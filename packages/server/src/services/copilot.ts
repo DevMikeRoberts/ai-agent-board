@@ -150,3 +150,10 @@ export function isRunning(taskId: string): boolean {
 export function clearEvents(taskId: string): void {
   eventLogs.delete(taskId);
 }
+
+export function shutdownAll(): void {
+  for (const [id, session] of sessions) {
+    session.cancel();
+    sessions.delete(id);
+  }
+}

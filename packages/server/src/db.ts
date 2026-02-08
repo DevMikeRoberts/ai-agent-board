@@ -2,12 +2,10 @@ import Database from 'better-sqlite3';
 import { v4 as uuid } from 'uuid';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
 import type { Task } from './types.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.resolve(__dirname, '..', 'data');
-const DB_PATH = path.join(DATA_DIR, 'kanban.db');
+const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), 'data', 'kanban.db');
+const DATA_DIR = path.dirname(DB_PATH);
 
 function migrate(db: Database.Database): void {
   db.exec(`

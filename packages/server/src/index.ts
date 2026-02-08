@@ -5,6 +5,7 @@ import { createWSS } from './websocket.js';
 import { initDatabase } from './db.js';
 import { SqliteTaskRepository } from './repositories/sqlite.js';
 import { createTaskRouter } from './routes/tasks.js';
+import { shutdownAll } from './services/copilot.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -30,3 +31,14 @@ server.listen(PORT, () => {
   console.log(`[server] listening on http://localhost:${PORT}`);
   console.log(`[server] WebSocket at ws://localhost:${PORT}/ws`);
 });
+
+// Graceful shutdown
+function shutdown() {
+  console.log('[server] shutting down...');
+  shutdownAll();
+  db.close();
+  server.close(() => process.exit(0));
+}
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);

@@ -41,15 +41,6 @@ export function useTasks() {
     }
   }, []);
 
-  const updateTask = useCallback(async (id: string, updates: Partial<Task>) => {
-    try {
-      const updated = await api.updateTask(id, updates);
-      setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
-    } catch (err) {
-      setError(`Failed to update task: ${(err as Error).message}`);
-    }
-  }, []);
-
   const moveTask = useCallback((taskId: string, targetColumn: ColumnId) => {
     setTasks((prev) => {
       const task = prev.find((t) => t.id === taskId);
@@ -76,17 +67,9 @@ export function useTasks() {
       // Revert optimistic update by re-fetching
       api.getTasks().then(setTasks).catch((fetchErr) => {
         console.error('[moveTask] re-fetch also failed:', fetchErr);
+        setError(`Move failed and could not refresh: ${fetchErr.message}`);
       });
     });
-  }, []);
-
-  const deleteTask = useCallback(async (id: string) => {
-    try {
-      await api.deleteTask(id);
-      setTasks((prev) => prev.filter((task) => task.id !== id));
-    } catch (err) {
-      setError(`Failed to delete task: ${(err as Error).message}`);
-    }
   }, []);
 
   const runTask = useCallback(async (id: string) => {
@@ -114,5 +97,5 @@ export function useTasks() {
 
   const clearError = useCallback(() => setError(null), []);
 
-  return { tasks, error, clearError, addTask, updateTask, moveTask, deleteTask, runTask, stopTask, getTasksByColumn };
+  return { tasks, error, clearError, addTask, moveTask, runTask, stopTask, getTasksByColumn };
 }
