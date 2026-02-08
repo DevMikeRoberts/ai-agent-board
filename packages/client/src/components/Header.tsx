@@ -1,5 +1,5 @@
-import { Sun, Moon, Kanban, Search } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Kanban, Search } from 'lucide-react';
+import { ThemeToggle } from './ThemeToggle';
 
 interface HeaderProps {
   theme: 'dark' | 'light';
@@ -40,18 +40,7 @@ export function Header({ theme, toggleTheme, taskCount, searchQuery, onSearchCha
             />
           </div>
 
-          <motion.button
-            whileTap={{ scale: 0.9 }}
-            onClick={toggleTheme}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            aria-label="Toggle theme"
-          >
-            {theme === 'dark' ? (
-              <Sun className="h-4 w-4" />
-            ) : (
-              <Moon className="h-4 w-4" />
-            )}
-          </motion.button>
+          <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
         </div>
       </div>
     </header>

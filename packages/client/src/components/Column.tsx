@@ -42,7 +42,7 @@ export function Column({ column, tasks, onTaskClick, onEditTask, onAddTask }: Co
   }, [column.color]);
 
   return (
-    <div className="flex h-full w-72 shrink-0 flex-col lg:w-80">
+    <div className="flex h-full w-full shrink-0 flex-col md:w-72 lg:w-80 max-md:h-auto max-md:min-h-48">
       {/* Column header */}
       <div className="mb-3 flex items-center justify-between px-1">
         <div className="flex items-center gap-2">

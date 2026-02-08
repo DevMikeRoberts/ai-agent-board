@@ -269,8 +269,24 @@ export function AgentPanel({ task, onClose, onRun, onStop, onDelete, onCreatePR,
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: '100%', opacity: 0 }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed right-0 top-0 z-[60] flex h-full w-full max-w-md flex-col border-l border-border bg-card shadow-2xl md:w-[420px]"
+            className="fixed right-0 top-0 z-[60] flex h-full w-full flex-col border-l border-border bg-card shadow-2xl md:max-w-md md:w-[420px]"
           >
+          {/* Progress bar */}
+          {(task.agentStatus === 'planning' || task.agentStatus === 'executing' || task.agentStatus === 'complete') && (
+            <div className="h-1 w-full bg-muted shrink-0">
+              <div
+                className={cn(
+                  'h-full rounded-r transition-all duration-700 ease-in-out',
+                  task.agentStatus === 'complete'
+                    ? 'w-full bg-emerald-500'
+                    : task.agentStatus === 'executing'
+                      ? 'w-3/5 bg-primary animate-pulse'
+                      : 'w-1/4 bg-purple-500 animate-pulse'
+                )}
+              />
+            </div>
+          )}
+
           {/* Header */}
           <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
             <div className="min-w-0 flex-1">

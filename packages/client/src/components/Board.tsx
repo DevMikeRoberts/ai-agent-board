@@ -97,7 +97,7 @@ export function Board({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex h-full gap-4 overflow-x-auto p-6 pb-4">
+      <div className="flex h-full gap-4 overflow-x-auto p-4 pb-4 max-md:flex-col max-md:overflow-x-hidden max-md:overflow-y-auto md:p-6">
         {columns.map((column, index) => (
           <motion.div
             key={column.id}
@@ -119,7 +119,7 @@ export function Board({
       {/* Drag overlay */}
       <DragOverlay>
         {activeTask && (
-          <div className="w-72 lg:w-80 rotate-3 opacity-90">
+          <div className="w-full max-w-80 rotate-3 opacity-90">
             <TaskCard task={activeTask} onClick={() => {}} />
           </div>
         )}
