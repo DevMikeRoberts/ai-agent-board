@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -70,6 +70,19 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
     onClose();
   };
 
+  // Close priority dropdown on outside click
+  const priorityRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!showPriority) return;
+    const handleClick = (e: MouseEvent) => {
+      if (priorityRef.current && !priorityRef.current.contains(e.target as Node)) {
+        setShowPriority(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showPriority]);
+
   const selectedPriority = priorities.find((p) => p.value === priority)!;
 
   return (
@@ -135,7 +148,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
               </div>
 
               {/* Priority */}
-              <div className="relative">
+              <div className="relative" ref={priorityRef}>
                 <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
                   Priority
                 </label>

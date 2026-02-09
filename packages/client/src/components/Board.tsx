@@ -14,7 +14,7 @@ import {
 import { motion } from 'framer-motion';
 import type { Task, ColumnId } from '@/types';
 import { VALID_TRANSITIONS } from '@/types';
-import { columns } from '@/lib/mock-data';
+import { columns } from '@/lib/columns';
 import { Column } from './Column';
 import { TaskCard } from './TaskCard';
 

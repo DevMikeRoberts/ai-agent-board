@@ -9,6 +9,7 @@ interface AliveWebSocket extends WebSocket {
 let wss: WebSocketServer;
 
 export function createWSS(server: Server): WebSocketServer {
+  if (wss) throw new Error('WSS already initialized');
   wss = new WebSocketServer({ server, path: '/ws' });
 
   wss.on('connection', (rawWs) => {

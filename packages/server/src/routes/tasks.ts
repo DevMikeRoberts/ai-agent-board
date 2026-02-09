@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
+import fs from 'fs';
+import path from 'path';
 import type { Task } from '../types.js';
 import { VALID_TRANSITIONS, isValidPriority, isValidColumnId, isValidAgentStatus } from '../types.js';
 import type { TaskRepository } from '../repositories/types.js';
@@ -15,6 +17,34 @@ function paramId(req: Request): string {
 const GIT_REF_RE = /^[a-zA-Z0-9_/][a-zA-Z0-9_./-]*$/;
 function isValidGitRef(ref: string): boolean {
   return GIT_REF_RE.test(ref) && !ref.includes('..') && !ref.endsWith('.lock') && ref.length <= 200;
+}
+
+// Allowed repo root directories — prevents path traversal to /etc, /root/.ssh, etc.
+const ALLOWED_REPO_ROOTS = (process.env.ALLOWED_REPO_ROOTS || '/root/projects,/tmp')
+  .split(',')
+  .map((p) => p.trim())
+  .filter(Boolean);
+
+function isAllowedRepoPath(repoPath: string): string | null {
+  const resolved = path.resolve(repoPath);
+  // Must be under one of the allowed roots
+  const underAllowedRoot = ALLOWED_REPO_ROOTS.some(
+    (root) => resolved === root || resolved.startsWith(root + '/')
+  );
+  if (!underAllowedRoot) {
+    return `repoPath must be under one of: ${ALLOWED_REPO_ROOTS.join(', ')}`;
+  }
+  // Must contain a .git directory (i.e. be a git repo)
+  try {
+    const gitDir = path.join(resolved, '.git');
+    const stat = fs.statSync(gitDir);
+    if (!stat.isDirectory()) {
+      return 'repoPath does not appear to be a git repository (no .git directory)';
+    }
+  } catch {
+    return 'repoPath does not appear to be a git repository (no .git directory)';
+  }
+  return null;
 }
 
 function broadcastTaskUpdate(task: Task): void {
@@ -215,9 +245,16 @@ export function createTaskRouter(repo: TaskRepository): Router {
       res.status(400).json({ error: 'baseBranch contains invalid characters' });
       return;
     }
-    if (typeof repoPath === 'string' && !repoPath.startsWith('/')) {
-      res.status(400).json({ error: 'repoPath must be an absolute path' });
-      return;
+    if (typeof repoPath === 'string') {
+      if (!repoPath.startsWith('/')) {
+        res.status(400).json({ error: 'repoPath must be an absolute path' });
+        return;
+      }
+      const repoErr = isAllowedRepoPath(repoPath);
+      if (repoErr) {
+        res.status(400).json({ error: repoErr });
+        return;
+      }
     }
 
     const updates: Partial<Task> = {};

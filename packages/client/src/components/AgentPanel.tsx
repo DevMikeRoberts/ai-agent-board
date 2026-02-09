@@ -73,7 +73,9 @@ interface AgentPanelProps {
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = () => {
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(text).catch((err) => {
+      console.warn('[clipboard] copy failed:', err);
+    });
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -155,7 +157,7 @@ function EventItem({ event }: { event: AgentEvent }) {
 
               {/* Command */}
               {event.type === 'command' && (
-                <div className="flex items-center gap-1 rounded-md bg-zinc-900 dark:bg-zinc-900 px-2.5 py-1.5 font-mono text-xs text-emerald-400">
+                <div className="flex items-center gap-1 rounded-md bg-zinc-900 px-2.5 py-1.5 font-mono text-xs text-emerald-400">
                   <span className="text-muted-foreground select-none">$</span>
                   <span className="flex-1">{event.content}</span>
                   <CopyButton text={event.content} />
@@ -164,14 +166,14 @@ function EventItem({ event }: { event: AgentEvent }) {
 
               {/* Output */}
               {event.type === 'output' && (
-                <div className="rounded-md bg-zinc-900 dark:bg-zinc-900 px-2.5 py-1.5 font-mono text-xs text-zinc-300">
+                <div className="rounded-md bg-zinc-900 px-2.5 py-1.5 font-mono text-xs text-zinc-300">
                   {event.content}
                 </div>
               )}
 
               {/* Diff */}
               {hasDiff && (
-                <div className="mt-1 overflow-x-auto rounded-md bg-zinc-900 dark:bg-zinc-900 p-2.5 font-mono text-[11px] leading-relaxed">
+                <div className="mt-1 overflow-x-auto rounded-md bg-zinc-900 p-2.5 font-mono text-[11px] leading-relaxed">
                   {event.metadata!.diff!.split('\n').map((line, i) => (
                     <div
                       key={i}
@@ -205,6 +207,7 @@ export function AgentPanel({ task, onClose, onRun, onStop, onDelete, onCreatePR,
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const taskId = task?.id ?? null;
+  const agentStatus = task?.agentStatus;
 
   useEffect(() => {
     if (!taskId) {
@@ -222,14 +225,15 @@ export function AgentPanel({ task, onClose, onRun, onStop, onDelete, onCreatePR,
     // Load existing events from server
     api.getEvents(taskId).then(setEvents).catch(console.error);
 
-    const isActive = task?.agentStatus === 'executing' || task?.agentStatus === 'planning';
-    if (isActive) setStreaming(true);
-
     // Listen for live agent events via WS
     const disconnect = connectWS((msg) => {
       if (msg.type === 'agent_event') {
         if (msg.payload.taskId === taskId) {
-          setEvents((prev) => [...prev, msg.payload]);
+          // Deduplicate by event id — historical load + live WS can overlap
+          setEvents((prev) => {
+            if (msg.payload.id && prev.some((e) => e.id === msg.payload.id)) return prev;
+            return [...prev, msg.payload];
+          });
           if (msg.payload.type === 'complete' || msg.payload.type === 'error') {
             setStreaming(false);
           }
@@ -242,6 +246,13 @@ export function AgentPanel({ task, onClose, onRun, onStop, onDelete, onCreatePR,
       setStreaming(false);
     };
   }, [taskId]);
+
+  // Fix #4: Sync streaming state with agentStatus (avoids stale closure on [taskId] effect)
+  useEffect(() => {
+    if (!taskId) return;
+    const isActive = agentStatus === 'executing' || agentStatus === 'planning';
+    setStreaming(isActive);
+  }, [taskId, agentStatus]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -364,9 +375,18 @@ export function AgentPanel({ task, onClose, onRun, onStop, onDelete, onCreatePR,
           </div>
 
           {/* Task description as markdown */}
+          {/* WARNING: Do NOT add rehype-raw — it would allow raw HTML injection (XSS). */}
           {task.description && (
             <div className="shrink-0 border-b border-border px-4 py-3 prose prose-xs prose-invert max-w-none text-xs text-muted-foreground leading-relaxed [&_code]:rounded [&_code]:bg-zinc-800 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-[11px] [&_pre]:rounded-md [&_pre]:bg-zinc-900 [&_pre]:p-2 [&_a]:text-primary [&_a]:underline">
-              <Markdown>{task.description}</Markdown>
+              <Markdown
+                allowedElements={[
+                  'p', 'strong', 'em', 'code', 'pre', 'ul', 'ol', 'li', 'a',
+                  'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'hr', 'br',
+                  'table', 'thead', 'tbody', 'tr', 'th', 'td',
+                ]}
+              >
+                {task.description}
+              </Markdown>
             </div>
           )}
 

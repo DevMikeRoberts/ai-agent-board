@@ -9,7 +9,7 @@ export const VALID_TRANSITIONS: Record<ColumnId, readonly ColumnId[]> = {
   'backlog': ['in-progress'],
   'in-progress': ['backlog', 'review'],
   'review': ['done', 'in-progress'],
-  'done': ['backlog'],
+  'done': [],
 };
 
 export function isValidPriority(value: unknown): value is Priority {
