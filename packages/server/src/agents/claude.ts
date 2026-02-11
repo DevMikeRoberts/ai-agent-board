@@ -25,6 +25,14 @@ export class ClaudeProvider implements AgentProvider {
     const model = this.model;
     let sessionId: string | null = null;
     let aborted = false;
+    // Mutex to serialize execute/send calls — Claude SDK doesn't support concurrent queries
+    let queryLock: Promise<void> = Promise.resolve();
+    function withLock<T>(fn: () => Promise<T>): Promise<T> {
+      const prev = queryLock;
+      let resolve: () => void;
+      queryLock = new Promise<void>(r => { resolve = r; });
+      return prev.then(fn).finally(() => resolve!());
+    }
 
     const agentSession: AgentSession = {
       get sessionId() {
@@ -32,6 +40,7 @@ export class ClaudeProvider implements AgentProvider {
       },
 
       async execute(prompt: string): Promise<void> {
+        return withLock(async () => {
         const messageGenerator = createMessageGenerator(prompt);
 
         const response = query({
@@ -102,6 +111,7 @@ export class ClaudeProvider implements AgentProvider {
               break;
           }
         }
+        });
       },
 
       async send(message: string): Promise<void> {
@@ -109,6 +119,7 @@ export class ClaudeProvider implements AgentProvider {
           throw new Error('Claude session not initialized — execute() must be called first');
         }
 
+        return withLock(async () => {
         const messageGenerator = createMessageGenerator(message);
 
         const response = query({
@@ -118,7 +129,7 @@ export class ClaudeProvider implements AgentProvider {
             cwd: config.workingDirectory,
             permissionMode: 'acceptEdits',
             systemPrompt: config.systemPrompt,
-            resume: sessionId,
+            resume: sessionId ?? undefined,
           },
         });
 
@@ -172,6 +183,7 @@ export class ClaudeProvider implements AgentProvider {
               break;
           }
         }
+        });
       },
 
       async abort(): Promise<void> {

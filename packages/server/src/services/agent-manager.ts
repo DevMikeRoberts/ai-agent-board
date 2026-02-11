@@ -420,7 +420,12 @@ make precise edits, and verify your changes compile/pass tests when applicable.
       timestamp: Date.now(),
     });
 
-    await entry.session.send(message);
+    try {
+      await entry.session.send(message);
+    } catch (err: any) {
+      const providerName = this.providers.get(entry.agentType)?.displayName || entry.agentType;
+      throw new Error(`${providerName} failed to process follow-up: ${err.message}`);
+    }
     return true;
   }
 

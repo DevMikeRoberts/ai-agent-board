@@ -134,6 +134,8 @@ export class CodexProvider implements AgentProvider {
       },
 
       async send(message: string): Promise<void> {
+        // Create fresh abort controller for follow-up (previous may have been aborted)
+        abortController = new AbortController();
         const input = [{ type: 'text' as const, text: message }];
         const { events } = await thread.runStreamed(input);
 

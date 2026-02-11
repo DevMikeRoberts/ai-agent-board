@@ -53,13 +53,15 @@ const agentActionTimestamps = new Map<string, number>();
 
 function isRateLimited(taskId: string): boolean {
   const now = Date.now();
-  // Always evict stale entries to prevent unbounded growth
-  for (const [id, ts] of agentActionTimestamps) {
-    if (now - ts > RATE_LIMIT_MS) agentActionTimestamps.delete(id);
-  }
   const last = agentActionTimestamps.get(taskId);
   if (last && now - last < RATE_LIMIT_MS) return true;
   agentActionTimestamps.set(taskId, now);
+  // Lazy eviction: only clean up when map gets large
+  if (agentActionTimestamps.size > 100) {
+    for (const [id, ts] of agentActionTimestamps) {
+      if (now - ts > RATE_LIMIT_MS) agentActionTimestamps.delete(id);
+    }
+  }
   return false;
 }
 
@@ -152,6 +154,26 @@ export function createTaskRouter(repo: TaskRepository, agentManager: AgentManage
     };
   }
 
+  // Shared status-change callback for agent completion/failure
+  function makeStatusCallback(taskId: string): (status: Task['agentStatus']) => void {
+    return (status) => {
+      const statusUpdates: Partial<Task> = { agentStatus: status };
+      if (status === 'complete') {
+        statusUpdates.completedAt = Date.now();
+        statusUpdates.columnId = 'review';
+      }
+      const t = repo.update(taskId, statusUpdates);
+      if (t) broadcastTaskUpdate(t);
+    };
+  }
+
+  function makeWorktreeCallback(taskId: string): (worktreePath: string) => void {
+    return (worktreePath) => {
+      const t = repo.update(taskId, { worktreePath });
+      if (t) broadcastTaskUpdate(t);
+    };
+  }
+
   // Start an agent for a task (shared by create+autoRun and batch)
   function startAgentForTask(task: Task): void {
     const updates: Partial<Task> = {
@@ -165,22 +187,7 @@ export function createTaskRouter(repo: TaskRepository, agentManager: AgentManage
     const updated = repo.update(task.id, updates);
     if (updated) {
       broadcastTaskUpdate(updated);
-      agentManager.startAgent(
-        updated,
-        (status) => {
-          const statusUpdates: Partial<Task> = { agentStatus: status };
-          if (status === 'complete') {
-            statusUpdates.completedAt = Date.now();
-            statusUpdates.columnId = 'review';
-          }
-          const t = repo.update(task.id, statusUpdates);
-          if (t) broadcastTaskUpdate(t);
-        },
-        (worktreePath) => {
-          const t = repo.update(task.id, { worktreePath });
-          if (t) broadcastTaskUpdate(t);
-        }
-      );
+      agentManager.startAgent(updated, makeStatusCallback(task.id), makeWorktreeCallback(task.id));
     }
   }
 
@@ -339,6 +346,18 @@ export function createTaskRouter(repo: TaskRepository, agentManager: AgentManage
       res.status(400).json({ error: 'repoPath must be a string' });
       return;
     }
+    if (typeof repoPath === 'string') {
+      const expandedRepoPath = expandTilde(repoPath);
+      if (!path.isAbsolute(expandedRepoPath)) {
+        res.status(400).json({ error: 'repoPath must be an absolute path' });
+        return;
+      }
+      const repoErr = isAllowedRepoPath(expandedRepoPath);
+      if (repoErr) {
+        res.status(400).json({ error: repoErr });
+        return;
+      }
+    }
 
     // Validate column transition if columnId is changing
     if (columnId && columnId !== task.columnId) {
@@ -357,7 +376,7 @@ export function createTaskRouter(repo: TaskRepository, agentManager: AgentManage
     if (columnId !== undefined) updates.columnId = columnId;
     if (agentStatus !== undefined) updates.agentStatus = agentStatus;
     if (agentType !== undefined) updates.agentType = agentType;
-    if (repoPath !== undefined) updates.repoPath = repoPath;
+    if (repoPath !== undefined) updates.repoPath = typeof repoPath === 'string' ? expandTilde(repoPath) : repoPath;
 
     // Reset agent state when moved to in-progress
     if (columnId === 'in-progress') {
@@ -489,22 +508,7 @@ export function createTaskRouter(repo: TaskRepository, agentManager: AgentManage
     }
     broadcastTaskUpdate(updated);
 
-    agentManager.startAgent(
-      updated,
-      (status) => {
-        const statusUpdates: Partial<Task> = { agentStatus: status };
-        if (status === 'complete') {
-          statusUpdates.completedAt = Date.now();
-          statusUpdates.columnId = 'review';
-        }
-        const t = repo.update(task.id, statusUpdates);
-        if (t) broadcastTaskUpdate(t);
-      },
-      (worktreePath) => {
-        const t = repo.update(task.id, { worktreePath });
-        if (t) broadcastTaskUpdate(t);
-      }
-    );
+    agentManager.startAgent(updated, makeStatusCallback(task.id), makeWorktreeCallback(task.id));
 
     res.json(updated);
   });

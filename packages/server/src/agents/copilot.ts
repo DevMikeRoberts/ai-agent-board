@@ -175,7 +175,7 @@ function mapSessionEvent(
       break;
 
     case 'assistant.message':
-      onEvent({ id: uuid(), taskId, type: 'complete', content: event.data.content, timestamp: Date.now() });
+      onEvent({ id: uuid(), taskId, type: 'output', content: event.data.content, timestamp: Date.now() });
       break;
 
     case 'assistant.message_delta':
