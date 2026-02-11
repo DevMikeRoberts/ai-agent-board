@@ -12,18 +12,31 @@ services:
       - ./packages/server/data:/app/packages/server/data
       # Shared types (live changes)
       - ./shared:/app/shared
-      # Mount host projects so the Copilot agent can read/write files
+      # Mount host projects so agents can read/write files
       - ${PROJECTS_DIR:-~/projects}:/host-projects
-      # GitHub auth for Copilot SDK (reads credentials from home)
+      # --- Agent CLI binaries ---
+      # Claude Code native binary (bind-mount from host)
+      - /usr/local/bin/claude:/usr/local/bin/claude:ro
+      # Codex CLI (mount package + create proper symlink so __dirname resolves vendor/)
+      - /usr/lib/node_modules/@openai/codex:/usr/lib/node_modules/@openai/codex:ro
+      # --- Agent auth credentials ---
+      # GitHub auth for Copilot SDK
       - ~/.config/github-copilot:/root/.config/github-copilot:ro
+      - ~/.config/gh:/root/.config/gh:ro
+      # Claude Code auth
+      - ~/.claude:/root/.claude:ro
+      # Codex (OpenAI) auth
+      - ~/.codex:/root/.codex:ro
     environment:
       - PORT=3001
       - NODE_ENV=development
       # Tell the server where host projects are mounted inside the container
       - ALLOWED_REPO_ROOTS=/host-projects,/tmp
       - ALLOWED_ORIGINS=http://localhost:4175,http://localhost:4176
-      # Copilot SDK model (override if needed)
-      - COPILOT_MODEL=${COPILOT_MODEL:-claude-sonnet-4-20250514}
+      # Agent models (override if needed)
+      - COPILOT_MODEL=${COPILOT_MODEL:-claude-opus-4-20250514}
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-opus-4-20250514}
+      - CODEX_MODEL=${CODEX_MODEL:-gpt-5.2-codex}
     restart: unless-stopped
 
   client:

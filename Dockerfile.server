@@ -1,7 +1,17 @@
 FROM node:24-slim
 
-# Install git (needed for worktree operations and Copilot SDK)
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+# Install git + curl (needed for worktree operations, Copilot SDK, and CLI installs)
+RUN apt-get update && apt-get install -y git curl && rm -rf /var/lib/apt/lists/*
+
+# Install GitHub CLI (for Copilot SDK)
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+      -o /usr/share/keyrings/githubcli-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+      > /etc/apt/sources.list.d/github-cli.list && \
+    apt-get update && apt-get install -y gh && rm -rf /var/lib/apt/lists/*
+
+# Claude Code CLI is bind-mounted from host (native binary)
+# Codex CLI npm package is bind-mounted at runtime
 
 WORKDIR /app
 
@@ -16,6 +26,10 @@ COPY shared/package.json shared/
 
 # Install all dependencies (workspace root)
 RUN npm ci
+
+# Codex CLI symlink — must be after npm ci so /usr/local/bin isn't overwritten
+# Points into the bind-mounted package so __dirname resolves vendor/ correctly
+RUN ln -sf /usr/lib/node_modules/@openai/codex/bin/codex.js /usr/local/bin/codex
 
 # Copy shared types (server imports from ../../shared)
 COPY shared/ shared/
