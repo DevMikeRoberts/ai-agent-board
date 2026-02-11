@@ -18,7 +18,7 @@ import {
   ExternalLink,
   Trash2,
 } from 'lucide-react';
-import type { Task, AgentEvent, AgentEventType } from '@/types';
+import type { Task, AgentEvent, AgentEventType, AgentType } from '@/types';
 import { api, connectWS } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
@@ -125,6 +125,12 @@ function looksLikeCode(text: string): boolean {
   const codePatterns = /^(import |export |const |let |var |function |class |if \(|for \(|while \(|return |async |await |\/\/|#include|def |package )/;
   return lines.some((line) => codePatterns.test(line.trimStart()));
 }
+
+const agentDisplayMap: Record<AgentType, { emoji: string; label: string }> = {
+  copilot: { emoji: '\u2699\uFE0F', label: 'Copilot' },
+  claude: { emoji: '\uD83D\uDFE0', label: 'Claude' },
+  codex: { emoji: '\uD83D\uDFE2', label: 'Codex' },
+};
 
 interface AgentPanelProps {
   task: Task | null;
@@ -385,13 +391,18 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onCleanup
             <div className="min-w-0 flex-1">
               <h3 className="truncate text-sm font-semibold">{task.title}</h3>
               <div className="mt-0.5 flex items-center gap-2">
+                {task.agentType && (
+                  <span className="text-[10px] text-muted-foreground">
+                    {agentDisplayMap[task.agentType].emoji} {agentDisplayMap[task.agentType].label}
+                  </span>
+                )}
                 {isActive && (
                   <span className="flex items-center gap-1 text-[10px] text-primary">
                     <span className="relative flex h-1.5 w-1.5">
                       <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
                       <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
                     </span>
-                    Agent active
+                    Active
                   </span>
                 )}
                 {task.agentStatus === 'complete' && (

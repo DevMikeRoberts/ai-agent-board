@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
-import type { Task, ColumnId, Priority } from '@/types';
+import type { Task, AgentType, ColumnId, Priority } from '@/types';
 import { useTheme } from '@/hooks/useTheme';
 import { useTasks } from '@/hooks/useTasks';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
@@ -95,7 +95,7 @@ export function App() {
   }, []);
 
   const handleWorktreeSubmit = useCallback(
-    async (config: { repoPath: string; branchName: string; baseBranch: string; useWorktree: boolean }) => {
+    async (config: { repoPath: string; branchName: string; baseBranch: string; useWorktree: boolean; agentType?: AgentType }) => {
       if (!worktreeDialogTaskId) return;
       const taskId = worktreeDialogTaskId;
       setSelectedTaskId(taskId);

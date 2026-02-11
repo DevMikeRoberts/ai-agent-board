@@ -3,6 +3,7 @@ export type {
   Priority,
   ColumnId,
   AgentStatus,
+  AgentType,
   Task,
   AgentEventType,
   AgentEvent,

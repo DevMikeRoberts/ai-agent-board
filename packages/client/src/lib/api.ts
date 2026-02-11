@@ -1,4 +1,12 @@
-import type { Task, AgentEvent, ColumnId, Priority } from '@/types';
+import type { Task, AgentEvent, AgentType, ColumnId, Priority } from '@/types';
+
+export interface AgentInfo {
+  name: AgentType;
+  displayName: string;
+  available: boolean;
+  version?: string;
+  reason?: string;
+}
 
 const BASE = '/api';
 
@@ -38,7 +46,9 @@ export const api = {
   getEvents: (id: string) =>
     request<AgentEvent[]>(`/tasks/${id}/events`),
 
-  configureTask: (id: string, config: { repoPath: string; branchName: string; baseBranch: string; useWorktree: boolean }) =>
+  getAgents: () => request<AgentInfo[]>('/agents'),
+
+  configureTask: (id: string, config: { repoPath: string; branchName: string; baseBranch: string; useWorktree: boolean; agentType?: AgentType }) =>
     request<Task>(`/tasks/${id}/configure`, { method: 'POST', body: JSON.stringify(config) }),
 
   createPR: (id: string) =>

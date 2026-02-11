@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { Task, ColumnId } from '@/types';
+import type { Task, AgentType, ColumnId } from '@/types';
 import { VALID_TRANSITIONS } from '@/types';
 import { api, connectWS } from '@/lib/api';
 
@@ -89,7 +89,7 @@ export function useTasks() {
 
   const configureAndRunTask = useCallback(async (
     id: string,
-    config: { repoPath: string; branchName: string; baseBranch: string; useWorktree: boolean }
+    config: { repoPath: string; branchName: string; baseBranch: string; useWorktree: boolean; agentType?: AgentType }
   ) => {
     try {
       const configured = await api.configureTask(id, config);
