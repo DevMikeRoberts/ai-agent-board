@@ -132,7 +132,7 @@ export function createTaskRouter(repo: TaskRepository, agentManager: AgentManage
       return;
     }
 
-    const { title, description, priority, columnId, agentStatus, agentType } = req.body;
+    const { title, description, priority, columnId, agentStatus, agentType, repoPath } = req.body;
 
     // Validate types of all incoming fields
     if (title !== undefined && (typeof title !== 'string' || !title.trim())) {
@@ -167,6 +167,10 @@ export function createTaskRouter(repo: TaskRepository, agentManager: AgentManage
       res.status(400).json({ error: 'invalid agentType: must be one of copilot, claude, codex' });
       return;
     }
+    if (repoPath !== undefined && typeof repoPath !== 'string') {
+      res.status(400).json({ error: 'repoPath must be a string' });
+      return;
+    }
 
     // Validate column transition if columnId is changing
     if (columnId && columnId !== task.columnId) {
@@ -185,6 +189,7 @@ export function createTaskRouter(repo: TaskRepository, agentManager: AgentManage
     if (columnId !== undefined) updates.columnId = columnId;
     if (agentStatus !== undefined) updates.agentStatus = agentStatus;
     if (agentType !== undefined) updates.agentType = agentType;
+    if (repoPath !== undefined) updates.repoPath = repoPath;
 
     // Reset agent state when moved to in-progress
     if (columnId === 'in-progress') {

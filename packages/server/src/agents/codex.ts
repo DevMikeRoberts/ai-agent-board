@@ -31,6 +31,8 @@ export class CodexProvider implements AgentProvider {
     const thread = this.codex.startThread({
       model: this.model,
       workingDirectory: config.workingDirectory,
+      skipGitRepoCheck: true,
+      sandboxMode: 'workspace-write',
     });
 
     let abortController: AbortController | null = null;
