@@ -21,7 +21,7 @@ export class CopilotProvider implements AgentProvider {
   private client: CopilotClient | null = null;
 
   constructor() {
-    this.model = process.env.COPILOT_MODEL || 'claude-sonnet-4-20250514';
+    this.model = process.env.COPILOT_MODEL || 'claude-opus-4-20250514';
   }
 
   async start(): Promise<void> {

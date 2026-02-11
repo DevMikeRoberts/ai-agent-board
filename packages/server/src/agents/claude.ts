@@ -9,7 +9,7 @@ export class ClaudeProvider implements AgentProvider {
   readonly model: string;
 
   constructor() {
-    this.model = process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514';
+    this.model = process.env.CLAUDE_MODEL || 'claude-opus-4-20250514';
   }
 
   async start(): Promise<void> {
