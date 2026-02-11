@@ -568,13 +568,22 @@ export function createTaskRouter(repo: TaskRepository, agentManager: AgentManage
     }
   });
 
-  // GET /api/tasks/:id/events
+  // GET /api/tasks/:id/events?since=<timestamp>&limit=<n>
   router.get('/:id/events', (req: Request, res: Response) => {
     if (!repo.getById(paramId(req))) {
       res.status(404).json({ error: 'task not found' });
       return;
     }
-    res.json(agentManager.getEvents(paramId(req)));
+    let events = agentManager.getEvents(paramId(req));
+    const since = Number(req.query.since);
+    if (since > 0) {
+      events = events.filter(e => e.timestamp > since);
+    }
+    const limit = Number(req.query.limit);
+    if (limit > 0) {
+      events = events.slice(-limit);
+    }
+    res.json(events);
   });
 
   // POST /api/tasks/:id/create-pr — create a PR from the worktree branch
