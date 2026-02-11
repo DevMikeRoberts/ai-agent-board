@@ -17,6 +17,7 @@ import {
   GitBranch,
   ExternalLink,
   Trash2,
+  Send,
 } from 'lucide-react';
 import type { Task, AgentEvent, AgentEventType } from '@/types';
 import { getAgentDisplay } from '@/lib/agent-config';
@@ -236,8 +237,15 @@ function EventItem({ event }: { event: CoalescedEvent }) {
                 )
               )}
 
+              {/* Command — user follow-up messages have distinct styling */}
+              {event.type === 'command' && event.content.startsWith('You: ') && (
+                <div className="rounded-md bg-sky-500/10 border border-sky-500/20 px-2.5 py-1.5 text-xs text-sky-300">
+                  {event.content}
+                </div>
+              )}
+
               {/* Command — show parsed command cleanly */}
-              {event.type === 'command' && (
+              {event.type === 'command' && !event.content.startsWith('You: ') && (
                 <div className="flex items-center gap-1 rounded-md bg-zinc-900 px-2.5 py-1.5 font-mono text-xs text-emerald-400">
                   <span className="text-muted-foreground select-none">$</span>
                   <span className="flex-1">{event.toolArgs || event.content}</span>
@@ -284,6 +292,8 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onCleanup
   const [streaming, setStreaming] = useState(false);
   const [prUrl, setPrUrl] = useState<string | null>(null);
   const [prLoading, setPrLoading] = useState(false);
+  const [followUpMessage, setFollowUpMessage] = useState('');
+  const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const taskId = task?.id ?? null;
@@ -300,6 +310,8 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onCleanup
     // Reset state for new task
     setPrUrl(null);
     setPrLoading(false);
+    setFollowUpMessage('');
+    setSending(false);
 
     // Load existing events from server
     api.getEvents(taskId).then(setEvents).catch(console.error);
@@ -317,6 +329,21 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onCleanup
             setStreaming(false);
           }
         }
+      }
+      // Show follow-up messages from other clients (dedup against local sends)
+      if (msg.type === 'agent_follow_up' && msg.payload.taskId === taskId) {
+        const content = `You: ${msg.payload.message}`;
+        setEvents((prev) => {
+          // Skip if we already added this message locally
+          if (prev.some((e) => e.type === 'command' && e.content === content)) return prev;
+          return [...prev, {
+            id: `fu-ws-${Date.now()}`,
+            taskId: taskId,
+            type: 'command' as const,
+            content,
+            timestamp: Date.now(),
+          }];
+        });
       }
     });
 
@@ -346,6 +373,28 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onCleanup
     () => coalesceEvents(events, streaming),
     [events, streaming]
   );
+
+  const handleSendFollowUp = async () => {
+    if (!task || !followUpMessage.trim() || sending) return;
+    const message = followUpMessage.trim();
+    setSending(true);
+    setFollowUpMessage('');
+    // Show locally immediately
+    setEvents((prev) => [...prev, {
+      id: `fu-${Date.now()}`,
+      taskId: task.id,
+      type: 'command' as const,
+      content: `You: ${message}`,
+      timestamp: Date.now(),
+    }]);
+    try {
+      await api.sendMessage(task.id, message);
+    } catch (err) {
+      console.error('[AgentPanel] failed to send follow-up:', err);
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -568,6 +617,34 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onCleanup
                 </span>
               </motion.div>
             )}
+          </div>
+
+          {/* Follow-up message input — fixed at bottom */}
+          <div className="shrink-0 border-t border-border bg-card px-3 py-2">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={followUpMessage}
+                onChange={(e) => setFollowUpMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendFollowUp();
+                  }
+                }}
+                placeholder="Send a message to the agent..."
+                disabled={agentStatus !== 'executing' || sending}
+                className="flex-1 rounded-md border border-border bg-muted px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-40 disabled:cursor-not-allowed"
+              />
+              <button
+                onClick={handleSendFollowUp}
+                disabled={agentStatus !== 'executing' || sending || !followUpMessage.trim()}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-primary hover:bg-primary/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Send message"
+              >
+                <Send className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
         </motion.div>
         </>

@@ -50,6 +50,9 @@ export const api = {
 
   cleanupWorktree: (id: string) =>
     request<{ success: boolean }>(`/tasks/${id}/cleanup-worktree`, { method: 'POST' }),
+
+  sendMessage: (id: string, message: string) =>
+    request<{ success: boolean }>(`/tasks/${id}/message`, { method: 'POST', body: JSON.stringify({ message }) }),
 };
 
 // --- WebSocket (shared singleton) ---

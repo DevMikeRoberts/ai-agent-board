@@ -557,6 +557,7 @@ export function createTaskRouter(repo: TaskRepository, agentManager: AgentManage
 
     try {
       await agentManager.sendMessage(task.id, message);
+      broadcast({ type: 'agent_follow_up', payload: { taskId: task.id, message } });
       res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'failed to send message' });
