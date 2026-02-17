@@ -1,6 +1,6 @@
 import { v4 as uuid } from 'uuid';
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import type { AgentProvider, AgentSession, AgentSessionConfig } from './base.js';
+import type { AgentProvider, AgentSession, AgentSessionConfig, AgentResult } from './base.js';
 import type { AgentType } from '../types.js';
 
 export class ClaudeProvider implements AgentProvider {
@@ -39,8 +39,10 @@ export class ClaudeProvider implements AgentProvider {
         return sessionId;
       },
 
-      async execute(prompt: string): Promise<void> {
+      async execute(prompt: string): Promise<AgentResult> {
         return withLock(async () => {
+        let result: AgentResult = { status: 'complete' };
+        try {
         const messageGenerator = createMessageGenerator(prompt);
 
         const response = query({
@@ -103,13 +105,39 @@ export class ClaudeProvider implements AgentProvider {
               break;
 
             case 'result':
-              config.onEvent({
-                id: uuid(), taskId: config.taskId, type: 'complete',
-                content: 'Claude Code completed the task.',
-                timestamp: Date.now(),
-              });
+              if ('subtype' in message && message.subtype === 'success') {
+                config.onEvent({
+                  id: uuid(), taskId: config.taskId, type: 'complete',
+                  content: 'Claude Code completed the task.',
+                  timestamp: Date.now(),
+                });
+                result = { status: 'complete' };
+              } else {
+                const errors = 'errors' in message && Array.isArray(message.errors)
+                  ? message.errors.join('; ')
+                  : `Agent ended with status: ${'subtype' in message ? message.subtype : 'unknown'}`;
+                config.onEvent({
+                  id: uuid(), taskId: config.taskId, type: 'error',
+                  content: errors,
+                  timestamp: Date.now(),
+                });
+                result = { status: 'failed', error: errors };
+              }
               break;
           }
+        }
+        if (aborted) {
+          return { status: 'failed', error: 'Execution aborted' };
+        }
+        return result;
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          config.onEvent({
+            id: uuid(), taskId: config.taskId, type: 'error',
+            content: `Claude SDK error: ${message}`,
+            timestamp: Date.now(),
+          });
+          return { status: 'failed', error: message };
         }
         });
       },

@@ -4,7 +4,7 @@ import {
   type CopilotSession,
   type SessionEvent,
 } from '@github/copilot-sdk';
-import type { AgentProvider, AgentSession, AgentSessionConfig } from './base.js';
+import type { AgentProvider, AgentSession, AgentSessionConfig, AgentResult } from './base.js';
 import type { AgentType } from '../types.js';
 
 // Configurable deny-list for high-risk tool kinds (comma-separated env var).
@@ -114,25 +114,38 @@ export class CopilotProvider implements AgentProvider {
     });
 
     let unsubscribe: (() => void) | null = null;
+    /** Captures session.error messages during execute for the AgentResult. */
+    let lastSessionError: string | undefined;
 
     const agentSession: AgentSession = {
       get sessionId() {
         return session.sessionId ?? null;
       },
 
-      async execute(prompt: string): Promise<void> {
+      async execute(prompt: string): Promise<AgentResult> {
+        lastSessionError = undefined;
+
         // Subscribe to session events and map to AgentEvents
         unsubscribe = session.on((event: SessionEvent) => {
           mapSessionEvent(config.taskId, event, config.onEvent);
 
-          // Backup completion: if session becomes idle, signal the manager
-          if (event.type === 'session.idle' && config.onIdle) {
-            console.log(`[copilot-provider] session.idle for task ${config.taskId} (backup completion)`);
-            config.onIdle();
+          if (event.type === 'session.error') {
+            lastSessionError = event.data?.message || 'Unknown session error';
           }
         });
 
-        await session.sendAndWait({ prompt });
+        try {
+          await session.sendAndWait({ prompt });
+          // sendAndWait resolved — session went idle after doing work.
+          // If a session.error was emitted during execution, treat as failure.
+          if (lastSessionError) {
+            return { status: 'failed', error: lastSessionError };
+          }
+          return { status: 'complete' };
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          return { status: 'failed', error: message };
+        }
       },
 
       async send(message: string): Promise<void> {

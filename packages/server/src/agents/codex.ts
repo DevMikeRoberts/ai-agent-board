@@ -1,6 +1,6 @@
 import { v4 as uuid } from 'uuid';
 import { Codex } from '@openai/codex-sdk';
-import type { AgentProvider, AgentSession, AgentSessionConfig } from './base.js';
+import type { AgentProvider, AgentSession, AgentSessionConfig, AgentResult } from './base.js';
 import type { AgentType } from '../types.js';
 
 export class CodexProvider implements AgentProvider {
@@ -42,9 +42,11 @@ export class CodexProvider implements AgentProvider {
         return thread.id;
       },
 
-      async execute(prompt: string): Promise<void> {
+      async execute(prompt: string): Promise<AgentResult> {
         abortController = new AbortController();
+        let result: AgentResult = { status: 'complete' };
 
+        try {
         const input = [{ type: 'text' as const, text: `${config.systemPrompt}\n\n${prompt}` }];
         const { events } = await thread.runStreamed(input);
 
@@ -112,24 +114,45 @@ export class CodexProvider implements AgentProvider {
                 content: 'Codex completed the task.',
                 timestamp: Date.now(),
               });
-              break;
+              result = { status: 'complete' };
+              // Terminal event — stop processing to prevent later events overwriting status
+              return result;
 
-            case 'turn.failed':
+            case 'turn.failed': {
+              const errorMsg = event.error?.message || 'Codex turn failed';
               config.onEvent({
                 id: uuid(), taskId: config.taskId, type: 'error',
-                content: event.error?.message || 'Codex turn failed',
+                content: errorMsg,
                 timestamp: Date.now(),
               });
-              break;
+              return { status: 'failed', error: errorMsg };
+            }
 
-            case 'error':
+            case 'error': {
+              const errorMsg = event.message || 'Unknown Codex error';
               config.onEvent({
                 id: uuid(), taskId: config.taskId, type: 'error',
-                content: event.message || 'Unknown Codex error',
+                content: errorMsg,
                 timestamp: Date.now(),
               });
+              result = { status: 'failed', error: errorMsg };
+              // Don't return here — non-terminal errors may precede turn.completed
               break;
+            }
           }
+        }
+        if (abortController?.signal.aborted) {
+          return { status: 'failed', error: 'Execution aborted' };
+        }
+        return result;
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          config.onEvent({
+            id: uuid(), taskId: config.taskId, type: 'error',
+            content: `Codex SDK error: ${message}`,
+            timestamp: Date.now(),
+          });
+          return { status: 'failed', error: message };
         }
       },
 
