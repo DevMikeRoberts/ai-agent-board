@@ -93,11 +93,15 @@ function coalesceEvents(events: AgentEvent[], streaming: boolean): CoalescedEven
       if (!hasFollowUp) continue; // skip — still streaming thinking
     }
 
-    // Mergeable types: thinking, output
-    if (event.type === 'thinking' || event.type === 'output') {
+    // Mergeable types: thinking, output, command_output
+    if (event.type === 'thinking' || event.type === 'output' || event.type === 'command_output') {
       // Check if last coalesced entry is the same type — merge
+      // Also merge command_output into output and vice versa
       const last = result[result.length - 1];
-      if (last && last.type === event.type) {
+      const mergeable = last && (last.type === event.type ||
+        (last.type === 'output' && event.type === 'command_output') ||
+        (last.type === 'command_output' && event.type === 'output'));
+      if (mergeable) {
         // Add paragraph break between merged events for readability
         last.content += '\n\n' + event.content;
         continue;
