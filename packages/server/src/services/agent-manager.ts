@@ -5,9 +5,9 @@ import os from 'os';
 import path from 'path';
 import type { Task, AgentEvent, AgentType } from '../types.js';
 import type { TaskRepository } from '../repositories/types.js';
-import type { AgentProvider, AgentSession, AgentInfo } from '@agent-sdk/core';
-import type { AgentEvent as CoreAgentEvent } from '@agent-sdk/core';
-import { CopilotProvider, ClaudeProvider, CodexProvider, detectAgents } from '@agent-sdk/core';
+import type { AgentProvider, AgentSession, AgentInfo } from '@codewithdan/agent-sdk-core';
+import type { AgentEvent as CoreAgentEvent } from '@codewithdan/agent-sdk-core';
+import { CopilotProvider, ClaudeProvider, CodexProvider, detectAgents } from '@codewithdan/agent-sdk-core';
 import { broadcast } from '../websocket.js';
 
 const AGENT_TIMEOUT_MS = parseInt(process.env.AGENT_TIMEOUT_MS || '600000', 10);
