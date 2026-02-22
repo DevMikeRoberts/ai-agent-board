@@ -1,6 +1,9 @@
 services:
   server:
     init: true
+    networks:
+      - default
+      - umami_default
     build:
       context: .
       dockerfile: Dockerfile.server
@@ -34,6 +37,8 @@ services:
       # Tell the server where host projects are mounted inside the container
       - ALLOWED_REPO_ROOTS=/host-projects,/tmp
       - ALLOWED_ORIGINS=http://localhost:4175,http://localhost:4176
+      # Database (PostgreSQL on host; use host.docker.internal or host network)
+      - DATABASE_URL=postgresql://kanban:kanban_db_pass@umami-db:5432/kanban
       # Agent models (override if needed)
       - COPILOT_MODEL=${COPILOT_MODEL:-claude-opus-4-20250514}
       - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-opus-4-20250514}
@@ -62,3 +67,7 @@ services:
     depends_on:
       - server
     restart: unless-stopped
+
+networks:
+  umami_default:
+    external: true
