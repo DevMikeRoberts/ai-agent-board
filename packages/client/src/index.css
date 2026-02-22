@@ -1,9 +1,7 @@
 @import 'tailwindcss';
 
-@layer base {
-  button, [role="button"] {
-    cursor: pointer;
-  }
+button, [role="button"] {
+  cursor: pointer;
 }
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
