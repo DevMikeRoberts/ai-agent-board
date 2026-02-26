@@ -37,8 +37,8 @@ services:
       # Tell the server where host projects are mounted inside the container
       - ALLOWED_REPO_ROOTS=/host-projects,/tmp
       - ALLOWED_ORIGINS=http://localhost:4175,http://localhost:4176
-      # Database (PostgreSQL on host; use host.docker.internal or host network)
-      - DATABASE_URL=postgresql://kanban:kanban_db_pass@umami-db:5432/kanban
+      # Database — set DATABASE_URL in .env for PostgreSQL; leave unset for SQLite
+      - DATABASE_URL=${DATABASE_URL:-}
       # Agent models (override if needed)
       - COPILOT_MODEL=${COPILOT_MODEL:-claude-opus-4-20250514}
       - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-opus-4-20250514}

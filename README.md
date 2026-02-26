@@ -1,6 +1,6 @@
 # Copilot Kanban Agent
 
-A drag-and-drop Kanban board that assigns coding tasks to GitHub Copilot as an autonomous agent. Drop a task into "In Progress" and Copilot will plan, execute, and complete the work — streaming live progress back to the board.
+A drag-and-drop Kanban board that assigns coding tasks to AI agents — GitHub Copilot, Claude Code, or OpenAI Codex. Drop a task into "In Progress," pick an agent, and it will plan, execute, and complete the work, streaming live progress back to the board.
 
 ## Tech Stack
 
@@ -8,24 +8,25 @@ A drag-and-drop Kanban board that assigns coding tasks to GitHub Copilot as an a
 |-------|------------|
 | Frontend | React 19, Vite, Tailwind CSS 4, Framer Motion |
 | Drag & Drop | @dnd-kit |
-| Backend | Express, better-sqlite3, ws (WebSocket) |
-| AI Agent | @github/copilot-sdk |
+| Backend | Express, better-sqlite3 / PostgreSQL, ws (WebSocket) |
+| AI Agents | @github/copilot-sdk, @anthropic-ai/claude-agent-sdk, @openai/codex-sdk |
 | Monorepo | npm workspaces |
 | Dev Environment | Docker Compose with live-reload volumes |
 
 ## Features
 
 - Kanban board with Backlog, In Progress, Review, Done columns
+- **Multi-agent support** — choose GitHub Copilot, Claude Code, or OpenAI Codex per task
+- Auto-detection of available agents at startup
 - Drag-and-drop task management with transition validation
 - Real-time agent activity streaming via WebSocket
 - Agent panel with event coalescing (thinking, commands, output)
 - Git worktree isolation per task (optional)
 - One-click PR creation from completed tasks
-- Delete confirmation dialogs
+- **Dual database backends** — SQLite (zero-config default) or PostgreSQL
 - Dark/light theme toggle
 - Task search and filtering
 - Keyboard shortcuts (N: new task, Esc: close panels)
-- Accessible dialogs with ARIA attributes
 
 ## Getting Started
 
@@ -33,33 +34,36 @@ A drag-and-drop Kanban board that assigns coding tasks to GitHub Copilot as an a
 
 - Node.js 20+
 - npm 10+
-- GitHub Copilot CLI (`gh extension install github/gh-copilot`)
-- Authenticated via `gh auth login`
+- At least one agent CLI authenticated on your machine:
+  - **GitHub Copilot**: `gh extension install github/gh-copilot` + `gh auth login`
+  - **Claude Code**: `claude` CLI installed and authenticated
+  - **OpenAI Codex**: `codex` CLI installed with API key configured
 - Docker & Docker Compose (for containerized dev)
 
 ### Option 1: Docker Compose (Recommended)
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/DanWahlin/copilot-kanban-board.git
 cd copilot-kanban-agent
+cp .env.example .env        # Edit .env if you need PostgreSQL or custom settings
 docker compose up -d
 ```
 
-That's it. Open [http://localhost:4175](http://localhost:4175).
+Open [http://localhost:4175](http://localhost:4175).
 
 - **Client** runs on port 4175 with Vite HMR
 - **Server** runs on port 3001 with tsx watch
 - Edit source files locally — changes are picked up instantly via volume mounts
 
 ```bash
-docker compose logs -f        # Watch logs
-docker compose down           # Stop
+docker compose logs -f           # Watch logs
+docker compose down              # Stop
 docker compose build --no-cache  # Rebuild after dependency changes
 ```
 
 #### Repo Paths in Docker
 
-When configuring a task's repository path, use `/host-projects/my-app` instead of `~/projects/my-app`. Your `~/projects` directory is mounted at `/host-projects` inside the server container. The Copilot agent can read and write files on your host through this mount.
+When configuring a task's repository path, use `/host-projects/my-app` instead of `~/projects/my-app`. Your `~/projects` directory is mounted at `/host-projects` inside the server container.
 
 To change the host projects directory:
 
@@ -93,7 +97,11 @@ npm run build:client
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `3001` | Server port |
-| `COPILOT_MODEL` | `claude-sonnet-4-20250514` | Model for Copilot sessions |
+| `DATABASE_URL` | _(unset)_ | PostgreSQL connection string; when unset, uses SQLite |
+| `DB_PATH` | `./data/kanban.db` | SQLite database file path |
+| `COPILOT_MODEL` | `claude-opus-4-20250514` | Model for Copilot SDK sessions |
+| `CLAUDE_MODEL` | `claude-opus-4-20250514` | Model for Claude Code sessions |
+| `CODEX_MODEL` | `gpt-5.2-codex` | Model for OpenAI Codex sessions |
 | `ALLOWED_REPO_ROOTS` | `$HOME,/tmp` | Allowed repo root paths (comma-separated) |
 | `ALLOWED_ORIGINS` | `http://localhost:4175,http://localhost:4176` | CORS origins |
 | `AGENT_TIMEOUT_MS` | `600000` | Max agent execution time (ms) |
@@ -104,43 +112,45 @@ npm run build:client
 
 ```
 copilot-kanban-agent/
-├── docker-compose.yml       # Two-container dev setup
-├── Dockerfile.client        # Vite dev server image
-├── Dockerfile.server        # Express + Copilot SDK image
+├── docker-compose.yml         # Two-container dev setup
+├── Dockerfile.client          # Vite dev server image
+├── Dockerfile.server          # Express + agent SDKs image
 ├── packages/
-│   ├── client/              # React frontend
+│   ├── client/                # React frontend
 │   │   └── src/
-│   │       ├── components/  # Board, Column, TaskCard, AgentPanel, dialogs
-│   │       ├── hooks/       # useTasks, useTheme, useKeyboardShortcuts
-│   │       └── lib/         # API client, WebSocket, utilities
-│   ├── server/              # Express backend
+│   │       ├── components/    # Board, Column, TaskCard, AgentPanel, dialogs
+│   │       ├── hooks/         # useTasks, useTheme, useKeyboardShortcuts
+│   │       └── lib/           # API client, WebSocket, utilities
+│   ├── server/                # Express backend
 │   │   └── src/
-│   │       ├── routes/      # REST API (task CRUD + agent lifecycle)
-│   │       ├── services/    # Copilot SDK integration
-│   │       ├── repositories/# SQLite data access
-│   │       ├── db.ts        # Database init + migrations
-│   │       └── websocket.ts # Real-time event broadcast
-│   └── e2e/                 # Playwright end-to-end tests
-└── shared/                  # Shared types (Task, AgentEvent, etc.)
+│   │       ├── agents/        # Provider pattern: copilot, claude, codex, detection
+│   │       ├── routes/        # REST API (task CRUD + agent lifecycle)
+│   │       ├── services/      # Agent session orchestration
+│   │       ├── repositories/  # SQLite + PostgreSQL data access
+│   │       ├── db.ts          # Database init + migrations
+│   │       └── websocket.ts   # Real-time event broadcast
+│   └── e2e/                   # Playwright end-to-end tests
+└── shared/                    # Shared types (Task, AgentEvent, etc.) + validation
 ```
 
 ## How It Works
 
 1. **Create a task** in the Backlog column
 2. **Drag it to In Progress** — the agent panel opens automatically
-3. **Configure the run** — set the repo path, branch name, and whether to use a git worktree
-4. **Click Start Agent** — Copilot begins working, streaming progress in real-time
+3. **Configure the run** — set the repo path, branch name, agent type, and whether to use a git worktree
+4. **Click Start Agent** — the selected agent begins working, streaming progress in real-time
 5. **Review the results** — commands executed, files modified, output produced
 6. **Create a PR** directly from the agent panel when the task completes
 
-### Copilot SDK Integration
+### Multi-Agent Architecture
 
-The server manages a singleton `CopilotClient` that communicates with the Copilot CLI. Each task gets its own `CopilotSession` with:
+The server uses a **provider pattern** to support multiple AI coding agents behind a common interface:
 
-- A system message scoped to the task's working directory
-- Auto-approved tool permissions (shell, read, write)
-- Real-time event streaming mapped to the UI's event types
-- Optional path rewriting for git worktree isolation
+- **`AgentProvider`** — creates sessions, reports availability
+- **`AgentSession`** — runs a task, emits events, supports abort
+- **`AgentManager`** — orchestrates sessions with timeouts, event caching, and graceful cleanup
+
+Each task can specify which agent to use. Available agents are auto-detected at startup by checking for installed CLIs. Events from all providers are normalized into a common `AgentEvent` format and streamed to the UI via WebSocket.
 
 ## Tests
 
@@ -152,6 +162,10 @@ npm test
 cd packages/e2e && npx playwright test --reporter=list
 ```
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## License
 
-MIT
+[MIT](LICENSE)

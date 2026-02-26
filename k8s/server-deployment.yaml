@@ -29,7 +29,7 @@ spec:
             - name: NODE_ENV
               value: production
             - name: DATABASE_URL
-              value: "postgresql://kanban:kanban_db_pass@127.0.0.1:5432/kanban"
+              value: "postgresql://kanban:CHANGE_ME@127.0.0.1:5432/kanban"
             - name: ALLOWED_REPO_ROOTS
               value: /host-projects,/tmp
             - name: ALLOWED_ORIGINS
