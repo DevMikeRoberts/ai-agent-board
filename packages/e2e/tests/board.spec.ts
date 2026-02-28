@@ -2,16 +2,16 @@ import { test, expect, type Page } from '@playwright/test';
 
 // Helper to wait for the board to render
 async function waitForBoard(page: Page) {
-  await expect(page.getByRole('heading', { name: 'Backlog' })).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByRole('heading', { name: 'In Progress' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Review' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Done' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Backlog', exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('heading', { name: 'In Progress', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Review', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Done', exact: true })).toBeVisible();
 }
 
 // Helper to open the create task dialog
 async function openCreateDialog(page: Page) {
   // The + button is next to the Backlog heading inside the column header
-  const backlogHeading = page.getByRole('heading', { name: 'Backlog' });
+  const backlogHeading = page.getByRole('heading', { name: 'Backlog', exact: true });
   // The + button is a sibling in the column header div - go up to the header row then find the button
   const headerRow = backlogHeading.locator('..').locator('..');
   const addButton = headerRow.locator('button').first();
@@ -38,7 +38,7 @@ test.describe('Kanban Board', () => {
 
   test('renders all four columns', async ({ page }) => {
     for (const col of ['Backlog', 'In Progress', 'Review', 'Done']) {
-      await expect(page.getByRole('heading', { name: col })).toBeVisible();
+      await expect(page.getByRole('heading', { name: col, exact: true })).toBeVisible();
     }
   });
 

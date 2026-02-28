@@ -5,14 +5,14 @@ import { test, expect, type Page } from '@playwright/test';
 // ---------------------------------------------------------------------------
 
 async function waitForBoard(page: Page) {
-  await expect(page.getByRole('heading', { name: 'Backlog' })).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByRole('heading', { name: 'In Progress' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Review' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Done' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Backlog', exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('heading', { name: 'In Progress', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Review', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Done', exact: true })).toBeVisible();
 }
 
 async function openCreateDialog(page: Page) {
-  const backlogHeading = page.getByRole('heading', { name: 'Backlog' });
+  const backlogHeading = page.getByRole('heading', { name: 'Backlog', exact: true });
   const headerRow = backlogHeading.locator('..').locator('..');
   const addButton = headerRow.locator('button').first();
   await addButton.click();
@@ -65,9 +65,9 @@ async function openWorktreeDialog(page: Page, title: string) {
 }
 
 /**
- * Get the 3 agent buttons from the WorktreeDialog's grid.
- * Buttons are rendered in a grid-cols-3 div under the "Agent" label.
- * Display names: "Copilot" | "Code" (from "Claude Code") | "Codex"
+ * Get the 4 agent buttons from the WorktreeDialog's grid.
+ * Buttons are rendered in a grid div under the "Agent" label.
+ * Display names: "Copilot" | "Code" (from "Claude Code") | "Codex" | "OpenCode"
  */
 function getAgentButtons(dialog: ReturnType<Page['locator']>) {
   const grid = dialog.locator('.grid');
@@ -75,6 +75,7 @@ function getAgentButtons(dialog: ReturnType<Page['locator']>) {
     copilot: grid.locator('button').nth(0),
     claude: grid.locator('button').nth(1),
     codex: grid.locator('button').nth(2),
+    opencode: grid.locator('button').nth(3),
   };
 }
 
@@ -88,21 +89,23 @@ test.describe('Agent Selector in WorktreeDialog', () => {
     await waitForBoard(page);
   });
 
-  test('shows agent selector with 3 agent buttons (Copilot, Claude, Codex)', async ({ page }) => {
+  test('shows agent selector with 4 agent buttons (Copilot, Claude, Codex, OpenCode)', async ({ page }) => {
     const title = `AgentSel ${Date.now()}`;
     await createTaskInProgress(page, title);
     const dialog = await openWorktreeDialog(page, title);
 
-    // The grid should contain exactly 3 agent buttons
-    const { copilot, claude, codex } = getAgentButtons(dialog);
+    // The grid should contain exactly 4 agent buttons
+    const { copilot, claude, codex, opencode } = getAgentButtons(dialog);
     await expect(copilot).toBeVisible();
     await expect(claude).toBeVisible();
     await expect(codex).toBeVisible();
+    await expect(opencode).toBeVisible();
 
-    // Verify button labels — displayName.split(' ').pop() gives: Copilot, Code, Codex
+    // Verify button labels — displayName.split(' ').pop() gives: Copilot, Code, Codex, OpenCode
     await expect(copilot).toContainText('Copilot');
     await expect(claude).toContainText('Code');
     await expect(codex).toContainText('Codex');
+    await expect(opencode).toContainText('OpenCode');
   });
 
   test('clicking an agent button selects it (shows primary/active state)', async ({ page }) => {
