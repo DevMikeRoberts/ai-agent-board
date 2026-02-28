@@ -179,3 +179,271 @@ test.describe('Task Edit', () => {
     await expect(page.getByRole('heading', { name: newTitle })).toBeVisible({ timeout: 5_000 });
   });
 });
+
+test.describe('Task Priority', () => {
+  let createdTaskIds: string[] = [];
+
+  test.beforeEach(async ({ page }) => {
+    createdTaskIds = [];
+    await page.goto('/');
+    await waitForBoard(page);
+  });
+
+  test.afterEach(async ({ request }) => {
+    for (const id of createdTaskIds) {
+      await request.delete(`${API}/api/tasks/${id}`).catch(() => {});
+    }
+    createdTaskIds = [];
+  });
+
+  test('create task with high priority shows amber left border', async ({ page }) => {
+    const ts = Date.now();
+    const taskTitle = `Priority Task ${ts}`;
+
+    await openCreateDialog(page);
+    await page.getByPlaceholder('What needs to be done?').fill(taskTitle);
+
+    // Open priority dropdown and select High
+    await page.getByText('Medium').first().click();
+    await page.getByRole('button', { name: '🟠 High' }).click();
+
+    await page.getByRole('button', { name: 'Create Task' }).click();
+    await expect(page.getByRole('heading', { name: 'Create Task' })).not.toBeVisible({ timeout: 3_000 });
+
+    // Get the task ID for cleanup
+    const id = await page.evaluate(async (t) => {
+      const res = await fetch('/api/tasks');
+      const tasks = await res.json();
+      return tasks.find((tk: any) => tk.title === t)?.id ?? null;
+    }, taskTitle);
+    createdTaskIds.push(id as string);
+
+    // Verify the task card has amber left border
+    const taskCard = page.locator('.group').filter({ has: page.getByRole('heading', { name: taskTitle }) });
+    await expect(taskCard).toHaveClass(/border-l-amber-500/);
+  });
+
+  test('edit task priority updates the border color', async ({ page }) => {
+    const ts = Date.now();
+    const taskTitle = `Edit Priority ${ts}`;
+    const id = await createTask(page, taskTitle);
+    createdTaskIds.push(id);
+
+    // Default priority is medium — verify blue border
+    const taskCard = page.locator('.group').filter({ has: page.getByRole('heading', { name: taskTitle }) });
+    await expect(taskCard).toHaveClass(/border-l-blue-500/);
+
+    // Edit task and change priority to critical
+    await taskCard.hover();
+    await taskCard.getByRole('button', { name: 'Edit task' }).click();
+    await expect(page.getByRole('heading', { name: 'Edit Task' })).toBeVisible();
+
+    // Open priority dropdown and select Critical
+    await page.getByText('Medium').first().click();
+    await page.getByRole('button', { name: '🔴 Critical' }).click();
+
+    await page.getByRole('button', { name: 'Save Changes' }).click();
+    await expect(page.getByRole('heading', { name: 'Edit Task' })).not.toBeVisible({ timeout: 2_000 });
+
+    // Verify the task card now has red left border
+    await expect(taskCard).toHaveClass(/border-l-red-500/, { timeout: 3_000 });
+  });
+});
+
+test.describe('Task Sorting', () => {
+  let createdTaskIds: string[] = [];
+
+  test.beforeEach(async ({ page }) => {
+    createdTaskIds = [];
+    await page.goto('/');
+    await waitForBoard(page);
+  });
+
+  test.afterEach(async ({ request }) => {
+    for (const id of createdTaskIds) {
+      await request.delete(`${API}/api/tasks/${id}`).catch(() => {});
+    }
+    createdTaskIds = [];
+  });
+
+  test('sort dropdown changes task order by priority', async ({ page, request }) => {
+    // Create tasks with different priorities via API
+    const tasks = [
+      { title: 'Sort Low Task', priority: 'low' },
+      { title: 'Sort Critical Task', priority: 'critical' },
+      { title: 'Sort High Task', priority: 'high' },
+    ];
+    for (const t of tasks) {
+      const res = await request.post(`${API}/api/tasks`, { data: { title: t.title, description: 'sort test', priority: t.priority } });
+      const created = await res.json();
+      createdTaskIds.push(created.id);
+    }
+
+    await page.reload();
+    await waitForBoard(page);
+
+    // Change sort to Priority ascending (critical first)
+    const sortSelect = page.locator('select');
+    await sortSelect.selectOption('priority');
+
+    // Get task titles in backlog column order
+    const backlog = page.locator('[data-column="backlog"]').first();
+    const headings = backlog.locator('h3');
+    const titles = await headings.allTextContents();
+
+    // Filter to just our test tasks
+    const sortTitles = titles.filter(t => t.startsWith('Sort '));
+    expect(sortTitles[0]).toBe('Sort Critical Task');
+    expect(sortTitles[sortTitles.length - 1]).toBe('Sort Low Task');
+  });
+});
+
+test.describe('Filter Chips', () => {
+  let createdTaskIds: string[] = [];
+
+  test.beforeEach(async ({ page }) => {
+    createdTaskIds = [];
+    await page.goto('/');
+    await waitForBoard(page);
+  });
+
+  test.afterEach(async ({ request }) => {
+    for (const id of createdTaskIds) {
+      await request.delete(`${API}/api/tasks/${id}`).catch(() => {});
+    }
+    createdTaskIds = [];
+  });
+
+  test('filter by agent type shows only matching tasks', async ({ page, request }) => {
+    // Create tasks with different agent types via API
+    const res1 = await request.post(`${API}/api/tasks`, { data: { title: 'Filter Claude Task', description: 'test', agentType: 'claude' } });
+    const res2 = await request.post(`${API}/api/tasks`, { data: { title: 'Filter Copilot Task', description: 'test', agentType: 'copilot' } });
+    createdTaskIds.push((await res1.json()).id, (await res2.json()).id);
+
+    await page.reload();
+    await waitForBoard(page);
+
+    // Both tasks should be visible
+    await expect(page.getByRole('heading', { name: 'Filter Claude Task' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Filter Copilot Task' })).toBeVisible();
+
+    // Click Claude filter chip
+    await page.getByRole('button', { name: '🟠 Claude' }).click();
+
+    // Only Claude task should be visible
+    await expect(page.getByRole('heading', { name: 'Filter Claude Task' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Filter Copilot Task' })).not.toBeVisible({ timeout: 2_000 });
+
+    // Click Clear to reset
+    await page.getByRole('button', { name: 'Clear' }).click();
+
+    // Both visible again
+    await expect(page.getByRole('heading', { name: 'Filter Claude Task' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Filter Copilot Task' })).toBeVisible();
+  });
+});
+
+test.describe('Retry Failed Tasks', () => {
+  let createdTaskIds: string[] = [];
+
+  test.beforeEach(async ({ page }) => {
+    createdTaskIds = [];
+    await page.goto('/');
+    await waitForBoard(page);
+  });
+
+  test.afterEach(async ({ request }) => {
+    for (const id of createdTaskIds) {
+      await request.delete(`${API}/api/tasks/${id}`).catch(() => {});
+    }
+    createdTaskIds = [];
+  });
+
+  test('retry button appears on failed tasks', async ({ page, request }) => {
+    // Create a task and set it to failed via API
+    const res = await request.post(`${API}/api/tasks`, {
+      data: { title: 'Retry Test Task', description: 'test', columnId: 'in-progress' },
+    });
+    const task = await res.json();
+    createdTaskIds.push(task.id);
+
+    // Mark as failed
+    await request.patch(`${API}/api/tasks/${task.id}`, {
+      data: { agentStatus: 'failed' },
+    });
+
+    await page.reload();
+    await waitForBoard(page);
+
+    // Hover over the task card to reveal action buttons
+    const taskCard = page.locator('.group').filter({ has: page.getByRole('heading', { name: 'Retry Test Task' }) });
+    await taskCard.hover();
+
+    // Retry button should be visible
+    await expect(taskCard.getByRole('button', { name: 'Retry task' })).toBeVisible();
+  });
+});
+
+test.describe('Task Templates', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await waitForBoard(page);
+  });
+
+  test.afterEach(async ({ request }) => {
+    // Clean up all templates
+    const res = await request.get(`${API}/api/templates`);
+    const templates = await res.json();
+    for (const t of templates) {
+      await request.delete(`${API}/api/templates/${t.id}`).catch(() => {});
+    }
+  });
+
+  test('create and use a template', async ({ page, request }) => {
+    // Create a template via API
+    const res = await request.post(`${API}/api/templates`, {
+      data: { name: 'Test Template', title: 'Templated Task', description: 'From template', priority: 'high', agentType: 'claude' },
+    });
+    expect(res.ok()).toBeTruthy();
+
+    // Open create dialog
+    await openCreateDialog(page);
+
+    // Click Templates button
+    await page.getByRole('button', { name: 'Templates' }).click();
+
+    // Click the template name to apply it
+    await page.getByText('Test Template').click();
+
+    // Verify fields are pre-filled
+    await expect(page.getByPlaceholder('What needs to be done?')).toHaveValue('Templated Task');
+    await expect(page.getByPlaceholder('Describe the task for the Copilot agent...')).toHaveValue('From template');
+
+    // Close without creating
+    await page.getByRole('button', { name: 'Cancel' }).first().click();
+  });
+
+  test('save as template from dialog', async ({ page }) => {
+    await openCreateDialog(page);
+
+    // Fill in some fields
+    await page.getByPlaceholder('What needs to be done?').fill('My Custom Task');
+    await page.getByPlaceholder('Describe the task for the Copilot agent...').fill('Custom description');
+
+    // Click "Save as Template"
+    await page.getByText('Save as Template').click();
+
+    // Type template name and save
+    await page.getByPlaceholder('Template name...').fill('My Saved Template');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+
+    // Close and reopen to verify template appears
+    await page.getByRole('button', { name: 'Cancel' }).first().click();
+    await openCreateDialog(page);
+    await page.getByRole('button', { name: 'Templates' }).click();
+    await expect(page.getByText('My Saved Template')).toBeVisible();
+
+    // Close without creating
+    await page.getByRole('button', { name: 'Cancel' }).first().click();
+  });
+});

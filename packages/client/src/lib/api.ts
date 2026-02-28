@@ -1,4 +1,4 @@
-import type { Task, AgentEvent, AgentInfo, AgentType, ColumnId, Priority } from '@/types';
+import type { Task, TaskTemplate, AgentEvent, AgentInfo, AgentType, ColumnId, Priority } from '@/types';
 
 export type { AgentInfo };
 
@@ -72,6 +72,19 @@ export const api = {
 
   unarchiveTask: (id: string) =>
     request<Task>(`/tasks/${id}/unarchive`, { method: 'PATCH' }),
+
+  // --- Templates ---
+  getTemplates: () =>
+    request<TaskTemplate[]>('/templates'),
+
+  createTemplate: (data: { name: string; title?: string; description?: string; priority?: Priority; agentType?: AgentType; repoPath?: string; baseBranch?: string; useWorktree?: boolean }) =>
+    request<TaskTemplate>('/templates', { method: 'POST', body: JSON.stringify(data) }),
+
+  updateTemplate: (id: string, data: Partial<Omit<TaskTemplate, 'id' | 'createdAt'>>) =>
+    request<TaskTemplate>(`/templates/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  deleteTemplate: (id: string) =>
+    request<void>(`/templates/${id}`, { method: 'DELETE' }),
 };
 
 // --- WebSocket (shared singleton) ---

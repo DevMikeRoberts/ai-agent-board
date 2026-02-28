@@ -1,12 +1,15 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
-import type { Task, AgentType, ColumnId } from '@/types';
+import type { Task, AgentType, Priority, ColumnId } from '@/types';
 import { useTheme } from '@/hooks/useTheme';
 import { useTasks } from '@/hooks/useTasks';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useDebounce } from '@/hooks/useDebounce';
+import { PRIORITY_WEIGHT } from '@/lib/priority-config';
 import { Header } from '@/components/Header';
+import type { StatusFilter } from '@/components/FilterChips';
+import { statusFilterToStatuses } from '@/components/FilterChips';
 import { Board } from '@/components/Board';
 import { TaskDialog } from '@/components/TaskDialog';
 import { AgentPanel } from '@/components/AgentPanel';
@@ -15,16 +18,40 @@ import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 
 export function App() {
   const { theme, toggleTheme } = useTheme();
-  const { tasks, error, clearError, showArchived, setShowArchived, addTask, updateTask, moveTask, stopTask, deleteTask, archiveTask, unarchiveTask, configureAndRunTask, createPR, cleanupWorktree } = useTasks();
+  const { tasks, error, clearError, showArchived, setShowArchived, addTask, updateTask, moveTask, runTask, stopTask, deleteTask, archiveTask, unarchiveTask, configureAndRunTask, createPR, cleanupWorktree } = useTasks();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [worktreeDialogTaskId, setWorktreeDialogTaskId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [deletingTask, setDeletingTask] = useState<Task | null>(null);
+  const [sortBy, setSortBy] = useState<'title' | 'priority' | 'created' | 'status'>(
+    () => (localStorage.getItem('kanban-sort-by') as 'title' | 'priority' | 'created' | 'status') || 'title'
+  );
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>(
+    () => (localStorage.getItem('kanban-sort-dir') as 'asc' | 'desc') || 'asc'
+  );
+  const [activeAgentTypes, setActiveAgentTypes] = useState<AgentType[]>(
+    () => { try { return JSON.parse(localStorage.getItem('kanban-filter-agents') || '[]'); } catch { return []; } }
+  );
+  const [activeStatuses, setActiveStatuses] = useState<StatusFilter[]>(
+    () => { try { return JSON.parse(localStorage.getItem('kanban-filter-statuses') || '[]'); } catch { return []; } }
+  );
 
   // Debounce search query
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
+  // Persist sort preferences
+  useEffect(() => {
+    localStorage.setItem('kanban-sort-by', sortBy);
+    localStorage.setItem('kanban-sort-dir', sortDir);
+  }, [sortBy, sortDir]);
+
+  // Persist filter preferences
+  useEffect(() => {
+    localStorage.setItem('kanban-filter-agents', JSON.stringify(activeAgentTypes));
+    localStorage.setItem('kanban-filter-statuses', JSON.stringify(activeStatuses));
+  }, [activeAgentTypes, activeStatuses]);
 
   // Derive live task from tasks array so it stays current with WS updates
   const selectedTask = useMemo(
@@ -32,19 +59,71 @@ export function App() {
     [selectedTaskId, tasks]
   );
 
-  // Filter tasks by search query
+  // Filter tasks by search query, agent type, and status
   const filteredTasks = useMemo(() => {
-    if (!debouncedSearchQuery.trim()) return tasks;
-    const q = debouncedSearchQuery.toLowerCase();
-    return tasks.filter(
-      (t) => t.title.toLowerCase().includes(q) || t.description.toLowerCase().includes(q)
-    );
-  }, [tasks, debouncedSearchQuery]);
+    let result = tasks;
+
+    // Text search
+    if (debouncedSearchQuery.trim()) {
+      const q = debouncedSearchQuery.toLowerCase();
+      result = result.filter(
+        (t) => t.title.toLowerCase().includes(q) || t.description.toLowerCase().includes(q)
+      );
+    }
+
+    // Agent type filter (OR within group)
+    if (activeAgentTypes.length > 0) {
+      result = result.filter((t) => t.agentType && activeAgentTypes.includes(t.agentType));
+    }
+
+    // Status filter (OR within group) — "running" maps to planning|executing
+    if (activeStatuses.length > 0) {
+      const matchingStatuses = activeStatuses.flatMap(statusFilterToStatuses);
+      result = result.filter((t) => matchingStatuses.includes(t.agentStatus));
+    }
+
+    return result;
+  }, [tasks, debouncedSearchQuery, activeAgentTypes, activeStatuses]);
+
+  // Sort comparator
+  const STATUS_WEIGHT: Record<string, number> = { executing: 0, planning: 1, failed: 2, idle: 3, complete: 4 };
+  const sortTasks = useCallback((a: Task, b: Task): number => {
+    const dir = sortDir === 'asc' ? 1 : -1;
+    switch (sortBy) {
+      case 'title':
+        return dir * a.title.localeCompare(b.title);
+      case 'priority':
+        return dir * ((PRIORITY_WEIGHT[a.priority] ?? 2) - (PRIORITY_WEIGHT[b.priority] ?? 2));
+      case 'created':
+        return dir * (a.createdAt - b.createdAt);
+      case 'status':
+        return dir * ((STATUS_WEIGHT[a.agentStatus] ?? 3) - (STATUS_WEIGHT[b.agentStatus] ?? 3));
+      default:
+        return 0;
+    }
+  }, [sortBy, sortDir]);
 
   const getFilteredTasksByColumn = useCallback(
-    (columnId: ColumnId) => filteredTasks.filter((t) => t.columnId === columnId),
-    [filteredTasks]
+    (columnId: ColumnId) => filteredTasks.filter((t) => t.columnId === columnId).sort(sortTasks),
+    [filteredTasks, sortTasks]
   );
+
+  const handleToggleAgentType = useCallback((agentType: AgentType) => {
+    setActiveAgentTypes((prev) =>
+      prev.includes(agentType) ? prev.filter((t) => t !== agentType) : [...prev, agentType]
+    );
+  }, []);
+
+  const handleToggleStatus = useCallback((status: StatusFilter) => {
+    setActiveStatuses((prev) =>
+      prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status]
+    );
+  }, []);
+
+  const handleClearFilters = useCallback(() => {
+    setActiveAgentTypes([]);
+    setActiveStatuses([]);
+  }, []);
 
   const handleTaskClick = useCallback((task: Task) => {
     if (task.columnId === 'backlog') return;
@@ -69,7 +148,7 @@ export function App() {
     setDialogOpen(true);
   }, []);
 
-  const handleEditSubmit = useCallback((id: string, updates: { title: string; description: string; agentType: AgentType }) => {
+  const handleEditSubmit = useCallback((id: string, updates: { title: string; description: string; priority: Priority; agentType: AgentType }) => {
     updateTask(id, updates);
   }, [updateTask]);
 
@@ -103,6 +182,15 @@ export function App() {
   );
 
   const handleRunWithConfig = useCallback((taskId: string) => {
+    setWorktreeDialogTaskId(taskId);
+  }, []);
+
+  const handleRetryTask = useCallback((task: Task) => {
+    setSelectedTaskId(task.id);
+    runTask(task.id);
+  }, [runTask]);
+
+  const handleReconfigureRetry = useCallback((taskId: string) => {
     setWorktreeDialogTaskId(taskId);
   }, []);
 
@@ -161,6 +249,15 @@ export function App() {
         onSearchChange={setSearchQuery}
         showArchived={showArchived}
         onToggleArchived={() => setShowArchived(!showArchived)}
+        sortBy={sortBy}
+        sortDir={sortDir}
+        onSortByChange={setSortBy}
+        onSortDirChange={setSortDir}
+        activeAgentTypes={activeAgentTypes}
+        activeStatuses={activeStatuses}
+        onToggleAgentType={handleToggleAgentType}
+        onToggleStatus={handleToggleStatus}
+        onClearFilters={handleClearFilters}
       />
 
       <main className="flex-1 overflow-hidden">
@@ -173,6 +270,7 @@ export function App() {
           onDeleteTask={handleDeleteTask}
           onArchiveTask={handleArchiveTask}
           onUnarchiveTask={handleUnarchiveTask}
+          onRetryTask={handleRetryTask}
           onAddTask={handleOpenDialog}
           showArchived={showArchived}
           // onDropInProgress receives the pre-move task object, but task.id is stable.
@@ -190,7 +288,7 @@ export function App() {
         onEditSubmit={handleEditSubmit}
       />
 
-      <AgentPanel task={selectedTask} onClose={handleClosePanel} onRun={handleRunWithConfig} onStop={stopTask} onCreatePR={createPR} onCleanupWorktree={cleanupWorktree} />
+      <AgentPanel task={selectedTask} onClose={handleClosePanel} onRun={handleRunWithConfig} onStop={stopTask} onCreatePR={createPR} onCleanupWorktree={cleanupWorktree} onReconfigureRetry={handleReconfigureRetry} />
 
       <WorktreeDialog
         open={worktreeDialogTaskId !== null}

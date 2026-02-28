@@ -6,6 +6,7 @@ export type {
   AgentType,
   AgentInfo,
   Task,
+  TaskTemplate,
   AgentEventType,
   AgentEvent,
   Column,

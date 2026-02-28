@@ -75,6 +75,19 @@ export interface AgentCompletePayload {
   eventCount: number;
 }
 
+export interface TaskTemplate {
+  id: string;
+  name: string;
+  title: string;
+  description: string;
+  priority: Priority;
+  agentType: AgentType;
+  repoPath?: string;
+  baseBranch?: string;
+  useWorktree?: boolean;
+  createdAt: number;
+}
+
 export interface AgentFollowUpPayload {
   taskId: string;
   message: string;

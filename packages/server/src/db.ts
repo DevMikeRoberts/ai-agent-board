@@ -91,6 +91,22 @@ function migrate(db: Database.Database): void {
   if (!colNames.has('archived')) {
     db.exec(`ALTER TABLE tasks ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`);
   }
+
+  // Templates table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS templates (
+      id            TEXT PRIMARY KEY,
+      name          TEXT NOT NULL UNIQUE,
+      title         TEXT NOT NULL DEFAULT '',
+      description   TEXT NOT NULL DEFAULT '',
+      priority      TEXT NOT NULL DEFAULT 'medium',
+      agent_type    TEXT NOT NULL DEFAULT 'copilot',
+      repo_path     TEXT,
+      base_branch   TEXT,
+      use_worktree  INTEGER,
+      created_at    INTEGER NOT NULL
+    )
+  `);
 }
 
 export function initDatabase(): Database.Database {
@@ -159,6 +175,22 @@ export async function initPostgresDatabase(pool: Pool): Promise<void> {
 
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_events_task_id ON events(task_id, timestamp ASC)
+  `);
+
+  // Templates table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS templates (
+      id            TEXT PRIMARY KEY,
+      name          TEXT NOT NULL UNIQUE,
+      title         TEXT NOT NULL DEFAULT '',
+      description   TEXT NOT NULL DEFAULT '',
+      priority      TEXT NOT NULL DEFAULT 'medium',
+      agent_type    TEXT NOT NULL DEFAULT 'copilot',
+      repo_path     TEXT,
+      base_branch   TEXT,
+      use_worktree  BOOLEAN,
+      created_at    BIGINT NOT NULL
+    )
   `);
 
   // Migrate existing FK to ON DELETE CASCADE if not already set

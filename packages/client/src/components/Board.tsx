@@ -28,6 +28,7 @@ interface BoardProps {
   onDeleteTask?: (task: Task) => void;
   onArchiveTask?: (task: Task) => void;
   onUnarchiveTask?: (task: Task) => void;
+  onRetryTask?: (task: Task) => void;
   onAddTask: () => void;
   onDropInProgress?: (task: Task) => void;
   showArchived?: boolean;
@@ -50,6 +51,7 @@ export function Board({
   onDeleteTask,
   onArchiveTask,
   onUnarchiveTask,
+  onRetryTask,
   onAddTask,
   onDropInProgress,
   showArchived = false,
@@ -165,6 +167,7 @@ export function Board({
               onDeleteTask={onDeleteTask}
               onArchiveTask={onArchiveTask}
               onUnarchiveTask={onUnarchiveTask}
+              onRetryTask={onRetryTask}
               onAddTask={column.id === 'backlog' ? onAddTask : undefined}
             />
           </motion.div>

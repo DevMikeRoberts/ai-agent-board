@@ -11,9 +11,11 @@ import {
   Pencil,
   Trash2,
   Archive,
+  RotateCw,
 } from 'lucide-react';
 import type { Task, AgentStatus } from '@/types';
 import { getAgentDisplay } from '@/lib/agent-config';
+import { getPriorityDisplay } from '@/lib/priority-config';
 import { cn } from '@/lib/utils';
 
 
@@ -44,9 +46,10 @@ interface TaskCardProps {
   onDelete?: (task: Task) => void;
   onArchive?: (task: Task) => void;
   onUnarchive?: (task: Task) => void;
+  onRetry?: (task: Task) => void;
 }
 
-function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarchive }: TaskCardProps) {
+function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarchive, onRetry }: TaskCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({
       id: task.id,
@@ -72,6 +75,7 @@ function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarc
   const agentStatus = agentStatusConfig[task.agentStatus];
   const StatusIcon = agentStatus.icon;
   const isActive = task.agentStatus === 'executing' || task.agentStatus === 'planning';
+  const priorityDisplay = getPriorityDisplay(task.priority);
 
   const [elapsed, setElapsed] = useState('');
   useEffect(() => {
@@ -94,6 +98,7 @@ function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarc
       className={cn(
         'group relative cursor-grab active:cursor-grabbing rounded-lg border border-border bg-card p-3 shadow-sm transition-all',
         'hover:border-primary/30 hover:shadow-md',
+        priorityDisplay?.borderClass,
         isDragging && 'z-50 rotate-2 scale-105 shadow-xl opacity-90',
         isActive && 'border-primary/20',
         task.archived && 'opacity-60 bg-muted'
@@ -102,11 +107,23 @@ function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarc
     >
 
       {/* Action buttons — top right, visible on hover */}
-      {(onEdit || onDelete || onArchive || onUnarchive) && (
+      {(onEdit || onDelete || onArchive || onUnarchive || onRetry) && (
         <div
           className="absolute right-2 top-2 flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
           onPointerDown={(e) => e.stopPropagation()}
         >
+          {onRetry && task.agentStatus === 'failed' && !task.archived && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onRetry(task);
+              }}
+              className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-amber-400"
+              aria-label="Retry task"
+            >
+              <RotateCw className="h-3 w-3" />
+            </button>
+          )}
           {onEdit && !task.archived && (
             <button
               onClick={(e) => {

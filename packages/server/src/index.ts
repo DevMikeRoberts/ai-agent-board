@@ -9,9 +9,11 @@ import { PostgresTaskRepository } from './repositories/postgres.js';
 import { createTaskRouter } from './routes/tasks.js';
 import { createAgentRouter } from './routes/agent.js';
 import { createGitRouter } from './routes/git.js';
+import { createTemplateRouter } from './routes/templates.js';
 import { AgentManager } from './services/agent-manager.js';
 import { authMiddleware } from './middleware/auth.js';
 import type { TaskRepository } from './repositories/types.js';
+import type { TemplateRepository } from './repositories/template-types.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -27,6 +29,7 @@ app.use('/api', authMiddleware);
 const DATABASE_URL = process.env.DATABASE_URL;
 
 let taskRepo: TaskRepository;
+let templateRepo: TemplateRepository;
 let cleanupDb: () => void;
 
 // Initialize AgentManager
@@ -39,12 +42,16 @@ const agentManager = new AgentManager();
     const pool = new Pool({ connectionString: DATABASE_URL });
     await initPostgresDatabase(pool);
     taskRepo = new PostgresTaskRepository(pool);
+    const { PostgresTemplateRepository } = await import('./repositories/postgres-templates.js');
+    templateRepo = new PostgresTemplateRepository(pool);
     cleanupDb = () => { pool.end(); };
     console.log('[server] using PostgreSQL backend');
   } else {
     // SQLite fallback
     const db = initDatabase();
     taskRepo = new SqliteTaskRepository(db);
+    const { SqliteTemplateRepository } = await import('./repositories/sqlite-templates.js');
+    templateRepo = new SqliteTemplateRepository(db);
     cleanupDb = () => { db.close(); };
     console.log('[server] using SQLite backend');
   }
@@ -54,6 +61,7 @@ const agentManager = new AgentManager();
   app.use('/api/tasks', createTaskRouter(taskRepo, agentManager));
   app.use('/api/tasks', createAgentRouter(taskRepo, agentManager));
   app.use('/api/tasks', createGitRouter(taskRepo, agentManager));
+  app.use('/api/templates', createTemplateRouter(templateRepo));
 
   // GET /api/agents — list available agents
   app.get('/api/agents', (_req, res) => {

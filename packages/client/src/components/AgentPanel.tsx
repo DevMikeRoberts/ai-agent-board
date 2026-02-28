@@ -20,6 +20,7 @@ import {
   Trash2,
   Send,
   FileText,
+  RotateCw,
 } from 'lucide-react';
 import type { Task, AgentEvent, AgentEventType } from '@/types';
 import { getAgentDisplay } from '@/lib/agent-config';
@@ -159,6 +160,7 @@ interface AgentPanelProps {
   onStop?: (id: string) => void;
   onCreatePR?: (id: string) => Promise<string | undefined>;
   onCleanupWorktree?: (id: string) => Promise<void>;
+  onReconfigureRetry?: (id: string) => void;
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -324,7 +326,7 @@ function EventItem({ event }: { event: CoalescedEvent }) {
   );
 }
 
-export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onCleanupWorktree }: AgentPanelProps) {
+export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onCleanupWorktree, onReconfigureRetry }: AgentPanelProps) {
   const [events, setEvents] = useState<AgentEvent[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [prUrl, setPrUrl] = useState<string | null>(null);
@@ -502,14 +504,24 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onCleanup
               </div>
             </div>
             <div className="ml-3 flex items-center gap-1.5">
-              {/* Run / Stop buttons */}
+              {/* Run / Stop / Retry buttons */}
               {!isActive && task.agentStatus !== 'complete' && onRun && (
                 <button
                   onClick={() => onRun(task.id)}
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-muted text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors"
-                  title="Run agent"
+                  title={task.agentStatus === 'failed' ? 'Retry agent' : 'Run agent'}
                 >
-                  <Play className="h-4 w-4" />
+                  {task.agentStatus === 'failed' ? <RotateCw className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                </button>
+              )}
+              {!isActive && task.agentStatus === 'failed' && onReconfigureRetry && (
+                <button
+                  onClick={() => onReconfigureRetry(task.id)}
+                  className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-muted px-3 text-xs font-medium text-amber-500 dark:text-amber-400 hover:bg-amber-500/20 transition-colors"
+                  title="Reconfigure and retry"
+                >
+                  <Cog className="h-3.5 w-3.5" />
+                  Reconfigure
                 </button>
               )}
               {isActive && onStop && (

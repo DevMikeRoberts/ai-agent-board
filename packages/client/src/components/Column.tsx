@@ -29,10 +29,11 @@ interface ColumnProps {
   onDeleteTask?: (task: Task) => void;
   onArchiveTask?: (task: Task) => void;
   onUnarchiveTask?: (task: Task) => void;
+  onRetryTask?: (task: Task) => void;
   onAddTask?: () => void;
 }
 
-export function Column({ column, tasks, onTaskClick, onEditTask, onDeleteTask, onArchiveTask, onUnarchiveTask, onAddTask }: ColumnProps) {
+export function Column({ column, tasks, onTaskClick, onEditTask, onDeleteTask, onArchiveTask, onUnarchiveTask, onRetryTask, onAddTask }: ColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
   const Icon = iconMap[column.icon] || Inbox;
 
@@ -47,7 +48,7 @@ export function Column({ column, tasks, onTaskClick, onEditTask, onDeleteTask, o
   }, [column.color]);
 
   return (
-    <div className="flex h-full w-full shrink-0 flex-col md:w-72 lg:w-80 max-md:h-auto max-md:min-h-48">
+    <div className="flex h-full w-full shrink-0 flex-col md:w-72 lg:w-80 max-md:h-auto max-md:min-h-48" data-column={column.id}>
       {/* Column header */}
       <div className="mb-3 flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
@@ -89,6 +90,7 @@ export function Column({ column, tasks, onTaskClick, onEditTask, onDeleteTask, o
             onDelete={onDeleteTask}
             onArchive={onArchiveTask}
             onUnarchive={onUnarchiveTask}
+            onRetry={onRetryTask}
           />
         ))}
 

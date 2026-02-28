@@ -1,5 +1,10 @@
-import { Kanban, Search, Archive } from 'lucide-react';
+import { Kanban, Search, Archive, ArrowUpDown } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
+import { FilterChips, type StatusFilter } from './FilterChips';
+import type { AgentType } from '@/types';
+
+export type SortBy = 'title' | 'priority' | 'created' | 'status';
+export type SortDir = 'asc' | 'desc';
 
 interface HeaderProps {
   theme: 'dark' | 'light';
@@ -8,9 +13,25 @@ interface HeaderProps {
   onSearchChange: (query: string) => void;
   showArchived: boolean;
   onToggleArchived: () => void;
+  sortBy: SortBy;
+  sortDir: SortDir;
+  onSortByChange: (sortBy: SortBy) => void;
+  onSortDirChange: (sortDir: SortDir) => void;
+  activeAgentTypes: AgentType[];
+  activeStatuses: StatusFilter[];
+  onToggleAgentType: (agentType: AgentType) => void;
+  onToggleStatus: (status: StatusFilter) => void;
+  onClearFilters: () => void;
 }
 
-export function Header({ theme, toggleTheme, searchQuery, onSearchChange, showArchived, onToggleArchived }: HeaderProps) {
+const SORT_OPTIONS: { value: SortBy; label: string }[] = [
+  { value: 'title', label: 'Title' },
+  { value: 'priority', label: 'Priority' },
+  { value: 'created', label: 'Created' },
+  { value: 'status', label: 'Status' },
+];
+
+export function Header({ theme, toggleTheme, searchQuery, onSearchChange, showArchived, onToggleArchived, sortBy, sortDir, onSortByChange, onSortDirChange, activeAgentTypes, activeStatuses, onToggleAgentType, onToggleStatus, onClearFilters }: HeaderProps) {
   return (
     <header className="sticky top-0 z-50 border-b border-zinc-700/30 bg-zinc-900 shadow-md">
       <div className="flex h-14 items-center justify-between px-6">
@@ -41,6 +62,27 @@ export function Header({ theme, toggleTheme, searchQuery, onSearchChange, showAr
             />
           </div>
 
+          {/* Sort control */}
+          <div className="flex items-center gap-1">
+            <ArrowUpDown className="h-3.5 w-3.5 text-zinc-400" />
+            <select
+              value={sortBy}
+              onChange={(e) => onSortByChange(e.target.value as SortBy)}
+              className="h-8 rounded-lg border border-zinc-700 bg-zinc-800 px-2 text-xs text-zinc-200 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
+            >
+              {SORT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => onSortDirChange(sortDir === 'asc' ? 'desc' : 'asc')}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-800 text-xs text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
+              aria-label={`Sort ${sortDir === 'asc' ? 'descending' : 'ascending'}`}
+            >
+              {sortDir === 'asc' ? '↑' : '↓'}
+            </button>
+          </div>
+
           {/* Archive toggle */}
           <button
             onClick={onToggleArchived}
@@ -57,6 +99,17 @@ export function Header({ theme, toggleTheme, searchQuery, onSearchChange, showAr
 
           <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
         </div>
+      </div>
+
+      {/* Filter chips row */}
+      <div className="flex items-center gap-2 px-6 pb-2">
+        <FilterChips
+          activeAgentTypes={activeAgentTypes}
+          activeStatuses={activeStatuses}
+          onToggleAgentType={onToggleAgentType}
+          onToggleStatus={onToggleStatus}
+          onClear={onClearFilters}
+        />
       </div>
     </header>
   );
