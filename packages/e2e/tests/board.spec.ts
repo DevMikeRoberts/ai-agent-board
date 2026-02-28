@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 
+const API = 'http://localhost:3001';
+
 // Helper to wait for the board to render
 async function waitForBoard(page: Page) {
   await expect(page.getByRole('heading', { name: 'Backlog', exact: true })).toBeVisible({ timeout: 10_000 });
@@ -10,24 +12,27 @@ async function waitForBoard(page: Page) {
 
 // Helper to open the create task dialog
 async function openCreateDialog(page: Page) {
-  // The + button is next to the Backlog heading inside the column header
   const backlogHeading = page.getByRole('heading', { name: 'Backlog', exact: true });
-  // The + button is a sibling in the column header div - go up to the header row then find the button
   const headerRow = backlogHeading.locator('..').locator('..');
   const addButton = headerRow.locator('button').first();
   await addButton.click();
   await expect(page.getByRole('heading', { name: 'Create Task' })).toBeVisible();
 }
 
-// Helper to create a task
-async function createTask(page: Page, title: string, description = 'Test description') {
+// Helper to create a task — returns task ID via API lookup
+async function createTask(page: Page, title: string, description = 'Test description'): Promise<string> {
   await openCreateDialog(page);
   await page.getByPlaceholder('What needs to be done?').fill(title);
   await page.getByPlaceholder('Describe the task for the Copilot agent...').fill(description);
   await page.getByRole('button', { name: 'Create Task' }).click();
-  // Wait for dialog to close and task to appear
   await expect(page.getByRole('heading', { name: 'Create Task' })).not.toBeVisible({ timeout: 3_000 });
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 5_000 });
+  const id = await page.evaluate(async (t) => {
+    const res = await fetch('/api/tasks');
+    const tasks = await res.json();
+    return tasks.find((tk: any) => tk.title === t)?.id ?? null;
+  }, title);
+  return id as string;
 }
 
 test.describe('Kanban Board', () => {
@@ -53,16 +58,27 @@ test.describe('Kanban Board', () => {
 });
 
 test.describe('Task CRUD', () => {
+  let createdTaskIds: string[] = [];
+
   test.beforeEach(async ({ page }) => {
+    createdTaskIds = [];
     await page.goto('/');
     await waitForBoard(page);
+  });
+
+  test.afterEach(async ({ request }) => {
+    for (const id of createdTaskIds) {
+      await request.delete(`${API}/api/tasks/${id}`).catch(() => {});
+    }
+    createdTaskIds = [];
   });
 
   test('create a new task', async ({ page }) => {
     const ts = Date.now();
     const taskTitle = `E2E Task ${ts}`;
     const taskDesc = `Automated test description ${ts}`;
-    await createTask(page, taskTitle, taskDesc);
+    const id = await createTask(page, taskTitle, taskDesc);
+    createdTaskIds.push(id);
     await expect(page.getByRole('heading', { name: taskTitle })).toBeVisible();
     await expect(page.getByText(taskDesc).first()).toBeVisible();
   });
@@ -70,8 +86,6 @@ test.describe('Task CRUD', () => {
   test('create task dialog opens and closes', async ({ page }) => {
     await openCreateDialog(page);
     await expect(page.getByPlaceholder('What needs to be done?')).toBeVisible();
-
-    // Cancel should close dialog
     await page.getByRole('button', { name: 'Cancel' }).click();
     await expect(page.getByPlaceholder('What needs to be done?')).not.toBeVisible({ timeout: 2_000 });
   });
@@ -80,21 +94,17 @@ test.describe('Task CRUD', () => {
     await openCreateDialog(page);
     const createButton = page.getByRole('button', { name: 'Create Task' });
     await expect(createButton).toBeDisabled();
-
     await page.getByPlaceholder('What needs to be done?').fill('Valid Task');
     await expect(createButton).toBeEnabled();
+    // Close without submitting
+    await page.getByRole('button', { name: 'Cancel' }).click();
   });
 
   test('click task to open agent panel', async ({ page }) => {
     const taskTitle = `Panel Task ${Date.now()}`;
-    await createTask(page, taskTitle);
+    const taskId = await createTask(page, taskTitle);
+    createdTaskIds.push(taskId);
 
-    // Move task to in-progress via API (clicking backlog cards doesn't open agent panel)
-    const taskId = await page.evaluate(async (title) => {
-      const res = await fetch('/api/tasks');
-      const tasks = await res.json();
-      return tasks.find((t: any) => t.title === title)?.id;
-    }, taskTitle);
     await page.evaluate(async (id) => {
       await fetch(`/api/tasks/${id}`, {
         method: 'PATCH',
@@ -103,14 +113,9 @@ test.describe('Task CRUD', () => {
       });
     }, taskId);
 
-    // Reload so the board reflects the move
     await page.reload();
     await waitForBoard(page);
-
-    // Click the task card
     await page.getByRole('heading', { name: taskTitle }).click();
-
-    // Agent panel should open with task title and action buttons
     await expect(page.getByRole('button', { name: 'Run agent' })).toBeVisible({ timeout: 3_000 });
     await expect(page.getByText('No agent activity yet')).toBeVisible();
   });
@@ -138,38 +143,39 @@ test.describe('Theme Toggle', () => {
 });
 
 test.describe('Task Edit', () => {
+  let createdTaskIds: string[] = [];
+
   test.beforeEach(async ({ page }) => {
+    createdTaskIds = [];
     await page.goto('/');
     await waitForBoard(page);
+  });
+
+  test.afterEach(async ({ request }) => {
+    for (const id of createdTaskIds) {
+      await request.delete(`${API}/api/tasks/${id}`).catch(() => {});
+    }
+    createdTaskIds = [];
   });
 
   test('edit button opens dialog with pre-populated data', async ({ page }) => {
     const ts = Date.now();
     const taskTitle = `Editable Task ${ts}`;
-    await createTask(page, taskTitle, 'Original description');
+    const taskId = await createTask(page, taskTitle, 'Original description');
+    createdTaskIds.push(taskId);
 
-    // Find the card containing our task and hover to reveal the edit button
     const taskCard = page.locator('.group').filter({ has: page.getByRole('heading', { name: taskTitle }) });
     await taskCard.hover();
+    await taskCard.getByRole('button', { name: 'Edit task' }).click();
 
-    // Click the edit button (pencil icon) within this specific card
-    const editButton = taskCard.getByRole('button', { name: 'Edit task' });
-    await editButton.click();
-
-    // Dialog should open in edit mode
     await expect(page.getByRole('heading', { name: 'Edit Task' })).toBeVisible();
-
-    // Fields should be pre-populated
-    const titleInput = page.getByPlaceholder('What needs to be done?');
-    await expect(titleInput).toHaveValue(taskTitle);
+    await expect(page.getByPlaceholder('What needs to be done?')).toHaveValue(taskTitle);
     await expect(page.getByPlaceholder('Describe the task for the Copilot agent...')).toHaveValue('Original description');
 
-    // Edit the title
     const newTitle = `Edited Task ${ts}`;
-    await titleInput.fill(newTitle);
+    await page.getByPlaceholder('What needs to be done?').fill(newTitle);
     await page.getByRole('button', { name: 'Save Changes' }).click();
 
-    // Dialog should close and updated title should appear
     await expect(page.getByRole('heading', { name: 'Edit Task' })).not.toBeVisible({ timeout: 2_000 });
     await expect(page.getByRole('heading', { name: newTitle })).toBeVisible({ timeout: 5_000 });
   });

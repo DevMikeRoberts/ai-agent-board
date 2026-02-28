@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 
+const API = 'http://localhost:3001';
+
 // ---------------------------------------------------------------------------
 // Helpers (mirrors board.spec.ts patterns)
 // ---------------------------------------------------------------------------
@@ -84,14 +86,25 @@ function getAgentButtons(dialog: ReturnType<Page['locator']>) {
 // ---------------------------------------------------------------------------
 
 test.describe('Agent Selector in WorktreeDialog', () => {
+  let createdTaskIds: string[] = [];
+
   test.beforeEach(async ({ page }) => {
+    createdTaskIds = [];
     await page.goto('/');
     await waitForBoard(page);
   });
 
+  test.afterEach(async ({ request }) => {
+    for (const id of createdTaskIds) {
+      await request.delete(`${API}/api/tasks/${id}`).catch(() => {});
+    }
+    createdTaskIds = [];
+  });
+
   test('shows agent selector with 4 agent buttons (Copilot, Claude, Codex, OpenCode)', async ({ page }) => {
     const title = `AgentSel ${Date.now()}`;
-    await createTaskInProgress(page, title);
+    const taskId = await createTaskInProgress(page, title);
+    createdTaskIds.push(taskId);
     const dialog = await openWorktreeDialog(page, title);
 
     // The grid should contain exactly 4 agent buttons
@@ -110,7 +123,8 @@ test.describe('Agent Selector in WorktreeDialog', () => {
 
   test('clicking an agent button selects it (shows primary/active state)', async ({ page }) => {
     const title = `AgentClick ${Date.now()}`;
-    await createTaskInProgress(page, title);
+    const taskId = await createTaskInProgress(page, title);
+    createdTaskIds.push(taskId);
     const dialog = await openWorktreeDialog(page, title);
     const { copilot, claude, codex } = getAgentButtons(dialog);
 
@@ -138,7 +152,8 @@ test.describe('Agent Selector in WorktreeDialog', () => {
 
   test('disabled agents have cursor-not-allowed styling', async ({ page }) => {
     const title = `AgentDisabled ${Date.now()}`;
-    await createTaskInProgress(page, title);
+    const taskId = await createTaskInProgress(page, title);
+    createdTaskIds.push(taskId);
     const dialog = await openWorktreeDialog(page, title);
     const { copilot, claude, codex } = getAgentButtons(dialog);
 
@@ -155,7 +170,8 @@ test.describe('Agent Selector in WorktreeDialog', () => {
 
   test('default agent selection is copilot', async ({ page }) => {
     const title = `DefaultAgent ${Date.now()}`;
-    await createTaskInProgress(page, title);
+    const taskId = await createTaskInProgress(page, title);
+    createdTaskIds.push(taskId);
     const dialog = await openWorktreeDialog(page, title);
     const { copilot } = getAgentButtons(dialog);
 
@@ -170,14 +186,25 @@ test.describe('Agent Selector in WorktreeDialog', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Agent Type Badge on Task Cards', () => {
+  let createdTaskIds: string[] = [];
+
   test.beforeEach(async ({ page }) => {
+    createdTaskIds = [];
     await page.goto('/');
     await waitForBoard(page);
   });
 
+  test.afterEach(async ({ request }) => {
+    for (const id of createdTaskIds) {
+      await request.delete(`${API}/api/tasks/${id}`).catch(() => {});
+    }
+    createdTaskIds = [];
+  });
+
   test('agent type badge appears on task card when agentType is set and column is not backlog', async ({ page }) => {
     const title = `BadgeTask ${Date.now()}`;
-    await createTaskInProgress(page, title, { agentType: 'copilot' });
+    const taskId = await createTaskInProgress(page, title, { agentType: 'copilot' });
+    createdTaskIds.push(taskId);
 
     // The card in in-progress should show the Copilot agent badge
     const card = page.locator('.group').filter({ has: page.getByRole('heading', { name: title }) });
@@ -202,6 +229,7 @@ test.describe('Agent Type Badge on Task Cards', () => {
         body: JSON.stringify({ agentType: 'claude' }),
       });
     }, { id: taskId });
+    if (taskId) createdTaskIds.push(taskId);
 
     await page.reload();
     await waitForBoard(page);
@@ -223,14 +251,25 @@ test.describe('Agent Type Badge on Task Cards', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Agent Panel Header', () => {
+  let createdTaskIds: string[] = [];
+
   test.beforeEach(async ({ page }) => {
+    createdTaskIds = [];
     await page.goto('/');
     await waitForBoard(page);
   });
 
+  test.afterEach(async ({ request }) => {
+    for (const id of createdTaskIds) {
+      await request.delete(`${API}/api/tasks/${id}`).catch(() => {});
+    }
+    createdTaskIds = [];
+  });
+
   test('shows the agent type emoji and label when task has agentType', async ({ page }) => {
     const title = `PanelAgent ${Date.now()}`;
-    await createTaskInProgress(page, title, { agentType: 'copilot' });
+    const taskId = await createTaskInProgress(page, title, { agentType: 'copilot' });
+    createdTaskIds.push(taskId);
 
     // Click to open the agent panel
     await page.getByRole('heading', { name: title }).click();
