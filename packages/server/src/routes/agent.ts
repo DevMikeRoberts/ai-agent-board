@@ -133,7 +133,7 @@ export function createAgentRouter(repo: TaskRepository, agentManager: AgentManag
       res.status(404).json({ error: 'task not found' });
       return;
     }
-    const stopped = agentManager.stopAgent(task.id);
+    const stopped = await agentManager.stopAgent(task.id);
     if (!stopped) {
       res.status(409).json({ error: 'no running agent for this task' });
       return;

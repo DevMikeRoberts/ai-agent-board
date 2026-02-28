@@ -136,6 +136,7 @@ export function WorktreeDialog({ open, task, onClose, onSubmit }: WorktreeDialog
                     { name: 'copilot' as AgentType, displayName: 'GitHub Copilot', available: true },
                     { name: 'claude' as AgentType, displayName: 'Claude Code', available: false, reason: 'Loading...' },
                     { name: 'codex' as AgentType, displayName: 'OpenAI Codex', available: false, reason: 'Loading...' },
+                    { name: 'opencode' as AgentType, displayName: 'OpenCode', available: false, reason: 'Loading...' },
                   ]).map((agent) => (
                     <button
                       key={agent.name}

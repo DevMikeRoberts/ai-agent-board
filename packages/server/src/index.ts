@@ -70,6 +70,22 @@ const agentManager = new AgentManager();
 
   await agentManager.initialize();
 
+
+  // Recover tasks orphaned by a previous server restart.
+  // Any task stuck in 'planning' or 'executing' has no live agent session —
+  // reset to 'failed' so they're not permanently frozen.
+  const allTasks = await taskRepo.getAll();
+  const orphaned = allTasks.filter(t =>
+    t.agentStatus === 'planning' || t.agentStatus === 'executing'
+  );
+  for (const task of orphaned) {
+    await taskRepo.update(task.id, {
+      agentStatus: 'failed',
+      completedAt: Date.now(),
+    });
+    console.warn(`[server] recovered orphaned task ${task.id} "${task.title}" (was ${task.agentStatus})`);
+  }
+
   server.listen(PORT, () => {
     console.log(`[server] listening on http://localhost:${PORT}`);
     console.log(`[server] WebSocket at ws://localhost:${PORT}/ws`);

@@ -7,7 +7,7 @@ import type { Task, AgentEvent, AgentType } from '../types.js';
 import type { TaskRepository } from '../repositories/types.js';
 import type { AgentProvider, AgentSession, AgentInfo } from '@codewithdan/agent-sdk-core';
 import type { AgentEvent as CoreAgentEvent } from '@codewithdan/agent-sdk-core';
-import { CopilotProvider, ClaudeProvider, CodexProvider, detectAgents } from '@codewithdan/agent-sdk-core';
+import { CopilotProvider, ClaudeProvider, CodexProvider, OpenCodeProvider, detectAgents } from '@codewithdan/agent-sdk-core';
 import { broadcast } from '../websocket.js';
 
 const AGENT_TIMEOUT_MS = parseInt(process.env.AGENT_TIMEOUT_MS || '600000', 10);
@@ -20,7 +20,7 @@ interface ManagedSession {
 }
 
 // Event log per task (capped to prevent unbounded growth)
-const MAX_EVENTS_PER_TASK = 100;
+const MAX_EVENTS_PER_TASK = 2000;
 const MAX_EVENT_LOG_TASKS = 200;
 
 // Deleted-task guard TTL
@@ -35,6 +35,8 @@ export class AgentManager {
   private eventLogs = new Map<string, AgentEvent[]>();
   private eventRepo: TaskRepository | null = null;
   private availableAgents: AgentInfo[] = [];
+  /** Pending coalesced output/thinking broadcast per task */
+  private streamBuffer = new Map<string, { event: AgentEvent; timer: ReturnType<typeof setTimeout> }>();
 
   /** Call once at startup to enable event persistence. */
   initEventPersistence(repo: TaskRepository): void {
@@ -47,6 +49,7 @@ export class AgentManager {
     this.providers.set('copilot', new CopilotProvider());
     this.providers.set('claude', new ClaudeProvider());
     this.providers.set('codex', new CodexProvider());
+    this.providers.set('opencode', new OpenCodeProvider());
 
     // Detect which agents are actually available on this system
     this.availableAgents = await detectAgents();
@@ -83,6 +86,8 @@ export class AgentManager {
 
   private emitEvent(taskId: string, event: AgentEvent): void {
     if (this.deletedTasks.has(taskId)) return;
+    // Drop empty content events — nothing to show
+    if (!event.content?.trim() && event.type !== 'complete' && event.type !== 'error') return;
 
     let log = this.eventLogs.get(taskId) || [];
     log.push(event);
@@ -102,22 +107,50 @@ export class AgentManager {
         console.error(`[agent-manager] failed to persist event: ${err instanceof Error ? err.message : String(err)}`);
       });
     }
-    broadcast({ type: 'agent_event', payload: event });
+    const STREAMABLE = new Set(['output', 'thinking']);
+
+    const flushBuffer = (taskId: string) => {
+      const buf = this.streamBuffer.get(taskId);
+      if (buf) {
+        clearTimeout(buf.timer);
+        broadcast({ type: 'agent_event', payload: buf.event });
+        this.streamBuffer.delete(taskId);
+      }
+    };
+
+    if (STREAMABLE.has(event.type)) {
+      const existing = this.streamBuffer.get(event.taskId);
+      if (existing && existing.event.type === event.type) {
+        // Same type — merge content and reset timer
+        clearTimeout(existing.timer);
+        existing.event.content += event.content;
+        existing.timer = setTimeout(() => flushBuffer(event.taskId), 40);
+      } else {
+        // Different type or no buffer — flush existing, start new buffer
+        if (existing) flushBuffer(event.taskId);
+        const entry = { event: { ...event }, timer: null as unknown as ReturnType<typeof setTimeout> };
+        entry.timer = setTimeout(() => flushBuffer(event.taskId), 40);
+        this.streamBuffer.set(event.taskId, entry);
+      }
+    } else {
+      // Non-streamable: flush pending buffer first, then broadcast immediately
+      flushBuffer(event.taskId);
+      broadcast({ type: 'agent_event', payload: event });
+    }
   }
 
   async getEvents(taskId: string): Promise<AgentEvent[]> {
+    // Prefer DB (complete, ordered) over in-memory (capped, may be partial)
+    if (this.eventRepo) {
+      const dbEvents = await this.eventRepo.getEventsByTaskId(taskId);
+      if (dbEvents.length > 0) return dbEvents;
+    }
+    // Fall back to in-memory (task still running, not yet persisted)
     const memEvents = this.eventLogs.get(taskId);
     if (memEvents && memEvents.length > 0) {
       this.eventLogs.delete(taskId);
       this.eventLogs.set(taskId, memEvents);
       return [...memEvents];
-    }
-    if (this.eventRepo) {
-      const dbEvents = await this.eventRepo.getEventsByTaskId(taskId);
-      if (dbEvents.length > 0) {
-        this.eventLogs.set(taskId, dbEvents);
-      }
-      return dbEvents;
     }
     return [];
   }

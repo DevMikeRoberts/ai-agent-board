@@ -142,7 +142,7 @@ export function validateTaskFields(body: Record<string, any>): string | null {
     return 'invalid columnId: must be one of backlog, in-progress, review, done';
   }
   if (agentType !== undefined && !isValidAgentType(agentType)) {
-    return 'invalid agentType: must be one of copilot, claude, codex';
+    return 'invalid agentType: must be one of copilot, claude, codex, opencode';
   }
   if (repoPath !== undefined && typeof repoPath !== 'string') {
     return 'repoPath must be a string';

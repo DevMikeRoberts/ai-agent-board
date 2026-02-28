@@ -1,0 +1,16 @@
+{
+  "serena": {
+    "tools": ["*"],
+    "type": "local",
+    "command": "uvx",
+    "args": [
+      "--from",
+      "git+https://github.com/oraios/serena",
+      "serena",
+      "start-mcp-server"
+    ],
+    "env": {
+      "SERENA_CONFIG_PATH": "/root/.serena/serena_config.yml"
+    }
+  }
+}

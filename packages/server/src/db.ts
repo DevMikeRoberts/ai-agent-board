@@ -140,5 +140,5 @@ export async function initPostgresDatabase(pool: Pool): Promise<void> {
 // ─── Backend selection helper ────────────────────────────────────────────────
 
 export function isPostgresUrl(url: string | undefined): boolean {
-  return !!url && url.startsWith('postgresql://');
+  return !!url && (url.startsWith('postgresql://') || url.startsWith('postgres://'));
 }

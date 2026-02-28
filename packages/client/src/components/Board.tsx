@@ -17,7 +17,7 @@ import { VALID_TRANSITIONS } from '@/types';
 import { columns as baseColumns } from '@/lib/columns';
 import { Column } from './Column';
 import { TaskCard } from './TaskCard';
-import { Archive } from 'lucide-react';
+
 
 interface BoardProps {
   tasks: Task[];
@@ -120,7 +120,7 @@ export function Board({
       if (draggedTask.archived) return;
 
       // Don't allow dropping into archived column
-      if (targetColumn === 'archived') return;
+      if ((targetColumn as string) === 'archived') return;
 
       // Validate transition before moving
       if (targetColumn === draggedTask.columnId) return;
@@ -133,7 +133,7 @@ export function Board({
         onDropInProgress(draggedTask);
       }
     },
-    [onMoveTask, onDropInProgress, tasks]
+    [onMoveTask, onDropInProgress, tasks, columns]
   );
 
   const handleDragCancel = useCallback(() => {

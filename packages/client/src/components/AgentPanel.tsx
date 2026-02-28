@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import type { Task, AgentEvent, AgentEventType } from '@/types';
 import { getAgentDisplay } from '@/lib/agent-config';
+import { TerminalView } from './TerminalView';
 import { api, connectWS } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
@@ -82,6 +83,9 @@ function coalesceEvents(events: AgentEvent[], streaming: boolean): CoalescedEven
   for (let i = 0; i < events.length; i++) {
     const event = events[i];
 
+    // Skip empty content events (shouldn't exist but guards against bad data)
+    if (!event.content?.trim() && event.type !== 'complete' && event.type !== 'error') continue;
+
     // Hide thinking events that are still actively streaming
     // (i.e. the last run of thinking events with no non-thinking event after them)
     if (event.type === 'thinking' && streaming) {
@@ -102,8 +106,8 @@ function coalesceEvents(events: AgentEvent[], streaming: boolean): CoalescedEven
         (last.type === 'output' && event.type === 'command_output') ||
         (last.type === 'command_output' && event.type === 'output'));
       if (mergeable) {
-        // Add paragraph break between merged events for readability
-        last.content += '\n\n' + event.content;
+        // Concatenate directly — content already includes natural newlines
+        last.content += event.content;
         continue;
       }
     }
@@ -190,9 +194,13 @@ function EventItem({ event }: { event: CoalescedEvent }) {
   const hasFile = event.metadata?.file;
 
   // For parsed commands, show the command string in the header
+  // For file events, show just the filename (basename) from metadata
+  const fileLabel = (event.type === 'file_read' || event.type === 'file_write' || event.type === 'file_edit')
+    ? (event.metadata?.file ? event.metadata.file.split('/').pop() : null)
+    : null;
   const headerSummary = event.toolArgs
     ? event.toolArgs.length > 80 ? event.toolArgs.slice(0, 80) + '...' : event.toolArgs
-    : null;
+    : fileLabel ?? null;
 
   return (
     <motion.div
@@ -324,6 +332,7 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onCleanup
   const [followUpMessage, setFollowUpMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
+  const [activeTab, setActiveTab] = useState<'events' | 'terminal'>('events');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const taskId = task?.id ?? null;
@@ -625,7 +634,41 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onCleanup
             </div>
           )}
 
+          {/* Tab bar */}
+          <div className="shrink-0 flex border-b border-border px-2 pt-1 gap-1">
+            <button
+              onClick={() => setActiveTab('events')}
+              className={cn(
+                'px-3 py-1.5 text-xs font-medium rounded-t transition-colors',
+                activeTab === 'events'
+                  ? 'bg-card border border-border border-b-card text-foreground -mb-px'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              Events
+            </button>
+            <button
+              onClick={() => setActiveTab('terminal')}
+              className={cn(
+                'px-3 py-1.5 text-xs font-medium rounded-t transition-colors',
+                activeTab === 'terminal'
+                  ? 'bg-card border border-border border-b-card text-foreground -mb-px'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              Terminal
+            </button>
+          </div>
+
+          {/* Terminal view */}
+          {activeTab === 'terminal' && (
+            <div className="flex-1 overflow-hidden bg-[#0f172a] rounded-none">
+              <TerminalView events={events} streaming={streaming} />
+            </div>
+          )}
+
           {/* Events list */}
+          {activeTab === 'events' && (
           <div
             ref={scrollRef}
             className="flex-1 overflow-y-auto p-2 space-y-0.5"
@@ -678,6 +721,7 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onCleanup
               </motion.div>
             )}
           </div>
+          )}
 
           {/* Follow-up message input — fixed at bottom */}
           <div className="shrink-0 border-t border-border bg-card px-3 py-2">
