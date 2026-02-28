@@ -11,7 +11,7 @@ interface HeaderProps {
   onToggleArchived: () => void;
 }
 
-export function Header({ theme, toggleTheme, taskCount: _taskCount, searchQuery, onSearchChange, showArchived, onToggleArchived }: HeaderProps) {
+export function Header({ theme, toggleTheme, taskCount, searchQuery, onSearchChange, showArchived, onToggleArchived }: HeaderProps) {
   return (
     <header className="sticky top-0 z-50 border-b border-zinc-700/30 bg-zinc-900 shadow-md">
       <div className="flex h-14 items-center justify-between px-6">
@@ -26,6 +26,7 @@ export function Header({ theme, toggleTheme, taskCount: _taskCount, searchQuery,
             <p className="text-sm text-zinc-400">
               AI Agent Task Board
             </p>
+            <p className="text-xs text-zinc-500">{taskCount} {taskCount === 1 ? 'task' : 'tasks'}</p>
           </div>
         </div>
 

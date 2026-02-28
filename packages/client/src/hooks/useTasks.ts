@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import type { Task, AgentType, ColumnId } from '@/types';
+import type { Task, AgentType, ColumnId, Priority } from '@/types';
 import { VALID_TRANSITIONS } from '@/types';
 import { api, connectWS } from '@/lib/api';
 
@@ -42,6 +42,23 @@ export function useTasks() {
       return newTask;
     } catch (err) {
       setError(`Failed to create task: ${(err as Error).message}`);
+      return undefined;
+    }
+  }, []);
+
+  const batchCreate = useCallback(async (
+    taskDefs: Array<{ title: string; description?: string; priority?: Priority; columnId?: ColumnId; agentType?: AgentType; repoPath?: string; branchName?: string; baseBranch?: string; useWorktree?: boolean; autoRun?: boolean }>
+  ) => {
+    try {
+      const { tasks: newTasks } = await api.batchCreateTasks(taskDefs);
+      setTasks((prev) => {
+        const existingIds = new Set(prev.map((t) => t.id));
+        const toAdd = newTasks.filter((t) => !existingIds.has(t.id));
+        return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
+      });
+      return newTasks;
+    } catch (err) {
+      setError(`Failed to create tasks: ${(err as Error).message}`);
       return undefined;
     }
   }, []);
@@ -171,5 +188,5 @@ export function useTasks() {
 
   const clearError = useCallback(() => setError(null), []);
 
-  return { tasks, error, clearError, showArchived, setShowArchived, addTask, updateTask, moveTask, runTask, stopTask, deleteTask, archiveTask, unarchiveTask, getTasksByColumn, configureAndRunTask, createPR, cleanupWorktree };
+  return { tasks, error, clearError, showArchived, setShowArchived, addTask, batchCreate, updateTask, moveTask, runTask, stopTask, deleteTask, archiveTask, unarchiveTask, getTasksByColumn, configureAndRunTask, createPR, cleanupWorktree };
 }

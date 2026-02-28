@@ -34,8 +34,11 @@ export const api = {
 
   getArchivedTasks: () => request<Task[]>('/tasks/archived'),
 
-  createTask: (data: { title: string; description: string; priority: Priority; columnId: ColumnId }) =>
+  createTask: (data: { title: string; description?: string; priority?: Priority; columnId?: ColumnId; agentType?: AgentType; repoPath?: string; branchName?: string; baseBranch?: string; useWorktree?: boolean; autoRun?: boolean }) =>
     request<Task>('/tasks', { method: 'POST', body: JSON.stringify(data) }),
+
+  batchCreateTasks: (tasks: Array<{ title: string; description?: string; priority?: Priority; columnId?: ColumnId; agentType?: AgentType; repoPath?: string; branchName?: string; baseBranch?: string; useWorktree?: boolean; autoRun?: boolean }>) =>
+    request<{ tasks: Task[] }>('/tasks/batch', { method: 'POST', body: JSON.stringify({ tasks }) }),
 
   updateTask: (id: string, data: Partial<Task>) =>
     request<Task>(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),

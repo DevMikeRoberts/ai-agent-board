@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { execSync } from 'child_process';
+import { existsSync } from 'fs';
 
 /**
  * End-to-end tests for real Copilot SDK agent execution.
@@ -43,6 +44,11 @@ function getTaskByTitle(tasks: any[], title: string) {
 }
 
 test.describe('Copilot SDK Agent', () => {
+  test.skip(
+    !existsSync(TEST_REPO),
+    `Skipping: TEST_REPO (${TEST_REPO}) not found. Set TEST_REPO env var to run these integration tests.`
+  );
+
   test.beforeEach(async ({ page }) => {
     // Ensure test repo is clean before each test
     execSync('git checkout -- .', { cwd: TEST_REPO });

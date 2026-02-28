@@ -50,7 +50,7 @@ export function createTaskRouter(repo: TaskRepository, agentManager: AgentManage
         res.status(201).json(failed || { ...task, agentStatus: 'failed' });
         return;
       }
-      startAgentForTask(task, repo, agentManager);
+      await startAgentForTask(task, repo, agentManager);
       const latest = await repo.getById(task.id);
       res.status(201).json(latest || task);
       return;
@@ -105,7 +105,7 @@ export function createTaskRouter(repo: TaskRepository, agentManager: AgentManage
             created[i] = failed;
           }
         } else {
-          startAgentForTask(task, repo, agentManager);
+          await startAgentForTask(task, repo, agentManager);
           const latest = await repo.getById(task.id);
           if (latest) created[i] = latest;
         }

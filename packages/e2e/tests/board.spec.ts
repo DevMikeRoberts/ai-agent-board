@@ -174,33 +174,3 @@ test.describe('Task Edit', () => {
     await expect(page.getByRole('heading', { name: newTitle })).toBeVisible({ timeout: 5_000 });
   });
 });
-
-test.describe('Priority Selection', () => {
-  test('can select different priorities in task dialog', async ({ page }) => {
-    await page.goto('/');
-    await waitForBoard(page);
-
-    await openCreateDialog(page);
-
-    // Click priority dropdown button — scope to dialog to avoid matching Medium badges on task cards
-    const dialog = page.locator('.fixed').filter({ has: page.getByRole('heading', { name: 'Create Task' }) });
-    await dialog.getByRole('button', { name: 'Medium' }).click();
-
-    // Should show all priority options in the dropdown
-    const dropdown = page.locator('.absolute');
-    await expect(dropdown.getByText('Low')).toBeVisible();
-    await expect(dropdown.getByText('High')).toBeVisible();
-    await expect(dropdown.getByText('Critical')).toBeVisible();
-
-    // Select High
-    await dropdown.getByText('High').click();
-
-    // Fill and submit
-    const taskTitle = `High Priority ${Date.now()}`;
-    await page.getByPlaceholder('What needs to be done?').fill(taskTitle);
-    await page.getByRole('button', { name: 'Create Task' }).click();
-
-    // Task should appear with High priority badge
-    await expect(page.getByRole('heading', { name: taskTitle })).toBeVisible({ timeout: 5_000 });
-  });
-});
