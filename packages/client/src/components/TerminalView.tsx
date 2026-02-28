@@ -19,7 +19,6 @@ const ANSI = {
   blue:    '\x1b[34m',
   red:     '\x1b[31m',
   magenta: '\x1b[35m',
-  white:   '\x1b[37m',
   gray:    '\x1b[90m',
 };
 

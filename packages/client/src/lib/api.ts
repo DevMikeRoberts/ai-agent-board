@@ -32,8 +32,6 @@ export const api = {
   getTasks: (includeArchived = false) =>
     request<Task[]>(`/tasks${includeArchived ? '?includeArchived=true' : ''}`),
 
-  getArchivedTasks: () => request<Task[]>('/tasks/archived'),
-
   createTask: (data: { title: string; description?: string; priority?: Priority; columnId?: ColumnId; agentType?: AgentType; repoPath?: string; branchName?: string; baseBranch?: string; useWorktree?: boolean; autoRun?: boolean }) =>
     request<Task>('/tasks', { method: 'POST', body: JSON.stringify(data) }),
 

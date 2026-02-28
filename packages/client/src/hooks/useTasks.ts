@@ -7,7 +7,6 @@ export function useTasks() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
-  // const loaded = useRef(false); // unused
 
   // Fetch tasks on mount and when showArchived changes
   useEffect(() => {

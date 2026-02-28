@@ -157,7 +157,6 @@ export function App() {
       <Header
         theme={theme}
         toggleTheme={toggleTheme}
-        taskCount={tasks.length}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         showArchived={showArchived}

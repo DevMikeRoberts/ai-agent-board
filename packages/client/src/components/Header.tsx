@@ -4,14 +4,13 @@ import { ThemeToggle } from './ThemeToggle';
 interface HeaderProps {
   theme: 'dark' | 'light';
   toggleTheme: () => void;
-  taskCount: number;
   searchQuery: string;
   onSearchChange: (query: string) => void;
   showArchived: boolean;
   onToggleArchived: () => void;
 }
 
-export function Header({ theme, toggleTheme, taskCount: _taskCount, searchQuery, onSearchChange, showArchived, onToggleArchived }: HeaderProps) {
+export function Header({ theme, toggleTheme, searchQuery, onSearchChange, showArchived, onToggleArchived }: HeaderProps) {
   return (
     <header className="sticky top-0 z-50 border-b border-zinc-700/30 bg-zinc-900 shadow-md">
       <div className="flex h-14 items-center justify-between px-6">
