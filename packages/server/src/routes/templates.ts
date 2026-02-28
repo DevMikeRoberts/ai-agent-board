@@ -3,13 +3,9 @@ import { v4 as uuid } from 'uuid';
 import type { TaskTemplate } from '../types.js';
 import { isValidPriority, isValidAgentType, MAX_TITLE_LENGTH, MAX_DESCRIPTION_LENGTH } from '@copilot-kanban/shared/constants.js';
 import type { TemplateRepository } from '../repositories/template-types.js';
+import { paramId } from './helpers.js';
 
 const MAX_TEMPLATE_NAME_LENGTH = 100;
-
-function paramId(req: Request): string {
-  const id = req.params.id;
-  return typeof id === 'string' ? id : id[0];
-}
 
 export function createTemplateRouter(templateRepo: TemplateRepository): Router {
   const router = Router();
@@ -116,6 +112,22 @@ export function createTemplateRouter(templateRepo: TemplateRepository): Router {
     }
     if (agentType !== undefined && !isValidAgentType(agentType)) {
       res.status(400).json({ error: 'invalid agentType' });
+      return;
+    }
+    if (title !== undefined && typeof title !== 'string') {
+      res.status(400).json({ error: 'title must be a string' });
+      return;
+    }
+    if (typeof title === 'string' && title.length > MAX_TITLE_LENGTH) {
+      res.status(400).json({ error: `title must be at most ${MAX_TITLE_LENGTH} characters` });
+      return;
+    }
+    if (description !== undefined && typeof description !== 'string') {
+      res.status(400).json({ error: 'description must be a string' });
+      return;
+    }
+    if (typeof description === 'string' && description.length > MAX_DESCRIPTION_LENGTH) {
+      res.status(400).json({ error: `description must be at most ${MAX_DESCRIPTION_LENGTH} characters` });
       return;
     }
 
