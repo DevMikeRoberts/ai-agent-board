@@ -9,6 +9,9 @@ const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), 'data', 'kanban.
 const DATA_DIR = path.dirname(DB_PATH);
 
 function migrate(db: Database.Database): void {
+  // Enable FK enforcement (off by default in SQLite)
+  db.pragma('foreign_keys = ON');
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS tasks (
       id            TEXT PRIMARY KEY,
@@ -31,9 +34,32 @@ function migrate(db: Database.Database): void {
       content    TEXT NOT NULL,
       timestamp  INTEGER NOT NULL,
       metadata   TEXT,
-      FOREIGN KEY (task_id) REFERENCES tasks(id)
+      FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
     )
   `);
+
+  // Migrate existing events table to ON DELETE CASCADE if needed
+  const fkList = db.pragma('foreign_key_list(events)') as Array<{ on_delete: string }>;
+  const hasCascade = fkList.some((fk) => fk.on_delete === 'CASCADE');
+  if (!hasCascade) {
+    db.exec(`
+      BEGIN;
+      CREATE TABLE events_new (
+        id         TEXT PRIMARY KEY,
+        task_id    TEXT NOT NULL,
+        type       TEXT NOT NULL,
+        content    TEXT NOT NULL,
+        timestamp  INTEGER NOT NULL,
+        metadata   TEXT,
+        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+      );
+      INSERT INTO events_new SELECT * FROM events;
+      DROP TABLE events;
+      ALTER TABLE events_new RENAME TO events;
+      COMMIT;
+    `);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_events_task_id ON events(task_id, timestamp ASC)`);
+  }
 
   // Index for fast lookups by task_id + ordering by timestamp
   db.exec(`CREATE INDEX IF NOT EXISTS idx_events_task_id ON events(task_id, timestamp ASC)`);
@@ -124,7 +150,7 @@ export async function initPostgresDatabase(pool: Pool): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS events (
       id         TEXT PRIMARY KEY,
-      task_id    TEXT NOT NULL REFERENCES tasks(id),
+      task_id    TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
       type       TEXT NOT NULL,
       content    TEXT NOT NULL,
       timestamp  BIGINT NOT NULL,
@@ -135,6 +161,24 @@ export async function initPostgresDatabase(pool: Pool): Promise<void> {
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_events_task_id ON events(task_id, timestamp ASC)
   `);
+
+  // Migrate existing FK to ON DELETE CASCADE if not already set
+  const { rows: fkRows } = await pool.query(`
+    SELECT rc.delete_rule
+    FROM information_schema.table_constraints tc
+    JOIN information_schema.referential_constraints rc
+      ON tc.constraint_name = rc.constraint_name
+    WHERE tc.table_name = 'events' AND tc.constraint_type = 'FOREIGN KEY'
+  `);
+  const hasCascade = fkRows.some((r: { delete_rule: string }) => r.delete_rule === 'CASCADE');
+  if (!hasCascade) {
+    await pool.query(`
+      ALTER TABLE events
+        DROP CONSTRAINT IF EXISTS events_task_id_fkey,
+        ADD CONSTRAINT events_task_id_fkey
+          FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+    `);
+  }
 }
 
 // ─── Backend selection helper ────────────────────────────────────────────────
