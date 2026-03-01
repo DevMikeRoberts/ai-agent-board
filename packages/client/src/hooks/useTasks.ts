@@ -15,21 +15,25 @@ export function useTasks() {
     });
   }, [showArchived]);
 
-  // WebSocket: live task updates from server
+  // WebSocket: live task updates from server, re-sync on reconnect
   useEffect(() => {
-    return connectWS((msg) => {
-      if (msg.type === 'task_updated') {
-        setTasks((prev) => {
-          const exists = prev.some((t) => t.id === msg.payload.id);
-          if (exists) return prev.map((t) => (t.id === msg.payload.id ? msg.payload : t));
-          return [...prev, msg.payload];
-        });
-      }
-      if (msg.type === 'task_deleted') {
-        setTasks((prev) => prev.filter((t) => t.id !== msg.payload.id));
-      }
-    });
-  }, []);
+    return connectWS(
+      (msg) => {
+        if (msg.type === 'task_updated') {
+          setTasks((prev) => {
+            const exists = prev.some((t) => t.id === msg.payload.id);
+            if (exists) return prev.map((t) => (t.id === msg.payload.id ? msg.payload : t));
+            return [...prev, msg.payload];
+          });
+        }
+        if (msg.type === 'task_deleted') {
+          setTasks((prev) => prev.filter((t) => t.id !== msg.payload.id));
+        }
+      },
+      // Re-fetch all tasks after WS reconnect to catch missed updates
+      () => { api.getTasks(showArchived).then(setTasks).catch(console.error); }
+    );
+  }, [showArchived]);
 
   const addTask = useCallback(async (task: Omit<Task, 'id' | 'createdAt' | 'agentStatus'> & { autoRun?: boolean }) => {
     try {

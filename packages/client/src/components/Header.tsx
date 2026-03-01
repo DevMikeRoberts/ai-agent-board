@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Kanban, Search, Archive, ArrowUpDown, Filter } from 'lucide-react';
+import { Kanban, Search, Archive, ArrowUpDown, Filter, Plus } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { FilterChips, type StatusFilter } from './FilterChips';
 import type { AgentType } from '@/types';
@@ -23,6 +23,7 @@ interface HeaderProps {
   onToggleAgentType: (agentType: AgentType) => void;
   onToggleStatus: (status: StatusFilter) => void;
   onClearFilters: () => void;
+  onNewTask: () => void;
 }
 
 const SORT_OPTIONS: { value: SortBy; label: string }[] = [
@@ -32,7 +33,7 @@ const SORT_OPTIONS: { value: SortBy; label: string }[] = [
   { value: 'status', label: 'Status' },
 ];
 
-export function Header({ theme, toggleTheme, searchQuery, onSearchChange, showArchived, onToggleArchived, sortBy, sortDir, onSortByChange, onSortDirChange, activeAgentTypes, activeStatuses, onToggleAgentType, onToggleStatus, onClearFilters }: HeaderProps) {
+export function Header({ theme, toggleTheme, searchQuery, onSearchChange, showArchived, onToggleArchived, sortBy, sortDir, onSortByChange, onSortDirChange, activeAgentTypes, activeStatuses, onToggleAgentType, onToggleStatus, onClearFilters, onNewTask }: HeaderProps) {
   const [showFilters, setShowFilters] = useState(false);
   const hasActiveFilters = activeAgentTypes.length > 0 || activeStatuses.length > 0;
 
@@ -54,6 +55,15 @@ export function Header({ theme, toggleTheme, searchQuery, onSearchChange, showAr
         </div>
 
         <div className="flex items-center gap-2">
+          {/* New Task button */}
+          <button
+            onClick={onNewTask}
+            className="flex items-center gap-1.5 px-3 h-8 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            New Task
+          </button>
+
           {/* Search input */}
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-300" />
@@ -62,6 +72,7 @@ export function Header({ theme, toggleTheme, searchQuery, onSearchChange, showAr
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder="Search tasks..."
+              aria-label="Search tasks"
               className="h-8 w-48 rounded-lg border border-zinc-700 bg-zinc-800 pl-8 pr-3 text-xs text-zinc-200 placeholder:text-zinc-300 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
             />
           </div>

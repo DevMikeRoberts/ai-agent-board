@@ -39,6 +39,15 @@ function formatElapsed(startedAt?: number): string {
   return `${minutes}m ${secs}s`;
 }
 
+function formatDuration(startedAt?: number, completedAt?: number): string {
+  if (!startedAt || !completedAt) return '';
+  const seconds = Math.floor((completedAt - startedAt) / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${minutes}m ${secs}s`;
+}
+
 interface TaskCardProps {
   task: Task;
   onClick: () => void;
@@ -198,11 +207,19 @@ function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarc
           </div>
 
           <div className="flex items-center gap-1.5">
-            {/* Elapsed time */}
+            {/* Elapsed time (running) */}
             {isActive && elapsed && (
               <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
                 <Clock className="h-3 w-3" />
                 {elapsed}
+              </span>
+            )}
+
+            {/* Duration (completed/failed) */}
+            {!isActive && (task.agentStatus === 'complete' || task.agentStatus === 'failed') && task.startedAt && task.completedAt && (
+              <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                <Clock className="h-3 w-3" />
+                {formatDuration(task.startedAt, task.completedAt)}
               </span>
             )}
 

@@ -7,6 +7,7 @@ import type { AgentEvent } from '@/types';
 interface TerminalViewProps {
   events: AgentEvent[];
   streaming: boolean;
+  theme?: 'dark' | 'light';
 }
 
 const ANSI = {
@@ -58,7 +59,37 @@ function eventToLines(event: AgentEvent): string {
   }
 }
 
-export function TerminalView({ events, streaming }: TerminalViewProps) {
+const DARK_THEME = {
+  background: 'transparent',
+  foreground: '#e2e8f0',
+  cursor:     '#e2e8f0',
+  black:      '#1e293b',
+  red:        '#f87171',
+  green:      '#4ade80',
+  yellow:     '#facc15',
+  blue:       '#60a5fa',
+  magenta:    '#c084fc',
+  cyan:       '#22d3ee',
+  white:      '#e2e8f0',
+  brightBlack:'#64748b',
+};
+
+const LIGHT_THEME = {
+  background: 'transparent',
+  foreground: '#1e293b',
+  cursor:     '#1e293b',
+  black:      '#e2e8f0',
+  red:        '#dc2626',
+  green:      '#16a34a',
+  yellow:     '#ca8a04',
+  blue:       '#2563eb',
+  magenta:    '#9333ea',
+  cyan:       '#0891b2',
+  white:      '#1e293b',
+  brightBlack:'#94a3b8',
+};
+
+export function TerminalView({ events, streaming, theme = 'dark' }: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -75,20 +106,7 @@ export function TerminalView({ events, streaming }: TerminalViewProps) {
       cursorBlink: false,
       fontSize: 11,
       fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", monospace',
-      theme: {
-        background: 'transparent',
-        foreground: '#e2e8f0',
-        cursor:     '#e2e8f0',
-        black:      '#1e293b',
-        red:        '#f87171',
-        green:      '#4ade80',
-        yellow:     '#facc15',
-        blue:       '#60a5fa',
-        magenta:    '#c084fc',
-        cyan:       '#22d3ee',
-        white:      '#e2e8f0',
-        brightBlack:'#64748b',
-      },
+      theme: theme === 'light' ? LIGHT_THEME : DARK_THEME,
     });
 
     const fit = new FitAddon();
@@ -110,7 +128,7 @@ export function TerminalView({ events, streaming }: TerminalViewProps) {
       fitRef.current = null;
       renderedCountRef.current = 0;
     };
-  }, []);
+  }, [theme]);
 
   // Write new events incrementally, coalescing consecutive same-type fragments
   useEffect(() => {

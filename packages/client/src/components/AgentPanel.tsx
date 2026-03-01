@@ -21,6 +21,7 @@ import {
   Send,
   FileText,
   RotateCw,
+  Download,
 } from 'lucide-react';
 import type { Task, AgentEvent, AgentEventType } from '@/types';
 import { getAgentDisplay } from '@/lib/agent-config';
@@ -161,14 +162,18 @@ interface AgentPanelProps {
   onCreatePR?: (id: string) => Promise<string | undefined>;
   onCleanupWorktree?: (id: string) => Promise<void>;
   onReconfigureRetry?: (id: string) => void;
+  theme?: 'dark' | 'light';
 }
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => { clearTimeout(timerRef.current); }, []);
   const handleCopy = () => {
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setCopied(false), 2000);
     }).catch((err) => {
       console.warn('[clipboard] copy failed:', err);
     });
@@ -326,7 +331,7 @@ function EventItem({ event }: { event: CoalescedEvent }) {
   );
 }
 
-export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onCleanupWorktree, onReconfigureRetry }: AgentPanelProps) {
+export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onCleanupWorktree, onReconfigureRetry, theme }: AgentPanelProps) {
   const [events, setEvents] = useState<AgentEvent[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [prUrl, setPrUrl] = useState<string | null>(null);
@@ -647,7 +652,8 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onCleanup
           )}
 
           {/* Tab bar */}
-          <div className="shrink-0 flex border-b border-border px-2 pt-1 gap-1">
+          <div className="shrink-0 flex items-center justify-between border-b border-border px-2 pt-1">
+            <div className="flex gap-1">
             <button
               onClick={() => setActiveTab('events')}
               className={cn(
@@ -670,12 +676,34 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onCleanup
             >
               Terminal
             </button>
+            </div>
+            {events.length > 0 && (
+              <button
+                onClick={() => {
+                  const md = events.map((e) => {
+                    const label = eventLabelMap[e.type] || e.type;
+                    const meta = e.metadata?.file ? ` (${e.metadata.file})` : '';
+                    return `### ${label}${meta}\n${e.content}`;
+                  }).join('\n\n');
+                  const blob = new Blob([`# Agent Log — ${task.title}\n\n${md}`], { type: 'text/markdown' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url; a.download = `agent-log-${task.id}.md`; a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="flex items-center gap-1 px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                title="Download event log as markdown"
+              >
+                <Download className="h-3 w-3" />
+                Export
+              </button>
+            )}
           </div>
 
           {/* Terminal view */}
           {activeTab === 'terminal' && (
-            <div className="flex-1 overflow-hidden bg-[#0f172a] rounded-none">
-              <TerminalView events={events} streaming={streaming} />
+            <div className={cn('flex-1 overflow-hidden rounded-none', theme === 'light' ? 'bg-[#f8f9fb]' : 'bg-[#0f172a]')}>
+              <TerminalView events={events} streaming={streaming} theme={theme} />
             </div>
           )}
 

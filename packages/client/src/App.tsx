@@ -258,6 +258,7 @@ export function App() {
         onToggleAgentType={handleToggleAgentType}
         onToggleStatus={handleToggleStatus}
         onClearFilters={handleClearFilters}
+        onNewTask={handleOpenDialog}
       />
 
       <main className="flex-1 overflow-hidden">
@@ -288,7 +289,7 @@ export function App() {
         onEditSubmit={handleEditSubmit}
       />
 
-      <AgentPanel task={selectedTask} onClose={handleClosePanel} onRun={handleRunWithConfig} onStop={stopTask} onCreatePR={createPR} onCleanupWorktree={cleanupWorktree} onReconfigureRetry={handleReconfigureRetry} />
+      <AgentPanel task={selectedTask} onClose={handleClosePanel} onRun={handleRunWithConfig} onStop={stopTask} onCreatePR={createPR} onCleanupWorktree={cleanupWorktree} onReconfigureRetry={handleReconfigureRetry} theme={theme} />
 
       <WorktreeDialog
         open={worktreeDialogTaskId !== null}

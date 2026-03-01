@@ -90,8 +90,10 @@ export const api = {
 // --- WebSocket (shared singleton) ---
 
 export type WSMessageHandler = (msg: { type: string; payload: any }) => void;
+type ReconnectHandler = () => void;
 
 const listeners = new Set<WSMessageHandler>();
+const reconnectListeners = new Set<ReconnectHandler>();
 let ws: WebSocket | null = null;
 let disposed = false;
 let reconnectTimer: ReturnType<typeof setTimeout>;
@@ -108,7 +110,11 @@ function ensureConnection() {
 
   ws = new WebSocket(url);
 
-  ws.onopen = () => console.log('[WS] connected');
+  ws.onopen = () => {
+    console.log('[WS] connected');
+    // Notify listeners to re-sync state after reconnect
+    reconnectListeners.forEach((fn) => fn());
+  };
 
   ws.onmessage = (e) => {
     try {
@@ -131,14 +137,16 @@ function ensureConnection() {
 /**
  * Subscribe to WebSocket messages. Returns an unsubscribe function.
  * All callers share a single underlying connection.
+ * onReconnect is called after each reconnect so callers can re-fetch state.
  */
-export function connectWS(onMessage: WSMessageHandler): () => void {
+export function connectWS(onMessage: WSMessageHandler, onReconnect?: ReconnectHandler): () => void {
   listeners.add(onMessage);
+  if (onReconnect) reconnectListeners.add(onReconnect);
   ensureConnection();
 
   return () => {
     listeners.delete(onMessage);
-    // Close the socket only when no listeners remain
+    if (onReconnect) reconnectListeners.delete(onReconnect);
     if (listeners.size === 0) {
       disposed = true;
       clearTimeout(reconnectTimer);

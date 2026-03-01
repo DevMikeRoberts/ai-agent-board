@@ -106,7 +106,7 @@ const agentManager = new AgentManager();
   function shutdown() {
     console.log('[server] shutting down...');
     agentManager.shutdownAll();
-    cleanupDb();
+    try { cleanupDb(); } catch (err) { console.error('[server] db cleanup error:', err); }
     server.close(() => process.exit(0));
     setTimeout(() => {
       console.warn('[server] force exit after timeout');
