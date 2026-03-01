@@ -1,5 +1,10 @@
 import { defineConfig } from '@playwright/test';
 
+// Use separate ports for E2E tests so they don't collide with
+// the Docker dev server (3001/4175) running in the background.
+const TEST_SERVER_PORT = 3002;
+const TEST_CLIENT_PORT = 4176;
+
 export default defineConfig({
   testDir: './tests',
   fullyParallel: false,
@@ -9,20 +14,20 @@ export default defineConfig({
   reporter: 'list',
   timeout: 30_000,
   use: {
-    baseURL: 'http://localhost:4175',
+    baseURL: `http://localhost:${TEST_CLIENT_PORT}`,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
   webServer: [
     {
-      command: 'cd ../server && npx tsx src/index.ts',
-      port: 3001,
+      command: `cd ../server && PORT=${TEST_SERVER_PORT} npx tsx src/index.ts`,
+      port: TEST_SERVER_PORT,
       reuseExistingServer: !process.env.CI,
       timeout: 15_000,
     },
     {
-      command: 'cd ../client && npx vite --port 4175',
-      port: 4175,
+      command: `cd ../client && API_URL=http://localhost:${TEST_SERVER_PORT} npx vite --port ${TEST_CLIENT_PORT}`,
+      port: TEST_CLIENT_PORT,
       reuseExistingServer: !process.env.CI,
       timeout: 15_000,
     },

@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 
-const API = 'http://localhost:3001';
+const API = 'http://localhost:3002';
 
 // Helper to wait for the board to render
 async function waitForBoard(page: Page) {

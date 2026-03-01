@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import WebSocket from 'ws';
 
-const API = 'http://localhost:3001';
+const API = 'http://localhost:3002';
 
 /**
  * E2E tests for the API Improvements (Items 1–5):
@@ -273,7 +273,7 @@ test.describe('agent_complete WebSocket event', () => {
     test.setTimeout(60_000);
 
     // 1. Connect to WebSocket FIRST so we don't miss the event
-    const ws = new WebSocket('ws://localhost:3001/ws');
+    const ws = new WebSocket('ws://localhost:3002/ws');
     await new Promise<void>((resolve, reject) => {
       ws.on('open', () => resolve());
       ws.on('error', reject);

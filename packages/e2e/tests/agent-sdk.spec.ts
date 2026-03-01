@@ -30,7 +30,7 @@ async function createTaskViaUI(page: Page, title: string, description: string) {
 async function waitForAgentComplete(request: any, taskId: string, timeout = AGENT_TIMEOUT) {
   // Wait for BOTH task_complete event AND status update (they can lag)
   await expect(async () => {
-    const res = await request.get('http://localhost:3001/api/tasks');
+    const res = await request.get('http://localhost:3002/api/tasks');
     const tasks = await res.json();
     const task = tasks.find((t: any) => t.id === taskId);
     expect(task.agentStatus).toBe('complete');
@@ -66,18 +66,18 @@ test.describe('Copilot SDK Agent', () => {
     await createTaskViaUI(page, title, 'Add a comment line at the very top of README.md: <!-- E2E test -->');
 
     // 2. Get task ID from API
-    const tasks = await (await request.get('http://localhost:3001/api/tasks')).json();
+    const tasks = await (await request.get('http://localhost:3002/api/tasks')).json();
     const task = getTaskByTitle(tasks, title);
     expect(task.columnId).toBe('backlog');
 
     // 3. Configure + move + run via API
-    await request.post(`http://localhost:3001/api/tasks/${task.id}/configure`, {
+    await request.post(`http://localhost:3002/api/tasks/${task.id}/configure`, {
       data: { repoPath: TEST_REPO, useWorktree: false },
     });
-    await request.patch(`http://localhost:3001/api/tasks/${task.id}`, {
+    await request.patch(`http://localhost:3002/api/tasks/${task.id}`, {
       data: { columnId: 'in-progress' },
     });
-    await request.post(`http://localhost:3001/api/tasks/${task.id}/run`);
+    await request.post(`http://localhost:3002/api/tasks/${task.id}/run`);
 
     // 4. Click task card to open agent panel — verify events stream in
     await page.getByRole('heading', { name: title }).click();
@@ -88,7 +88,7 @@ test.describe('Copilot SDK Agent', () => {
     await waitForAgentComplete(request, task.id);
 
     // 6. Verify task moved to review
-    const finalTasks = await (await request.get('http://localhost:3001/api/tasks')).json();
+    const finalTasks = await (await request.get('http://localhost:3002/api/tasks')).json();
     const finalTask = getTaskByTitle(finalTasks, title);
     expect(finalTask.columnId).toBe('review');
 
@@ -106,17 +106,17 @@ test.describe('Copilot SDK Agent', () => {
     await createTaskViaUI(page, title, 'Add a comment at the top of README.md: <!-- worktree test -->');
 
     // 2. Get task ID
-    const tasks = await (await request.get('http://localhost:3001/api/tasks')).json();
+    const tasks = await (await request.get('http://localhost:3002/api/tasks')).json();
     const task = getTaskByTitle(tasks, title);
 
     // 3. Configure with worktree + run agent
-    await request.post(`http://localhost:3001/api/tasks/${task.id}/configure`, {
+    await request.post(`http://localhost:3002/api/tasks/${task.id}/configure`, {
       data: { repoPath: TEST_REPO, useWorktree: true, branchName, baseBranch: 'master' },
     });
-    await request.patch(`http://localhost:3001/api/tasks/${task.id}`, {
+    await request.patch(`http://localhost:3002/api/tasks/${task.id}`, {
       data: { columnId: 'in-progress' },
     });
-    await request.post(`http://localhost:3001/api/tasks/${task.id}/run`);
+    await request.post(`http://localhost:3002/api/tasks/${task.id}/run`);
 
     // 4. Wait for completion
     await waitForAgentComplete(request, task.id);
@@ -126,7 +126,7 @@ test.describe('Copilot SDK Agent', () => {
     expect(mainStatus).toBe('');
 
     // 6. Verify worktree has changes
-    const finalTasks = await (await request.get('http://localhost:3001/api/tasks')).json();
+    const finalTasks = await (await request.get('http://localhost:3002/api/tasks')).json();
     const finalTask = getTaskByTitle(finalTasks, title);
     expect(finalTask.worktreePath).toBeTruthy();
     const wtDiff = execSync('git diff HEAD -- README.md', { cwd: finalTask.worktreePath }).toString();
@@ -138,7 +138,7 @@ test.describe('Copilot SDK Agent', () => {
       .toBeVisible({ timeout: 5_000 });
 
     // 8. Clean up
-    await request.post(`http://localhost:3001/api/tasks/${task.id}/cleanup-worktree`);
+    await request.post(`http://localhost:3002/api/tasks/${task.id}/cleanup-worktree`);
     execSync('git worktree prune', { cwd: TEST_REPO });
     try { execSync(`git branch -D ${branchName}`, { cwd: TEST_REPO }); } catch {}
   });

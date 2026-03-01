@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 
-const API = 'http://localhost:3001';
+const API = 'http://localhost:3002';
 
 // ---------------------------------------------------------------------------
 // Helpers (mirrors board.spec.ts patterns)
