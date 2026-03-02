@@ -672,7 +672,7 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onCleanup
                   </div>
                   <button
                     onClick={() => setPrError(null)}
-                    className="mt-2 text-[10px] text-red-400/60 hover:text-red-400"
+                    className="mt-2 text-[10px] text-zinc-300 hover:text-white"
                   >
                     Dismiss
                   </button>
