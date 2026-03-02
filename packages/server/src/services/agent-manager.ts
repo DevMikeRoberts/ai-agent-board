@@ -236,9 +236,20 @@ export class AgentManager {
     const baseBranch = task.baseBranch || 'main';
     const cwd = task.worktreePath || task.repoPath;
 
+    // Check that a remote named 'origin' exists
+    try {
+      const remoteUrl = execFileSync('git', ['remote', 'get-url', 'origin'], { cwd, stdio: 'pipe' }).toString().trim();
+      if (!remoteUrl) throw new Error('empty');
+    } catch {
+      throw new Error(
+        'No git remote "origin" configured. Push your repo to GitHub first:\n' +
+        `  cd ${task.repoPath}\n` +
+        '  gh repo create <name> --source=. --push'
+      );
+    }
+
     try {
       execFileSync('git', ['push', '-u', 'origin', task.branchName], { cwd, stdio: 'pipe' });
-      // Sanitize and truncate title for CLI arg safety
       const prTitle = task.title.replace(/[<>]/g, '').slice(0, 200);
       const result = execFileSync(
         'gh',
@@ -250,8 +261,10 @@ export class AgentManager {
       console.log(`[pr] created: ${url}`);
       return { url };
     } catch (err: unknown) {
-      console.error(`[pr] creation failed:`, err instanceof Error ? err.message : String(err));
-      throw new Error(`PR creation failed: ${err instanceof Error && 'stderr' in err ? err.stderr?.toString() : err instanceof Error ? err.message : String(err)}`);
+      const stderr = err instanceof Error && 'stderr' in err ? (err as any).stderr?.toString() : '';
+      const msg = stderr || (err instanceof Error ? err.message : String(err));
+      console.error(`[pr] creation failed:`, msg);
+      throw new Error(`PR creation failed: ${msg.trim()}`);
     }
   }
 
