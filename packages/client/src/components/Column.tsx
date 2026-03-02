@@ -114,12 +114,16 @@ export function Column({ column, tasks, onTaskClick, onEditTask, onDeleteTask, o
             />
           ))}
 
-          {tasks.length === 0 && (
+          {tasks.length === 0 && !extraContent && (
             <div className="flex flex-1 items-center justify-center py-4">
               <div className="text-center">
                 <Icon className="mx-auto h-6 w-6 text-muted-foreground/30" />
                 <p className="mt-1 text-xs text-muted-foreground/50">
-                  No tasks
+                  {column.id === 'backlog' && 'Press N to create a task or G for a group'}
+                  {column.id === 'in-progress' && 'Drag tasks here to start AI agents'}
+                  {column.id === 'review' && 'Completed tasks appear here for review'}
+                  {column.id === 'done' && 'Move reviewed tasks here when finished'}
+                  {!['backlog', 'in-progress', 'review', 'done'].includes(column.id) && 'No tasks'}
                 </p>
               </div>
             </div>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Kanban, Search, Archive, ArrowUpDown, Filter, Plus } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { FilterChips, type StatusFilter } from './FilterChips';
+import { useConnectionStatus } from '@/hooks/useConnectionStatus';
 import type { AgentType } from '@/types';
 
 export type SortBy = 'title' | 'priority' | 'created' | 'status';
@@ -37,6 +38,7 @@ const SORT_OPTIONS: { value: SortBy; label: string }[] = [
 export function Header({ theme, toggleTheme, searchQuery, onSearchChange, showArchived, onToggleArchived, sortBy, sortDir, onSortByChange, onSortDirChange, activeAgentTypes, activeStatuses, onToggleAgentType, onToggleStatus, onClearFilters, onNewTask, onNewGroup }: HeaderProps) {
   const [showFilters, setShowFilters] = useState(false);
   const hasActiveFilters = activeAgentTypes.length > 0 || activeStatuses.length > 0;
+  const wsStatus = useConnectionStatus();
 
   return (
     <header className="sticky top-0 z-50 border-b border-zinc-700/30 bg-zinc-900 shadow-md">
@@ -49,9 +51,17 @@ export function Header({ theme, toggleTheme, searchQuery, onSearchChange, showAr
             <h1 className="text-lg font-semibold tracking-tight text-white">
               Copilot Kanban
             </h1>
-            <p className="text-sm text-zinc-400">
-              AI Agent Task Board
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm text-zinc-400">
+                AI Agent Task Board
+              </p>
+              {wsStatus === 'disconnected' && (
+                <span className="flex items-center gap-1 text-[10px] text-red-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                  Reconnecting…
+                </span>
+              )}
+            </div>
           </div>
         </div>
 

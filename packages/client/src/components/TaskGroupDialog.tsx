@@ -6,8 +6,9 @@ import { MAX_GROUP_CHILDREN, MIN_GROUP_CHILDREN } from '@/types';
 import { AGENT_DISPLAY } from '@/lib/agent-config';
 import { PRIORITY_DISPLAY } from '@/lib/priority-config';
 import { cn } from '@/lib/utils';
+import { getRecentRepoPaths, addRepoPath } from '@/lib/repo-history';
 import ParallelismSlider from './ParallelismSlider';
-import type { CreateGroupChild } from '@/lib/api';
+import type { CreateGroupChild, TaskGroupWithChildren } from '@/lib/api';
 
 interface ChildRow {
   key: string; // React key
@@ -30,6 +31,8 @@ interface TaskGroupDialogProps {
     children: CreateGroupChild[];
     autoRun?: boolean;
   }) => void;
+  editGroup?: TaskGroupWithChildren | null;
+  onEditSubmit?: (id: string, updates: { title: string; description?: string; priority: Priority; maxConcurrency: number }) => void;
 }
 
 const agents: { value: AgentType; label: string; emoji: string }[] = (
@@ -45,7 +48,7 @@ function makeRow(): ChildRow {
   return { key: `child-${nextKey++}`, title: '', description: '', agentType: 'copilot', useWorktree: true };
 }
 
-export function TaskGroupDialog({ open, onClose, onSubmit }: TaskGroupDialogProps) {
+export function TaskGroupDialog({ open, onClose, onSubmit, editGroup, onEditSubmit }: TaskGroupDialogProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<Priority>('medium');
@@ -56,9 +59,25 @@ export function TaskGroupDialog({ open, onClose, onSubmit }: TaskGroupDialogProp
   const [autoRun, setAutoRun] = useState(false);
   const [showPriority, setShowPriority] = useState(false);
 
-  // Reset when dialog closes
+  const isEditMode = !!editGroup;
+
+  // Pre-populate in edit mode, reset when dialog closes
   useEffect(() => {
-    if (!open) {
+    if (editGroup && open) {
+      setTitle(editGroup.title);
+      setDescription(editGroup.description || '');
+      setPriority(editGroup.priority);
+      setRepoPath(editGroup.repoPath || '');
+      setBaseBranch(editGroup.baseBranch || 'main');
+      setMaxConcurrency(editGroup.maxConcurrency);
+      setChildren(editGroup.children.map((c) => ({
+        key: `child-${nextKey++}`,
+        title: c.title,
+        description: c.description,
+        agentType: c.agentType || 'copilot',
+        useWorktree: c.useWorktree ?? true,
+      })));
+    } else if (!open) {
       setTitle('');
       setDescription('');
       setPriority('medium');
@@ -68,7 +87,7 @@ export function TaskGroupDialog({ open, onClose, onSubmit }: TaskGroupDialogProp
       setChildren([makeRow(), makeRow()]);
       setAutoRun(false);
     }
-  }, [open]);
+  }, [editGroup, open]);
 
   // Keep concurrency in range when children change
   useEffect(() => {
@@ -79,8 +98,21 @@ export function TaskGroupDialog({ open, onClose, onSubmit }: TaskGroupDialogProp
 
   function handleSubmit() {
     if (!title.trim()) return;
+
+    if (isEditMode && onEditSubmit && editGroup) {
+      onEditSubmit(editGroup.id, {
+        title: title.trim(),
+        description: description.trim() || undefined,
+        priority,
+        maxConcurrency,
+      });
+      onClose();
+      return;
+    }
+
     if (children.some((c) => !c.title.trim())) return;
 
+    if (repoPath.trim()) addRepoPath(repoPath.trim());
     onSubmit({
       title: title.trim(),
       description: description.trim() || undefined,
@@ -134,7 +166,7 @@ export function TaskGroupDialog({ open, onClose, onSubmit }: TaskGroupDialogProp
           >
             {/* Header */}
             <div className="flex items-center justify-between border-b border-zinc-700 px-6 py-4">
-              <h2 className="text-lg font-semibold text-zinc-100">Create Task Group</h2>
+              <h2 className="text-lg font-semibold text-zinc-100">{isEditMode ? 'Edit Task Group' : 'Create Task Group'}</h2>
               <button onClick={onClose} className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">
                 <X className="h-5 w-5" />
               </button>
@@ -203,8 +235,12 @@ export function TaskGroupDialog({ open, onClose, onSubmit }: TaskGroupDialogProp
                     value={repoPath}
                     onChange={(e) => setRepoPath(e.target.value)}
                     placeholder="/host-projects/my-app"
+                    list="recent-group-repo-paths"
                     className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
                   />
+                  <datalist id="recent-group-repo-paths">
+                    {getRecentRepoPaths().map((p) => <option key={p} value={p} />)}
+                  </datalist>
                 </div>
 
                 {/* Base branch */}
@@ -329,20 +365,32 @@ export function TaskGroupDialog({ open, onClose, onSubmit }: TaskGroupDialogProp
               >
                 Cancel
               </button>
-              <button
-                onClick={() => { setAutoRun(false); handleSubmit(); }}
-                disabled={!title.trim() || children.some((c) => !c.title.trim())}
-                className="rounded-lg bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-600 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Create Group
-              </button>
-              <button
-                onClick={() => { setAutoRun(true); handleSubmit(); }}
-                disabled={!title.trim() || children.some((c) => !c.title.trim())}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Create & Run
-              </button>
+              {isEditMode ? (
+                <button
+                  onClick={handleSubmit}
+                  disabled={!title.trim()}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Save Changes
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => { setAutoRun(false); handleSubmit(); }}
+                    disabled={!title.trim() || children.some((c) => !c.title.trim())}
+                    className="rounded-lg bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Create Group
+                  </button>
+                  <button
+                    onClick={() => { setAutoRun(true); handleSubmit(); }}
+                    disabled={!title.trim() || children.some((c) => !c.title.trim())}
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Create & Run
+                  </button>
+                </>
+              )}
             </div>
           </motion.div>
         </motion.div>

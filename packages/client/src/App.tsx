@@ -23,9 +23,10 @@ import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 export function App() {
   const { theme, toggleTheme } = useTheme();
   const { tasks, error, clearError, showArchived, setShowArchived, addTask, updateTask, moveTask, runTask, stopTask, deleteTask, archiveTask, unarchiveTask, configureAndRunTask, createPR, mergeLocal, cleanupWorktree } = useTasks();
-  const { groups, createGroup, runGroup, stopGroup, deleteGroup, refreshGroup } = useTaskGroups();
+  const { groups, createGroup, runGroup, stopGroup, deleteGroup, updateGroup, refreshGroup } = useTaskGroups();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<TaskGroupWithChildren | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -98,6 +99,15 @@ export function App() {
   const handleDeleteGroup = useCallback((id: string) => {
     setDeletingGroupId(id);
   }, []);
+
+  const handleEditGroup = useCallback((group: TaskGroupWithChildren) => {
+    setEditingGroup(group);
+    setGroupDialogOpen(true);
+  }, []);
+
+  const handleEditGroupSubmit = useCallback(async (id: string, updates: { title: string; description?: string; priority: Priority; maxConcurrency: number }) => {
+    await updateGroup(id, updates);
+  }, [updateGroup]);
 
   const handleRetryChild = useCallback(async (taskId: string) => {
     await runTask(taskId);
@@ -356,6 +366,7 @@ export function App() {
           onRunGroup={handleRunGroup}
           onStopGroup={handleStopGroup}
           onDeleteGroup={handleDeleteGroup}
+          onEditGroup={handleEditGroup}
         />
       </main>
 
@@ -369,8 +380,10 @@ export function App() {
 
       <TaskGroupDialog
         open={groupDialogOpen}
-        onClose={() => setGroupDialogOpen(false)}
+        onClose={() => { setGroupDialogOpen(false); setEditingGroup(null); }}
         onSubmit={createGroup}
+        editGroup={editingGroup}
+        onEditSubmit={handleEditGroupSubmit}
       />
 
       <AgentPanel task={selectedTask} onClose={handleClosePanel} onRun={handleRunWithConfig} onStop={stopTask} onCreatePR={createPR} onMergeLocal={mergeLocal} onCleanupWorktree={cleanupWorktree} onReconfigureRetry={handleReconfigureRetry} theme={theme} />

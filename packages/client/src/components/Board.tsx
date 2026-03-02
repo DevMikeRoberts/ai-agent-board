@@ -39,6 +39,7 @@ interface BoardProps {
   onRunGroup?: (id: string) => void;
   onStopGroup?: (id: string) => void;
   onDeleteGroup?: (id: string) => void;
+  onEditGroup?: (group: TaskGroupWithChildren) => void;
 }
 
 // Use pointerWithin first (ideal for dropping into columns),
@@ -67,6 +68,7 @@ export function Board({
   onRunGroup,
   onStopGroup,
   onDeleteGroup,
+  onEditGroup,
 }: BoardProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
 
@@ -194,6 +196,7 @@ export function Board({
                     onRunGroup={onRunGroup ?? (() => {})}
                     onStopGroup={onStopGroup ?? (() => {})}
                     onDeleteGroup={onDeleteGroup ?? (() => {})}
+                    onEditGroup={onEditGroup}
                   />
                 ))
               }

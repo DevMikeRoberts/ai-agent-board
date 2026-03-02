@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Layers, Play, Square, Trash2, CheckCircle2, AlertCircle, Cog, Brain } from 'lucide-react';
+import { Layers, Play, Square, Trash2, Pencil, CheckCircle2, AlertCircle, Cog, Brain } from 'lucide-react';
 import type { Task, AgentStatus } from '@/types';
 import type { TaskGroupWithChildren } from '@/lib/api';
 import { AGENT_DISPLAY } from '@/lib/agent-config';
@@ -12,6 +12,7 @@ interface TaskGroupCardProps {
   onRunGroup: (id: string) => void;
   onStopGroup: (id: string) => void;
   onDeleteGroup: (id: string) => void;
+  onEditGroup?: (group: TaskGroupWithChildren) => void;
 }
 
 interface GroupStatus {
@@ -45,7 +46,7 @@ function statusIcon(status: AgentStatus) {
   }
 }
 
-export function TaskGroupCard({ group, onClickGroup, onRunGroup, onStopGroup, onDeleteGroup }: TaskGroupCardProps) {
+export function TaskGroupCard({ group, onClickGroup, onRunGroup, onStopGroup, onDeleteGroup, onEditGroup }: TaskGroupCardProps) {
   const status = useMemo(() => computeStatus(group.children), [group.children]);
   const isRunning = status.executing > 0 || status.planning > 0;
   const pct = status.total > 0 ? ((status.completed / status.total) * 100) : 0;
@@ -94,6 +95,15 @@ export function TaskGroupCard({ group, onClickGroup, onRunGroup, onStopGroup, on
               title="Stop all"
             >
               <Square className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {onEditGroup && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onEditGroup(group); }}
+              className="rounded p-1 text-zinc-400 hover:bg-zinc-700 hover:text-blue-400"
+              title="Edit group"
+            >
+              <Pencil className="h-3.5 w-3.5" />
             </button>
           )}
           <button

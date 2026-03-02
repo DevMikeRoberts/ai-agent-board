@@ -151,6 +151,25 @@ let ws: WebSocket | null = null;
 let disposed = false;
 let reconnectTimer: ReturnType<typeof setTimeout>;
 
+// Connection status tracking
+export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting';
+let connectionStatus: ConnectionStatus = 'disconnected';
+const statusListeners = new Set<(status: ConnectionStatus) => void>();
+
+function setConnectionStatus(status: ConnectionStatus) {
+  connectionStatus = status;
+  statusListeners.forEach((fn) => fn(status));
+}
+
+export function getConnectionStatus(): ConnectionStatus {
+  return connectionStatus;
+}
+
+export function subscribeConnectionStatus(listener: (status: ConnectionStatus) => void): () => void {
+  statusListeners.add(listener);
+  return () => { statusListeners.delete(listener); };
+}
+
 function ensureConnection() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
 
@@ -160,12 +179,13 @@ function ensureConnection() {
     url += `?token=${encodeURIComponent(API_KEY)}`;
   }
   disposed = false;
+  setConnectionStatus('connecting');
 
   ws = new WebSocket(url);
 
   ws.onopen = () => {
     console.log('[WS] connected');
-    // Notify listeners to re-sync state after reconnect
+    setConnectionStatus('connected');
     reconnectListeners.forEach((fn) => fn());
   };
 
@@ -180,7 +200,10 @@ function ensureConnection() {
   ws.onclose = () => {
     if (!disposed && listeners.size > 0) {
       console.log('[WS] disconnected, reconnecting in 2s');
+      setConnectionStatus('disconnected');
       reconnectTimer = setTimeout(ensureConnection, 2000);
+    } else {
+      setConnectionStatus('disconnected');
     }
   };
 

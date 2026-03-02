@@ -5,6 +5,7 @@ import type { Task, AgentType } from '@/types';
 import { api, type AgentInfo } from '@/lib/api';
 import { AGENT_DISPLAY } from '@/lib/agent-config';
 import { cn } from '@/lib/utils';
+import { getRecentRepoPaths, addRepoPath } from '@/lib/repo-history';
 
 interface WorktreeDialogProps {
   open: boolean;
@@ -61,6 +62,7 @@ export function WorktreeDialog({ open, task, onClose, onSubmit }: WorktreeDialog
     e.preventDefault();
     if (!repoPath.trim()) return;
     localStorage.setItem(LS_REPO_KEY, repoPath.trim());
+    addRepoPath(repoPath.trim());
     localStorage.setItem(LS_BASE_BRANCH_KEY, baseBranch.trim());
     localStorage.setItem(LS_WORKTREE_KEY, String(useWorktree));
     onSubmit({
@@ -121,9 +123,13 @@ export function WorktreeDialog({ open, task, onClose, onSubmit }: WorktreeDialog
                   value={repoPath}
                   onChange={(e) => setRepoPath(e.target.value)}
                   placeholder="~/projects/my-app"
+                  list="recent-repo-paths"
                   autoFocus
                   className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 />
+                <datalist id="recent-repo-paths">
+                  {getRecentRepoPaths().map((p) => <option key={p} value={p} />)}
+                </datalist>
               </div>
 
               {/* Agent selector */}

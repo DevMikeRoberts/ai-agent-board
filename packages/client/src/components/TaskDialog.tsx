@@ -8,11 +8,12 @@ import type { Task, ColumnId, AgentType, Priority } from '@/types';
 import { AGENT_DISPLAY } from '@/lib/agent-config';
 import { PRIORITY_DISPLAY } from '@/lib/priority-config';
 import { cn } from '@/lib/utils';
+import { getRecentRepoPaths, addRepoPath } from '@/lib/repo-history';
 
 interface TaskDialogProps {
   open: boolean;
   onClose: () => void;
-  onSubmit: (task: { title: string; description: string; priority: Priority; columnId: ColumnId; agentType: AgentType; autoRun?: boolean }) => void;
+  onSubmit: (task: { title: string; description: string; priority: Priority; columnId: ColumnId; agentType: AgentType; autoRun?: boolean; repoPath?: string; branchName?: string; baseBranch?: string; useWorktree?: boolean }) => void;
   /** When set, dialog is in edit mode with pre-populated fields */
   editTask?: Task | null;
   /** Called on save in edit mode */
@@ -35,6 +36,9 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
   const [showPriority, setShowPriority] = useState(false);
   const [showAgent, setShowAgent] = useState(false);
   const [autoRun, setAutoRun] = useState(false);
+  const [repoPath, setRepoPath] = useState('');
+  const [baseBranch, setBaseBranch] = useState('main');
+  const [useWorktree, setUseWorktree] = useState(true);
 
   const isEditMode = !!editTask;
 
@@ -54,6 +58,9 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
       setShowPriority(false);
       setShowAgent(false);
       setAutoRun(false);
+      setRepoPath('');
+      setBaseBranch('main');
+      setUseWorktree(true);
     }
   }, [editTask, open]);
 
@@ -68,6 +75,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
         agentType,
       });
     } else {
+      if (autoRun && repoPath.trim()) addRepoPath(repoPath.trim());
       onSubmit({
         title: title.trim(),
         description: description.trim(),
@@ -75,6 +83,11 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
         columnId: autoRun ? 'in-progress' : 'backlog',
         agentType,
         autoRun: autoRun || undefined,
+        ...(autoRun && repoPath.trim() ? {
+          repoPath: repoPath.trim(),
+          baseBranch: baseBranch.trim() || 'main',
+          useWorktree,
+        } : {}),
       });
     }
     setTitle('');
@@ -82,6 +95,9 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
     setPriority('medium');
     setAgentType('copilot');
     setAutoRun(false);
+    setRepoPath('');
+    setBaseBranch('main');
+    setUseWorktree(true);
     onClose();
   };
 
@@ -276,6 +292,49 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
                     Auto-run — start agent immediately after creating
                   </span>
                 </label>
+              )}
+
+              {/* Run configuration (visible when auto-run is checked) */}
+              {!isEditMode && autoRun && (
+                <div className="space-y-3 rounded-lg border border-border/50 bg-muted/30 p-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Repository Path</label>
+                    <input
+                      type="text"
+                      value={repoPath}
+                      onChange={(e) => setRepoPath(e.target.value)}
+                      placeholder="/host-projects/my-app"
+                      list="task-recent-repo-paths"
+                      className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-mono placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
+                    />
+                    <datalist id="task-recent-repo-paths">
+                      {getRecentRepoPaths().map((p) => <option key={p} value={p} />)}
+                    </datalist>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-muted-foreground">Base Branch</label>
+                      <input
+                        type="text"
+                        value={baseBranch}
+                        onChange={(e) => setBaseBranch(e.target.value)}
+                        placeholder="main"
+                        className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
+                      />
+                    </div>
+                    <div className="flex items-end pb-1">
+                      <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={useWorktree}
+                          onChange={(e) => setUseWorktree(e.target.checked)}
+                          className="rounded border-border"
+                        />
+                        Git worktree
+                      </label>
+                    </div>
+                  </div>
+                </div>
               )}
 
               {/* Actions */}

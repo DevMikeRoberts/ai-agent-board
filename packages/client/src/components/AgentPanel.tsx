@@ -345,7 +345,7 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onMergeLo
   const [followUpMessage, setFollowUpMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
-  const [activeTab, setActiveTab] = useState<'events' | 'terminal'>('events');
+  const [activeTab, setActiveTab] = useState<'events' | 'terminal' | 'changes'>('events');
   const [showWorktreeConfirm, setShowWorktreeConfirm] = useState(false);
   const [hasRemote, setHasRemote] = useState<boolean | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -436,6 +436,23 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onMergeLo
     () => coalesceEvents(events, streaming),
     [events, streaming]
   );
+
+  // Derive file changes for the Changes tab
+  const fileChanges = useMemo(() => {
+    const files = new Map<string, { type: 'created' | 'modified' | 'read'; content: string; diff?: string }>();
+    for (const event of events) {
+      const file = event.metadata?.file;
+      if (!file) continue;
+      if (event.type === 'file_write') {
+        files.set(file, { type: files.has(file) ? 'modified' : 'created', content: event.content, diff: event.metadata?.diff });
+      } else if (event.type === 'file_edit') {
+        files.set(file, { type: 'modified', content: event.content, diff: event.metadata?.diff });
+      } else if (event.type === 'file_read' && !files.has(file)) {
+        files.set(file, { type: 'read', content: event.content });
+      }
+    }
+    return [...files.entries()].map(([path, info]) => ({ path, ...info }));
+  }, [events]);
 
   const handleSendFollowUp = async () => {
     if (!task || !followUpMessage.trim() || sending) return;
@@ -791,6 +808,17 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onMergeLo
             >
               Terminal
             </button>
+            <button
+              onClick={() => setActiveTab('changes')}
+              className={cn(
+                'px-3 py-1.5 text-xs font-medium rounded-t transition-colors',
+                activeTab === 'changes'
+                  ? 'bg-card border border-border border-b-card text-foreground -mb-px'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              Changes{fileChanges.length > 0 ? ` (${fileChanges.length})` : ''}
+            </button>
             </div>
             {events.length > 0 && (
               <button
@@ -819,6 +847,32 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onMergeLo
           {activeTab === 'terminal' && (
             <div className={cn('flex-1 overflow-hidden rounded-none', theme === 'light' ? 'bg-[#f8f9fb]' : 'bg-[#0f172a]')}>
               <TerminalView events={events} streaming={streaming} theme={theme} />
+            </div>
+          )}
+
+          {/* Changes list */}
+          {activeTab === 'changes' && (
+            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              {fileChanges.length === 0 && (
+                <div className="flex h-full items-center justify-center">
+                  <div className="text-center">
+                    <FileCode2 className="mx-auto h-10 w-10 text-muted-foreground/20" />
+                    <p className="mt-3 text-sm text-muted-foreground/50">No file changes yet</p>
+                  </div>
+                </div>
+              )}
+              {fileChanges.map((file) => (
+                <details key={file.path} className="group rounded-lg border border-border bg-card">
+                  <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-accent/50">
+                    <span>{file.type === 'created' ? '🟢' : file.type === 'modified' ? '🟡' : '📖'}</span>
+                    <span className="flex-1 font-mono text-xs text-foreground truncate">{file.path}</span>
+                    <span className="text-[10px] text-muted-foreground capitalize">{file.type}</span>
+                  </summary>
+                  <div className="border-t border-border px-3 py-2 overflow-x-auto">
+                    <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap">{file.diff || file.content}</pre>
+                  </div>
+                </details>
+              ))}
             </div>
           )}
 
