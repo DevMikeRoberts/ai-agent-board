@@ -20,7 +20,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: `cd ../server && PORT=${TEST_SERVER_PORT} npx tsx src/index.ts`,
+      command: `cd ../server && PORT=${TEST_SERVER_PORT} DATABASE_URL= npx tsx src/index.ts`,
       port: TEST_SERVER_PORT,
       reuseExistingServer: !process.env.CI,
       timeout: 15_000,

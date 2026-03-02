@@ -108,6 +108,9 @@ export function createGroupsRouter(
       if (child.title.length > MAX_TITLE_LENGTH) {
         res.status(400).json({ error: `children[${i}].title exceeds max length` }); return;
       }
+      if (child.description !== undefined && typeof child.description !== 'string') {
+        res.status(400).json({ error: `children[${i}].description must be a string` }); return;
+      }
       if (child.agentType !== undefined && !isValidAgentType(child.agentType)) {
         res.status(400).json({ error: `children[${i}].agentType is invalid` }); return;
       }
@@ -176,7 +179,12 @@ export function createGroupsRouter(
       updates.priority = req.body.priority;
     }
     if (req.body.maxConcurrency !== undefined) {
-      updates.maxConcurrency = req.body.maxConcurrency;
+      const children = await groupRepo.getChildTasks(id);
+      const mc = req.body.maxConcurrency;
+      if (typeof mc !== 'number' || !Number.isInteger(mc) || mc < 1 || mc > children.length) {
+        res.status(400).json({ error: `maxConcurrency must be an integer between 1 and ${children.length}` }); return;
+      }
+      updates.maxConcurrency = mc;
     }
     if (req.body.columnId !== undefined) updates.columnId = req.body.columnId;
     if (req.body.archived !== undefined) updates.archived = req.body.archived;

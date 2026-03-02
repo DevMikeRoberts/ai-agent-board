@@ -370,6 +370,52 @@ test.describe('Task Groups API', () => {
     const res = await request.post(`${API}/api/groups/nonexistent-id/stop`);
     expect(res.status()).toBe(404);
   });
+
+  test('POST /api/groups rejects non-string child description', async ({ request }) => {
+    const res = await request.post(`${API}/api/groups`, {
+      data: {
+        title: 'Bad Description Group',
+        maxConcurrency: 1,
+        children: [
+          { title: 'Valid child', agentType: 'copilot' },
+          { title: 'Bad child', description: 123, agentType: 'copilot' },
+        ],
+      },
+    });
+    expect(res.status()).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain('children[1].description');
+  });
+
+  test('PATCH /api/groups/:id rejects invalid maxConcurrency', async ({ request }) => {
+    const createRes = await request.post(`${API}/api/groups`, {
+      data: {
+        title: 'Concurrency Patch Test',
+        maxConcurrency: 1,
+        children: makeChildren(2),
+      },
+    });
+    const group = await createRes.json();
+    createdGroupIds.push(group.id);
+
+    // Zero
+    const res0 = await request.patch(`${API}/api/groups/${group.id}`, { data: { maxConcurrency: 0 } });
+    expect(res0.status()).toBe(400);
+
+    // Greater than children count
+    const resHigh = await request.patch(`${API}/api/groups/${group.id}`, { data: { maxConcurrency: 99 } });
+    expect(resHigh.status()).toBe(400);
+
+    // Non-integer
+    const resFloat = await request.patch(`${API}/api/groups/${group.id}`, { data: { maxConcurrency: 1.5 } });
+    expect(resFloat.status()).toBe(400);
+
+    // Valid update should work
+    const resOk = await request.patch(`${API}/api/groups/${group.id}`, { data: { maxConcurrency: 2 } });
+    expect(resOk.status()).toBe(200);
+    const updated = await resOk.json();
+    expect(updated.maxConcurrency).toBe(2);
+  });
 });
 
 // ─── UI Tests ───────────────────────────────────────────────────────
