@@ -78,6 +78,9 @@ export const api = {
   mergeLocal: (id: string) =>
     request<{ merged: boolean; baseBranch: string }>(`/tasks/${id}/merge-local`, { method: 'POST' }),
 
+  getGitInfo: (id: string) =>
+    request<{ hasRemote: boolean }>(`/tasks/${id}/git-info`),
+
   sendMessage: (id: string, message: string) =>
     request<{ success: boolean }>(`/tasks/${id}/message`, { method: 'POST', body: JSON.stringify({ message }) }),
 

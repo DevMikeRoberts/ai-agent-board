@@ -1,10 +1,28 @@
 import { Router, Request, Response } from 'express';
+import { execFileSync } from 'child_process';
 import type { TaskRepository } from '../repositories/types.js';
 import type { AgentManager } from '../services/agent-manager.js';
 import { paramId, broadcastTaskUpdate } from './helpers.js';
 
 export function createGitRouter(repo: TaskRepository, agentManager: AgentManager): Router {
   const router = Router();
+
+  // GET /api/tasks/:id/git-info — check if repo has a remote
+  router.get('/:id/git-info', async (req: Request, res: Response) => {
+    const id = paramId(req);
+    const task = await repo.getById(id);
+    if (!task) { res.status(404).json({ error: 'task not found' }); return; }
+    if (!task.repoPath) { res.json({ hasRemote: false }); return; }
+
+    try {
+      const remote = execFileSync('git', ['remote', 'get-url', 'origin'], {
+        cwd: task.repoPath, stdio: 'pipe',
+      }).toString().trim();
+      res.json({ hasRemote: !!remote });
+    } catch {
+      res.json({ hasRemote: false });
+    }
+  });
 
   // POST /api/tasks/:id/create-pr — create a PR from the worktree branch
   router.post('/:id/create-pr', async (req: Request, res: Response) => {

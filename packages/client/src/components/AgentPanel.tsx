@@ -347,6 +347,7 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onMergeLo
   const [descExpanded, setDescExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<'events' | 'terminal'>('events');
   const [showWorktreeConfirm, setShowWorktreeConfirm] = useState(false);
+  const [hasRemote, setHasRemote] = useState<boolean | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const taskId = task?.id ?? null;
@@ -367,11 +368,16 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onMergeLo
     setMergeResult(null);
     setMergeLoading(false);
     setMergeError(null);
+    setShowWorktreeConfirm(false);
+    setHasRemote(null);
     setFollowUpMessage('');
     setSending(false);
 
     // Load existing events from server
     api.getEvents(taskId).then(setEvents).catch(console.error);
+
+    // Check if repo has a git remote (for showing Create PR vs Merge to main)
+    api.getGitInfo(taskId).then((info) => setHasRemote(info.hasRemote)).catch(() => setHasRemote(false));
 
     // Listen for live agent events via WS
     const disconnect = connectWS((msg) => {
@@ -622,7 +628,7 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onMergeLo
               {/* PR / Cleanup actions — show when task is done or complete */}
               {(task.agentStatus === 'complete' || task.columnId === 'done') && (
                 <div className="flex items-center gap-2 pt-1">
-                  {!prUrl && onCreatePR && (
+                  {!prUrl && onCreatePR && hasRemote === true && (
                     <button
                       onClick={async () => {
                         setPrLoading(true);
