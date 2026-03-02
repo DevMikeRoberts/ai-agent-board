@@ -32,6 +32,7 @@ export function App() {
   const [worktreeDialogTaskId, setWorktreeDialogTaskId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [deletingTask, setDeletingTask] = useState<Task | null>(null);
+  const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'title' | 'priority' | 'created' | 'status'>(
     () => (localStorage.getItem('kanban-sort-by') as 'title' | 'priority' | 'created' | 'status') || 'title'
   );
@@ -94,10 +95,9 @@ export function App() {
     await stopGroup(id);
   }, [stopGroup]);
 
-  const handleDeleteGroup = useCallback(async (id: string) => {
-    await deleteGroup(id);
-    if (selectedGroupId === id) setSelectedGroupId(null);
-  }, [deleteGroup, selectedGroupId]);
+  const handleDeleteGroup = useCallback((id: string) => {
+    setDeletingGroupId(id);
+  }, []);
 
   const handleRetryChild = useCallback(async (taskId: string) => {
     await runTask(taskId);
@@ -220,15 +220,20 @@ export function App() {
     setDeletingTask(task);
   }, []);
 
-  const handleConfirmDelete = useCallback(() => {
+  const handleConfirmDelete = useCallback(async () => {
     if (deletingTask) {
       deleteTask(deletingTask.id);
       setDeletingTask(null);
+    } else if (deletingGroupId) {
+      await deleteGroup(deletingGroupId);
+      if (selectedGroupId === deletingGroupId) setSelectedGroupId(null);
+      setDeletingGroupId(null);
     }
-  }, [deletingTask, deleteTask]);
+  }, [deletingTask, deleteTask, deletingGroupId, deleteGroup, selectedGroupId]);
 
   const handleCancelDelete = useCallback(() => {
     setDeletingTask(null);
+    setDeletingGroupId(null);
   }, []);
 
   const handleArchiveTask = useCallback((task: Task) => {
@@ -275,8 +280,9 @@ export function App() {
 
   // Keyboard shortcuts
   const handleCloseAll = useCallback(() => {
-    if (deletingTask) {
+    if (deletingTask || deletingGroupId) {
       setDeletingTask(null);
+      setDeletingGroupId(null);
     } else if (worktreeDialogTaskId) {
       setWorktreeDialogTaskId(null);
     } else if (groupDialogOpen) {
@@ -288,11 +294,11 @@ export function App() {
     } else if (selectedTaskId) {
       setSelectedTaskId(null);
     }
-  }, [deletingTask, worktreeDialogTaskId, groupDialogOpen, dialogOpen, selectedGroupId, selectedTaskId]);
+  }, [deletingTask, deletingGroupId, worktreeDialogTaskId, groupDialogOpen, dialogOpen, selectedGroupId, selectedTaskId]);
 
   const isAnyOpen = useCallback(
-    () => dialogOpen || groupDialogOpen || selectedTaskId !== null || selectedGroupId !== null || worktreeDialogTaskId !== null || deletingTask !== null,
-    [dialogOpen, groupDialogOpen, selectedTaskId, selectedGroupId, worktreeDialogTaskId, deletingTask]
+    () => dialogOpen || groupDialogOpen || selectedTaskId !== null || selectedGroupId !== null || worktreeDialogTaskId !== null || deletingTask !== null || deletingGroupId !== null,
+    [dialogOpen, groupDialogOpen, selectedTaskId, selectedGroupId, worktreeDialogTaskId, deletingTask, deletingGroupId]
   );
 
   useKeyboardShortcuts({
@@ -386,8 +392,8 @@ export function App() {
       />
 
       <DeleteConfirmDialog
-        open={deletingTask !== null}
-        taskTitle={deletingTask?.title ?? ''}
+        open={deletingTask !== null || deletingGroupId !== null}
+        taskTitle={deletingTask?.title ?? groups.find(g => g.id === deletingGroupId)?.title ?? ''}
         onCancel={handleCancelDelete}
         onConfirm={handleConfirmDelete}
       />
