@@ -24,7 +24,8 @@ A drag-and-drop Kanban board that assigns coding tasks to AI agents — GitHub C
 - Terminal-style event viewer (xterm.js) with ANSI color support
 - Agent panel with event coalescing (thinking, commands, output)
 - Git worktree isolation per task (optional)
-- One-click PR creation from completed tasks
+- **Local merge or PR** — merge worktree branch to main locally, or create a PR if a GitHub remote exists (auto-detected)
+- Worktree auto-cleanup after merge, PR creation, or archival
 - **Dual database backends** — SQLite (zero-config default) or PostgreSQL
 - Task templates for reusable task configurations
 - **Task Groups** — define multiple related tasks in one form, launch with configurable parallelism (slider 1..N), monitor aggregate progress
@@ -131,13 +132,13 @@ copilot-kanban-agent/
 ├── packages/
 │   ├── client/                # React frontend
 │   │   └── src/
-│   │       ├── components/    # Board, Column, TaskCard, TaskGroupCard, GroupPanel, AgentPanel, TerminalView, FilterChips, dialogs
+│   │       ├── components/    # Board, Column, TaskCard, TaskGroupCard, GroupPanel, AgentPanel, TerminalView, ParallelismSlider, FilterChips, dialogs
 │   │       ├── hooks/         # useTasks, useTaskGroups, useTheme, useDebounce, useKeyboardShortcuts
 │   │       └── lib/           # API client, WebSocket, agent-config, priority-config, utilities
 │   ├── server/                # Express backend
 │   │   └── src/
 │   │       ├── middleware/     # Bearer token auth
-│   │       ├── routes/        # REST API split: tasks, agent, git, templates, groups
+│   │       ├── routes/        # REST API split: tasks, agent, git (merge/PR/worktree), templates, groups
 │   │       ├── services/      # Agent session orchestration via @codewithdan/agent-sdk-core
 │   │       ├── repositories/  # SQLite + PostgreSQL data access (tasks + templates + groups)
 │   │       ├── db.ts          # Database init + migrations
@@ -153,7 +154,7 @@ copilot-kanban-agent/
 3. **Configure the run** — set the repo path, branch name, agent type, and whether to use a git worktree
 4. **Click Start Agent** — the selected agent begins working, streaming progress in real-time
 5. **Review the results** — commands executed, files modified, output produced
-6. **Create a PR** directly from the agent panel when the task completes
+6. **Merge or create a PR** — merge the branch to main locally, or create a PR if the repo has a GitHub remote
 
 ### Multi-Agent Architecture
 
@@ -186,6 +187,18 @@ npm test
 # Run directly
 cd packages/e2e && npx playwright test --reporter=list
 ```
+
+7 test files, 81 tests (79 active, 2 skipped integration):
+
+| File | Tests | Coverage |
+|------|-------|----------|
+| `board.spec.ts` | 14 | Task CRUD, drag & drop, theme, priority, sorting, filters, retry |
+| `api-improvements.spec.ts` | 20 | Auto-run, batch create, status endpoint, WebSocket events, follow-up messages |
+| `agent-selector.spec.ts` | 7 | Agent selection UI, badges, worktree dialog |
+| `groups.spec.ts` | 28 | Group CRUD, validation, archive, edge cases (E3/E12), UI |
+| `git-operations.spec.ts` | 8 | Local merge, conflict handling, PR creation, worktree cleanup |
+| `group-integration.spec.ts` | 2 | Full agent execution with real agents, stop & cleanup |
+| `agent-sdk.spec.ts` | 2 | Real Copilot SDK execution (skipped without test repo) |
 
 ## Contributing
 

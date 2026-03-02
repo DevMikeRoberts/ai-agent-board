@@ -35,11 +35,13 @@ copilot-kanban-agent/
 - **Multi-agent support** — pluggable `AgentProvider`/`AgentSession` interfaces from `@codewithdan/agent-sdk-core`. Four providers: `copilot` (`@github/copilot-sdk`), `claude` (`@anthropic-ai/claude-agent-sdk`), `codex` (`@openai/codex-sdk`), `opencode` (`@opencode-ai/sdk`). Auto-detected at startup via `detectAgents()`.
 - **Agent SDK abstraction** — all provider implementations live in the external `@codewithdan/agent-sdk-core` package. The server imports providers and the detection function from this package.
 - **Dual database backends** — SQLite via `better-sqlite3` (default, zero config) or PostgreSQL via `pg` (set `DATABASE_URL`). Both implement the `TaskRepository` and `TemplateRepository` interfaces.
-- **Route splitting** — REST API is split across `tasks.ts` (CRUD), `agent.ts` (start/stop/events), `git.ts` (PR creation, worktree cleanup), and `templates.ts` (task template CRUD).
+- **Route splitting** — REST API is split across `tasks.ts` (CRUD), `agent.ts` (start/stop/events/follow-up), `git.ts` (merge-local, create-pr, worktree cleanup, git-info), `templates.ts` (task template CRUD), and `groups.ts` (group CRUD + run/stop/archive).
 - **API key auth** — optional Bearer token via `API_KEY` env var. When set, all API and WebSocket requests require `Authorization: Bearer <key>`. Middleware in `middleware/auth.ts`.
 - **Task Groups** — parent entity with N child tasks, concurrency-controlled execution via `GroupQueue` in agent-manager. Groups move as a single card on the board; auto-advance to review when all children complete. Parallelism slider locked once running.
 - **Event streaming** — SDK events mapped to `AgentEvent`s, persisted to database, broadcast via WebSocket. In-memory LRU cache (200 tasks max, 100 events per task).
-- **Git worktrees** — optional per-task branch isolation. Agent works in worktree directory, path rewriting via `onPreToolUse` hook.
+- **Git worktrees** — optional per-task branch isolation. Agent works in worktree directory, path rewriting via `onPreToolUse` hook. Worktrees auto-cleaned after successful merge or PR creation.
+- **Local merge** — `mergeLocal()` merges worktree branch into base branch locally with per-repo mutex to prevent concurrent checkout races. Auto-aborts on conflict.
+- **Smart PR/merge buttons** — `GET /api/tasks/:id/git-info` checks for remote; UI shows "Create PR" only when remote exists, "Merge to main" always available.
 - **Vite proxy** — client proxies `/api` and `/ws` to the server. In Docker, `API_URL` env var points to `http://server:3001`.
 - **Shared validation** — `shared/constants.ts` exports validators (`isValidPriority`, `isValidColumnId`, etc.) and limits (`MAX_TITLE_LENGTH`, `MAX_DESCRIPTION_LENGTH`) used by both client and server.
 
@@ -120,7 +122,7 @@ npm test
 cd packages/e2e && npx playwright test
 ```
 
-4 test files, 43 tests: board tests (CRUD, drag, edit, theme, priority, agent panel), agent SDK tests, agent selector tests, API improvement tests.
+7 test files, 81 tests (79 active, 2 skipped integration): board (CRUD, drag, theme, priority, sort, filter, retry), API improvements (auto-run, batch, status, events), agent selector, task groups (CRUD, validation, edge cases, UI), git operations (merge, PR, worktree), group integration (real agent execution), agent SDK.
 
 ## Code Patterns
 
@@ -133,6 +135,8 @@ cd packages/e2e && npx playwright test
 - **Graceful shutdown**: 5s force-exit timeout after `SIGINT`/`SIGTERM`, all SDK sessions cleaned up
 - **Copilot permission request**: SDK uses `req.kind` (shell/read/write/mcp/url/memory), NOT `req.toolName`
 - **Group queue**: `GroupQueue` in agent-manager tracks pending/running/completed/failed per group. `drainQueue()` fills slots up to `maxConcurrency` as children complete.
+- **Per-repo mutex**: `withRepoLock()` serializes git operations (merge, checkout) on the same repository to prevent concurrent modification races.
+- **Startup recovery**: Orphaned tasks (`executing`/`planning` without live session) reset to `failed` on server restart. Groups reconstruct queue from DB state.
 
 ## Known Issues (LOW priority)
 
