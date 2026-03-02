@@ -91,6 +91,31 @@ function migrate(db: Database.Database): void {
   if (!colNames.has('archived')) {
     db.exec(`ALTER TABLE tasks ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`);
   }
+  if (!colNames.has('group_id')) {
+    db.exec(`ALTER TABLE tasks ADD COLUMN group_id TEXT REFERENCES task_groups(id) ON DELETE CASCADE`);
+  }
+  if (!colNames.has('group_order')) {
+    db.exec(`ALTER TABLE tasks ADD COLUMN group_order INTEGER`);
+  }
+
+  // Task groups table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS task_groups (
+      id              TEXT PRIMARY KEY,
+      title           TEXT NOT NULL,
+      description     TEXT NOT NULL DEFAULT '',
+      priority        TEXT NOT NULL DEFAULT 'medium',
+      column_id       TEXT NOT NULL DEFAULT 'backlog',
+      repo_path       TEXT,
+      base_branch     TEXT,
+      max_concurrency INTEGER NOT NULL DEFAULT 2,
+      created_at      INTEGER NOT NULL,
+      started_at      INTEGER,
+      completed_at    INTEGER,
+      archived        INTEGER NOT NULL DEFAULT 0
+    )
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_group_id ON tasks(group_id)`);
 
   // Templates table
   db.exec(`
@@ -161,6 +186,40 @@ export async function initPostgresDatabase(pool: Pool): Promise<void> {
   await addCol('worktree_path', 'TEXT');
   await addCol('agent_type', "TEXT NOT NULL DEFAULT 'copilot'");
   await addCol('archived', 'BOOLEAN NOT NULL DEFAULT FALSE');
+  await addCol('group_id', 'TEXT');
+  await addCol('group_order', 'INTEGER');
+
+  // Task groups table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS task_groups (
+      id              TEXT PRIMARY KEY,
+      title           TEXT NOT NULL,
+      description     TEXT NOT NULL DEFAULT '',
+      priority        TEXT NOT NULL DEFAULT 'medium',
+      column_id       TEXT NOT NULL DEFAULT 'backlog',
+      repo_path       TEXT,
+      base_branch     TEXT,
+      max_concurrency INTEGER NOT NULL DEFAULT 2,
+      created_at      BIGINT NOT NULL,
+      started_at      BIGINT,
+      completed_at    BIGINT,
+      archived        BOOLEAN NOT NULL DEFAULT FALSE
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_group_id ON tasks(group_id)`);
+
+  // Add FK for group_id if not present
+  const { rows: gfkRows } = await pool.query(`
+    SELECT constraint_name FROM information_schema.table_constraints
+    WHERE table_name = 'tasks' AND constraint_type = 'FOREIGN KEY'
+      AND constraint_name = 'tasks_group_id_fkey'
+  `);
+  if (gfkRows.length === 0) {
+    await pool.query(`
+      ALTER TABLE tasks ADD CONSTRAINT tasks_group_id_fkey
+        FOREIGN KEY (group_id) REFERENCES task_groups(id) ON DELETE CASCADE
+    `).catch(() => { /* constraint may already exist */ });
+  }
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS events (

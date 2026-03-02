@@ -5,6 +5,7 @@ export type {
   AgentStatus,
   AgentType,
   Task,
+  TaskGroup,
   TaskTemplate,
   AgentEventType,
   AgentEvent,
@@ -21,4 +22,7 @@ export {
   isValidColumnId,
   isValidAgentStatus,
   isValidAgentType,
+  MAX_GROUP_CHILDREN,
+  MIN_GROUP_CHILDREN,
+  isValidMaxConcurrency,
 } from '../../../shared/constants.js';

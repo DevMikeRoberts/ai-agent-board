@@ -20,6 +20,8 @@ interface TaskRow {
   worktree_path: string | null;
   agent_type: string;
   archived: boolean;
+  group_id: string | null;
+  group_order: number | null;
 }
 
 function rowToTask(row: TaskRow): Task {
@@ -61,6 +63,8 @@ function rowToTask(row: TaskRow): Task {
     worktreePath: row.worktree_path ?? undefined,
     agentType: row.agent_type as AgentType,
     archived: row.archived,
+    groupId: row.group_id ?? undefined,
+    groupOrder: row.group_order ?? undefined,
   };
 }
 
@@ -73,8 +77,8 @@ export class PostgresTaskRepository implements TaskRepository {
 
   async getAll(includeArchived = false): Promise<Task[]> {
     const query = includeArchived
-      ? 'SELECT * FROM tasks ORDER BY created_at ASC'
-      : 'SELECT * FROM tasks WHERE archived = FALSE ORDER BY created_at ASC';
+      ? 'SELECT * FROM tasks WHERE group_id IS NULL ORDER BY created_at ASC'
+      : 'SELECT * FROM tasks WHERE archived = FALSE AND group_id IS NULL ORDER BY created_at ASC';
     const { rows } = await this.pool.query<TaskRow>(query);
     return rows.map(rowToTask);
   }

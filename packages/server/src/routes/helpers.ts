@@ -4,7 +4,7 @@ import { execFileSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import type { Task } from '../types.js';
+import type { Task, TaskGroup } from '../types.js';
 import { isValidPriority, isValidColumnId, isValidAgentType, MAX_TITLE_LENGTH, MAX_DESCRIPTION_LENGTH } from '@copilot-kanban/shared/constants.js';
 import type { TaskRepository } from '../repositories/types.js';
 import { broadcast } from '../websocket.js';
@@ -98,6 +98,10 @@ export function expandTilde(p: string): string {
 
 export function broadcastTaskUpdate(task: Task): void {
   broadcast({ type: 'task_updated', payload: task });
+}
+
+export function broadcastGroupUpdate(group: TaskGroup): void {
+  broadcast({ type: 'group_updated', payload: group });
 }
 
 // ─── Rate limiter ───────────────────────────────────────────────────

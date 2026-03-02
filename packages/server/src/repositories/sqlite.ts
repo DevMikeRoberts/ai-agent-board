@@ -19,6 +19,8 @@ interface TaskRow {
   worktree_path: string | null;
   agent_type: AgentType;
   archived: number;
+  group_id: string | null;
+  group_order: number | null;
 }
 
 function rowToTask(row: TaskRow): Task {
@@ -39,6 +41,8 @@ function rowToTask(row: TaskRow): Task {
     worktreePath: row.worktree_path ?? undefined,
     agentType: row.agent_type,
     archived: Boolean(row.archived),
+    groupId: row.group_id ?? undefined,
+    groupOrder: row.group_order ?? undefined,
   };
 }
 
@@ -61,15 +65,15 @@ export class SqliteTaskRepository implements TaskRepository {
   constructor(db: Database.Database) {
     this.db = db;
     this.stmts = {
-      getAll: db.prepare('SELECT * FROM tasks WHERE archived = 0 ORDER BY created_at ASC'),
-      getAllIncludingArchived: db.prepare('SELECT * FROM tasks ORDER BY created_at ASC'),
+      getAll: db.prepare('SELECT * FROM tasks WHERE archived = 0 AND group_id IS NULL ORDER BY created_at ASC'),
+      getAllIncludingArchived: db.prepare('SELECT * FROM tasks WHERE group_id IS NULL ORDER BY created_at ASC'),
       getArchived: db.prepare('SELECT * FROM tasks WHERE archived = 1 ORDER BY created_at DESC'),
       getById: db.prepare('SELECT * FROM tasks WHERE id = ?'),
       insert: db.prepare(`
         INSERT INTO tasks (id, title, description, priority, column_id, agent_status, agent_type, created_at, started_at, completed_at,
-          repo_path, branch_name, base_branch, use_worktree, worktree_path, archived)
+          repo_path, branch_name, base_branch, use_worktree, worktree_path, archived, group_id, group_order)
         VALUES (@id, @title, @description, @priority, @column_id, @agent_status, @agent_type, @created_at, @started_at, @completed_at,
-          @repo_path, @branch_name, @base_branch, @use_worktree, @worktree_path, @archived)
+          @repo_path, @branch_name, @base_branch, @use_worktree, @worktree_path, @archived, @group_id, @group_order)
       `),
       update: db.prepare(`
         UPDATE tasks SET
@@ -128,6 +132,8 @@ export class SqliteTaskRepository implements TaskRepository {
       use_worktree: task.useWorktree != null ? (task.useWorktree ? 1 : 0) : null,
       worktree_path: task.worktreePath ?? null,
       archived: task.archived ? 1 : 0,
+      group_id: task.groupId ?? null,
+      group_order: task.groupOrder ?? null,
     });
     return task;
   }

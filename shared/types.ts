@@ -28,6 +28,23 @@ export interface Task {
   worktreePath?: string;
   agentType?: AgentType;
   archived?: boolean;
+  groupId?: string;
+  groupOrder?: number;
+}
+
+export interface TaskGroup {
+  id: string;
+  title: string;
+  description?: string;
+  priority: Priority;
+  columnId: ColumnId;
+  repoPath?: string;
+  baseBranch?: string;
+  maxConcurrency: number;
+  createdAt: number;
+  startedAt?: number;
+  completedAt?: number;
+  archived?: boolean;
 }
 
 export type AgentEventType =
@@ -98,4 +115,5 @@ export type WSMessage =
   | { type: 'task_updated'; payload: Task }
   | { type: 'task_deleted'; payload: { id: string } }
   | { type: 'agent_complete'; payload: AgentCompletePayload }
-  | { type: 'agent_follow_up'; payload: AgentFollowUpPayload };
+  | { type: 'agent_follow_up'; payload: AgentFollowUpPayload }
+  | { type: 'group_updated'; payload: TaskGroup };

@@ -3,7 +3,7 @@ import { execFileSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import type { Task, AgentEvent, AgentType } from '../types.js';
+import type { Task, TaskGroup, AgentEvent, AgentType } from '../types.js';
 import type { TaskRepository } from '../repositories/types.js';
 import type { AgentProvider, AgentSession, AgentInfo } from '@codewithdan/agent-sdk-core';
 import type { AgentEvent as CoreAgentEvent } from '@codewithdan/agent-sdk-core';
@@ -26,6 +26,19 @@ const MAX_EVENT_LOG_TASKS = 200;
 // Deleted-task guard TTL
 const DELETED_TASK_TTL_MS = 60_000;
 
+interface GroupQueue {
+  groupId: string;
+  maxConcurrency: number;
+  pendingTaskIds: string[];
+  runningTaskIds: Set<string>;
+  completedTaskIds: Set<string>;
+  failedTaskIds: Set<string>;
+  tasks: Map<string, Task>;
+  makeStatusCallback: (task: Task) => (status: Task['agentStatus']) => void | Promise<void>;
+  makeWorktreeCallback: (task: Task) => (worktreePath: string) => void | Promise<void>;
+  onChildComplete: (taskId: string) => void | Promise<void>;
+}
+
 export class AgentManager {
   private providers = new Map<AgentType, AgentProvider>();
   private sessions = new Map<string, ManagedSession>();
@@ -37,6 +50,7 @@ export class AgentManager {
   private availableAgents: AgentInfo[] = [];
   /** Pending coalesced output/thinking broadcast per task */
   private streamBuffer = new Map<string, { event: AgentEvent; timer: ReturnType<typeof setTimeout> }>();
+  private groupQueues = new Map<string, GroupQueue>();
 
   /** Call once at startup to enable event persistence. */
   initEventPersistence(repo: TaskRepository): void {
@@ -522,5 +536,99 @@ make precise edits, and verify your changes compile/pass tests when applicable.
     for (const provider of this.providers.values()) {
       provider.stop().catch(() => {});
     }
+  }
+
+  // ─── Group Queue ──────────────────────────────────────────────────
+
+  isGroupRunning(groupId: string): boolean {
+    return this.groupQueues.has(groupId);
+  }
+
+  startGroup(
+    group: TaskGroup,
+    children: Task[],
+    makeStatusCb: (task: Task) => (status: Task['agentStatus']) => void | Promise<void>,
+    makeWorktreeCb: (task: Task) => (worktreePath: string) => void | Promise<void>,
+    onChildComplete: (taskId: string) => void | Promise<void>,
+  ): void {
+    if (this.groupQueues.has(group.id)) return;
+
+    const queue: GroupQueue = {
+      groupId: group.id,
+      maxConcurrency: group.maxConcurrency,
+      pendingTaskIds: children.map((c) => c.id),
+      runningTaskIds: new Set(),
+      completedTaskIds: new Set(),
+      failedTaskIds: new Set(),
+      tasks: new Map(children.map((c) => [c.id, c])),
+      makeStatusCallback: makeStatusCb,
+      makeWorktreeCallback: makeWorktreeCb,
+      onChildComplete,
+    };
+
+    this.groupQueues.set(group.id, queue);
+    this.drainGroupQueue(group.id);
+  }
+
+  private drainGroupQueue(groupId: string): void {
+    const queue = this.groupQueues.get(groupId);
+    if (!queue) return;
+
+    while (
+      queue.runningTaskIds.size < queue.maxConcurrency &&
+      queue.pendingTaskIds.length > 0
+    ) {
+      const taskId = queue.pendingTaskIds.shift()!;
+      const task = queue.tasks.get(taskId);
+      if (!task) continue;
+
+      queue.runningTaskIds.add(taskId);
+
+      // Wrap status callback to intercept completion
+      const originalStatusCb = queue.makeStatusCallback(task);
+      const wrappedStatusCb = (status: Task['agentStatus']) => {
+        const result = originalStatusCb(status);
+
+        if (status === 'complete' || status === 'failed') {
+          queue.runningTaskIds.delete(taskId);
+          if (status === 'complete') {
+            queue.completedTaskIds.add(taskId);
+          } else {
+            queue.failedTaskIds.add(taskId);
+          }
+
+          // Drain more
+          this.drainGroupQueue(groupId);
+
+          // Notify completion
+          queue.onChildComplete(taskId);
+
+          // Clean up queue when fully drained
+          if (queue.pendingTaskIds.length === 0 && queue.runningTaskIds.size === 0) {
+            this.groupQueues.delete(groupId);
+          }
+        }
+
+        return result;
+      };
+
+      this.startAgent(task, wrappedStatusCb, queue.makeWorktreeCallback(task));
+    }
+  }
+
+  async stopGroup(groupId: string): Promise<void> {
+    const queue = this.groupQueues.get(groupId);
+    if (!queue) return;
+
+    // Clear pending
+    queue.pendingTaskIds.length = 0;
+
+    // Stop running children
+    const running = [...queue.runningTaskIds];
+    for (const taskId of running) {
+      await this.stopAgent(taskId);
+    }
+
+    this.groupQueues.delete(groupId);
   }
 }
