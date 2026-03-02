@@ -66,7 +66,7 @@ const agentManager = new AgentManager();
   agentManager.initEventPersistence(taskRepo);
 
   app.use('/api/tasks', createTaskRouter(taskRepo, agentManager));
-  app.use('/api/tasks', createAgentRouter(taskRepo, agentManager));
+  app.use('/api/tasks', createAgentRouter(taskRepo, agentManager, groupRepo));
   app.use('/api/tasks', createGitRouter(taskRepo, agentManager));
   app.use('/api/templates', createTemplateRouter(templateRepo));
   app.use('/api/groups', createGroupsRouter(groupRepo, taskRepo, agentManager));
@@ -103,29 +103,33 @@ const agentManager = new AgentManager();
   }
 
   // Recover orphaned task groups
-  const allGroups = await groupRepo.getAll();
-  for (const group of allGroups) {
-    if (group.columnId === 'in-progress') {
-      const children = await groupRepo.getChildTasks(group.id);
-      let recovered = false;
-      for (const child of children) {
-        if (child.agentStatus === 'executing') {
-          await taskRepo.update(child.id, { agentStatus: 'failed', completedAt: Date.now() });
-          console.warn(`[server] recovered orphaned group child ${child.id} "${child.title}" (was executing)`);
-          recovered = true;
+  try {
+    const allGroups = await groupRepo.getAll();
+    for (const group of allGroups) {
+      if (group.columnId === 'in-progress') {
+        const children = await groupRepo.getChildTasks(group.id);
+        for (const child of children) {
+          if (child.agentStatus === 'executing') {
+            await taskRepo.update(child.id, { agentStatus: 'failed', completedAt: Date.now() });
+            console.warn(`[server] recovered orphaned group child ${child.id} "${child.title}" (was executing)`);
+          } else if (child.agentStatus === 'planning') {
+            // Planning children hadn't started — reset to idle so they can be re-queued
+            await taskRepo.update(child.id, { agentStatus: 'idle', startedAt: undefined });
+            console.warn(`[server] reset group child ${child.id} "${child.title}" (was planning → idle)`);
+          }
+        }
+        // Check if group should auto-advance after recovery
+        const updatedChildren = await groupRepo.getChildTasks(group.id);
+        const allDone = updatedChildren.every(c => c.agentStatus === 'complete' || c.agentStatus === 'failed');
+        const anyFailed = updatedChildren.some(c => c.agentStatus === 'failed');
+        if (allDone && !anyFailed) {
+          await groupRepo.update(group.id, { columnId: 'review', completedAt: Date.now() });
+          console.warn(`[server] recovered group ${group.id} "${group.title}" → review`);
         }
       }
-      // Check if group should auto-advance after recovery
-      const updatedChildren = await groupRepo.getChildTasks(group.id);
-      const allDone = updatedChildren.every(c => c.agentStatus === 'complete' || c.agentStatus === 'failed');
-      const anyFailed = updatedChildren.some(c => c.agentStatus === 'failed');
-      if (allDone && !anyFailed) {
-        await groupRepo.update(group.id, { columnId: 'review', completedAt: Date.now() });
-        console.warn(`[server] recovered group ${group.id} "${group.title}" → review`);
-      } else if (recovered) {
-        console.warn(`[server] group ${group.id} "${group.title}" stays in-progress (has failed children)`);
-      }
     }
+  } catch (err) {
+    console.error('[server] failed to recover groups:', err);
   }
 
   server.listen(PORT, () => {

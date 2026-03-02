@@ -3,14 +3,15 @@ import path from 'path';
 import type { Task } from '../types.js';
 import { isValidAgentType } from '@copilot-kanban/shared/constants.js';
 import type { TaskRepository } from '../repositories/types.js';
+import type { TaskGroupRepository } from '../repositories/group-types.js';
 import { broadcast } from '../websocket.js';
 import type { AgentManager } from '../services/agent-manager.js';
 import {
   paramId, isAllowedRepoPath, expandTilde, isValidGitRef,
-  broadcastTaskUpdate, makeStatusCallback, makeWorktreeCallback, isRateLimited,
+  broadcastTaskUpdate, broadcastGroupUpdate, makeStatusCallback, makeWorktreeCallback, isRateLimited,
 } from './helpers.js';
 
-export function createAgentRouter(repo: TaskRepository, agentManager: AgentManager): Router {
+export function createAgentRouter(repo: TaskRepository, agentManager: AgentManager, groupRepo?: TaskGroupRepository): Router {
   const router = Router();
 
   // POST /api/tasks/:id/configure — store worktree config before running
@@ -115,6 +116,18 @@ export function createAgentRouter(repo: TaskRepository, agentManager: AgentManag
       return;
     }
     broadcastTaskUpdate(updated);
+
+    // E8: If this task belongs to a group in 'review', move group back to in-progress
+    if (updated.groupId && groupRepo) {
+      const group = await groupRepo.getById(updated.groupId);
+      if (group && group.columnId === 'review') {
+        const movedGroup = await groupRepo.update(group.id, {
+          columnId: 'in-progress',
+          completedAt: undefined,
+        });
+        if (movedGroup) broadcastGroupUpdate(movedGroup);
+      }
+    }
 
     agentManager.startAgent(updated, makeStatusCallback(repo, task.id), makeWorktreeCallback(repo, task.id));
 

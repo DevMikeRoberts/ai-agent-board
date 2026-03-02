@@ -574,46 +574,53 @@ make precise edits, and verify your changes compile/pass tests when applicable.
     const queue = this.groupQueues.get(groupId);
     if (!queue) return;
 
-    while (
-      queue.runningTaskIds.size < queue.maxConcurrency &&
-      queue.pendingTaskIds.length > 0
-    ) {
-      const taskId = queue.pendingTaskIds.shift()!;
-      const task = queue.tasks.get(taskId);
-      if (!task) continue;
+    // Use queueMicrotask to avoid reentrancy issues when startAgent
+    // synchronously calls onStatusChange('failed') for unavailable agents
+    const startNext = () => {
+      const q = this.groupQueues.get(groupId);
+      if (!q) return;
+      if (q.runningTaskIds.size >= q.maxConcurrency || q.pendingTaskIds.length === 0) return;
 
-      queue.runningTaskIds.add(taskId);
+      const taskId = q.pendingTaskIds.shift()!;
+      const task = q.tasks.get(taskId);
+      if (!task) { startNext(); return; }
 
-      // Wrap status callback to intercept completion
-      const originalStatusCb = queue.makeStatusCallback(task);
+      q.runningTaskIds.add(taskId);
+
+      const originalStatusCb = q.makeStatusCallback(task);
       const wrappedStatusCb = (status: Task['agentStatus']) => {
         const result = originalStatusCb(status);
 
         if (status === 'complete' || status === 'failed') {
-          queue.runningTaskIds.delete(taskId);
+          q.runningTaskIds.delete(taskId);
           if (status === 'complete') {
-            queue.completedTaskIds.add(taskId);
+            q.completedTaskIds.add(taskId);
           } else {
-            queue.failedTaskIds.add(taskId);
+            q.failedTaskIds.add(taskId);
           }
 
-          // Drain more
-          this.drainGroupQueue(groupId);
-
           // Notify completion
-          queue.onChildComplete(taskId);
+          q.onChildComplete(taskId);
 
           // Clean up queue when fully drained
-          if (queue.pendingTaskIds.length === 0 && queue.runningTaskIds.size === 0) {
+          if (q.pendingTaskIds.length === 0 && q.runningTaskIds.size === 0) {
             this.groupQueues.delete(groupId);
+          } else {
+            // Schedule next drain to avoid reentrancy
+            queueMicrotask(() => this.drainGroupQueue(groupId));
           }
         }
 
         return result;
       };
 
-      this.startAgent(task, wrappedStatusCb, queue.makeWorktreeCallback(task));
-    }
+      this.startAgent(task, wrappedStatusCb, q.makeWorktreeCallback(task));
+
+      // Start more if we haven't hit concurrency limit
+      startNext();
+    };
+
+    startNext();
   }
 
   async stopGroup(groupId: string): Promise<void> {

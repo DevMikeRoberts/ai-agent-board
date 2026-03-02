@@ -178,7 +178,27 @@ export function createGroupsRouter(
     if (req.body.maxConcurrency !== undefined) {
       updates.maxConcurrency = req.body.maxConcurrency;
     }
+    if (req.body.columnId !== undefined) updates.columnId = req.body.columnId;
     if (req.body.archived !== undefined) updates.archived = req.body.archived;
+
+    // E3: Moving group back to backlog stops all running children and resets state
+    if (updates.columnId === 'backlog' && group.columnId !== 'backlog') {
+      if (agentManager.isGroupRunning(id)) {
+        await agentManager.stopGroup(id);
+      }
+      const children = await groupRepo.getChildTasks(id);
+      for (const child of children) {
+        if (child.agentStatus !== 'idle') {
+          await taskRepo.update(child.id, {
+            agentStatus: 'idle',
+            startedAt: undefined,
+            completedAt: undefined,
+          });
+        }
+      }
+      updates.startedAt = undefined;
+      updates.completedAt = undefined;
+    }
 
     const updated = await groupRepo.update(id, updates);
     if (updated) {
@@ -327,7 +347,10 @@ async function startGroupExecution(
   if (pendingChildren.length === 0) return;
 
   const onChildComplete = async (_taskId: string) => {
-    // Check if all children are done
+    // Guard: group may have been deleted while agents were running
+    const currentGroup = await groupRepo.getById(groupId);
+    if (!currentGroup) return;
+
     const currentChildren = await groupRepo.getChildTasks(groupId);
     const allDone = currentChildren.every(
       (c) => c.agentStatus === 'complete' || c.agentStatus === 'failed',
@@ -336,14 +359,12 @@ async function startGroupExecution(
     if (allDone) {
       const anyFailed = currentChildren.some((c) => c.agentStatus === 'failed');
       if (!anyFailed) {
-        // All complete — advance to review
         const updated = await groupRepo.update(groupId, {
           columnId: 'review',
           completedAt: Date.now(),
         });
         if (updated) broadcastGroupUpdate(updated);
       } else {
-        // Some failed — stay in-progress but mark completedAt
         const updated = await groupRepo.update(groupId, { completedAt: Date.now() });
         if (updated) broadcastGroupUpdate(updated);
       }
