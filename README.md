@@ -1,6 +1,6 @@
 # Copilot Kanban Agent
 
-A drag-and-drop Kanban board that assigns coding tasks to AI agents — GitHub Copilot, Claude Code, or OpenAI Codex. Drop a task into "In Progress," pick an agent, and it will plan, execute, and complete the work, streaming live progress back to the board.
+A drag-and-drop Kanban board that assigns coding tasks to AI agents — GitHub Copilot, Claude Code, OpenAI Codex, or OpenCode. Drop a task into "In Progress," pick an agent, and it will plan, execute, and complete the work, streaming live progress back to the board.
 
 ## Tech Stack
 
@@ -9,21 +9,29 @@ A drag-and-drop Kanban board that assigns coding tasks to AI agents — GitHub C
 | Frontend | React 19, Vite, Tailwind CSS 4, Framer Motion |
 | Drag & Drop | @dnd-kit |
 | Backend | Express, better-sqlite3 / PostgreSQL, ws (WebSocket) |
-| AI Agents | @github/copilot-sdk, @anthropic-ai/claude-agent-sdk, @openai/codex-sdk |
+| AI Agents | @codewithdan/agent-sdk-core (wraps @github/copilot-sdk, @anthropic-ai/claude-agent-sdk, @openai/codex-sdk, @opencode-ai/sdk) |
+| Terminal UI | @xterm/xterm |
 | Monorepo | npm workspaces |
 | Dev Environment | Docker Compose with live-reload volumes |
 
 ## Features
 
 - Kanban board with Backlog, In Progress, Review, Done columns
-- **Multi-agent support** — choose GitHub Copilot, Claude Code, or OpenAI Codex per task
+- **Multi-agent support** — choose GitHub Copilot, Claude Code, OpenAI Codex, or OpenCode per task
 - Auto-detection of available agents at startup
 - Drag-and-drop task management with transition validation
 - Real-time agent activity streaming via WebSocket
+- Terminal-style event viewer (xterm.js) with ANSI color support
 - Agent panel with event coalescing (thinking, commands, output)
 - Git worktree isolation per task (optional)
 - One-click PR creation from completed tasks
 - **Dual database backends** — SQLite (zero-config default) or PostgreSQL
+- Task templates for reusable task configurations
+- Auto-run option to start agent immediately on task creation
+- Priority levels (critical, high, medium, low) with emoji indicators and color-coded borders
+- Filter and sort tasks by agent type, status, and priority
+- API key authentication (optional — set `API_KEY` env var)
+- Task archiving
 - Dark/light theme toggle
 - Task search and filtering
 - Keyboard shortcuts (N: new task, Esc: close panels)
@@ -38,6 +46,7 @@ A drag-and-drop Kanban board that assigns coding tasks to AI agents — GitHub C
   - **GitHub Copilot**: `gh extension install github/gh-copilot` + `gh auth login`
   - **Claude Code**: `claude` CLI installed and authenticated
   - **OpenAI Codex**: `codex` CLI installed with API key configured
+  - **OpenCode**: `opencode` CLI installed and configured
 - Docker & Docker Compose (for containerized dev)
 
 ### Option 1: Docker Compose (Recommended)
@@ -96,12 +105,15 @@ npm run build:client
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `API_KEY` | _(unset)_ | Bearer token for API + WebSocket auth; unset = open access |
+| `VITE_API_KEY` | _(unset)_ | Client-side API key (must match `API_KEY`) |
 | `PORT` | `3001` | Server port |
 | `DATABASE_URL` | _(unset)_ | PostgreSQL connection string; when unset, uses SQLite |
 | `DB_PATH` | `./data/kanban.db` | SQLite database file path |
 | `COPILOT_MODEL` | `claude-opus-4-20250514` | Model for Copilot SDK sessions |
 | `CLAUDE_MODEL` | `claude-opus-4-20250514` | Model for Claude Code sessions |
 | `CODEX_MODEL` | `gpt-5.2-codex` | Model for OpenAI Codex sessions |
+| `COPILOT_DENIED_TOOLS` | _(unset)_ | Comma-separated tool names to deny in Copilot sessions |
 | `ALLOWED_REPO_ROOTS` | `$HOME,/tmp` | Allowed repo root paths (comma-separated) |
 | `ALLOWED_ORIGINS` | `http://localhost:4175,http://localhost:4176` | CORS origins |
 | `AGENT_TIMEOUT_MS` | `600000` | Max agent execution time (ms) |
@@ -118,19 +130,19 @@ copilot-kanban-agent/
 ├── packages/
 │   ├── client/                # React frontend
 │   │   └── src/
-│   │       ├── components/    # Board, Column, TaskCard, AgentPanel, dialogs
-│   │       ├── hooks/         # useTasks, useTheme, useKeyboardShortcuts
-│   │       └── lib/           # API client, WebSocket, utilities
+│   │       ├── components/    # Board, Column, TaskCard, AgentPanel, TerminalView, FilterChips, dialogs
+│   │       ├── hooks/         # useTasks, useTheme, useDebounce, useKeyboardShortcuts
+│   │       └── lib/           # API client, WebSocket, agent-config, priority-config, utilities
 │   ├── server/                # Express backend
 │   │   └── src/
-│   │       ├── agents/        # Provider pattern: copilot, claude, codex, detection
-│   │       ├── routes/        # REST API (task CRUD + agent lifecycle)
-│   │       ├── services/      # Agent session orchestration
-│   │       ├── repositories/  # SQLite + PostgreSQL data access
+│   │       ├── middleware/     # Bearer token auth
+│   │       ├── routes/        # REST API split: tasks, agent, git, templates
+│   │       ├── services/      # Agent session orchestration via @codewithdan/agent-sdk-core
+│   │       ├── repositories/  # SQLite + PostgreSQL data access (tasks + templates)
 │   │       ├── db.ts          # Database init + migrations
 │   │       └── websocket.ts   # Real-time event broadcast
 │   └── e2e/                   # Playwright end-to-end tests
-└── shared/                    # Shared types (Task, AgentEvent, etc.) + validation
+└── shared/                    # Shared types (Task, TaskTemplate, AgentEvent, etc.) + validation
 ```
 
 ## How It Works
@@ -144,13 +156,13 @@ copilot-kanban-agent/
 
 ### Multi-Agent Architecture
 
-The server uses a **provider pattern** to support multiple AI coding agents behind a common interface:
+The server uses a **provider pattern** (via `@codewithdan/agent-sdk-core`) to support multiple AI coding agents behind a common interface:
 
 - **`AgentProvider`** — creates sessions, reports availability
 - **`AgentSession`** — runs a task, emits events, supports abort
 - **`AgentManager`** — orchestrates sessions with timeouts, event caching, and graceful cleanup
 
-Each task can specify which agent to use. Available agents are auto-detected at startup by checking for installed CLIs. Events from all providers are normalized into a common `AgentEvent` format and streamed to the UI via WebSocket.
+Each task can specify which agent to use. Available agents are auto-detected at startup by checking for installed CLIs. Four providers are supported: Copilot, Claude Code, Codex, and OpenCode. Events from all providers are normalized into a common `AgentEvent` format and streamed to the UI via WebSocket.
 
 ## Tests
 

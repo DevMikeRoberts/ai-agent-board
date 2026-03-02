@@ -2,38 +2,41 @@
 
 ## Project Overview
 
-Copilot Kanban Agent — a drag-and-drop Kanban board that delegates coding tasks to AI coding agents (GitHub Copilot, Claude Code, OpenAI Codex). Monorepo with npm workspaces.
+Copilot Kanban Agent — a drag-and-drop Kanban board that delegates coding tasks to AI coding agents (GitHub Copilot, Claude Code, OpenAI Codex, OpenCode). Monorepo with npm workspaces.
 
 ## Architecture
 
 ```
 copilot-kanban-agent/
 ├── packages/
-│   ├── client/          # React 19 + Vite + Tailwind 4 + Framer Motion
+│   ├── client/          # React 19 + Vite + Tailwind 4 + Framer Motion + xterm.js
 │   │   └── src/
-│   │       ├── components/  # Board, Column, TaskCard, AgentPanel, Header, dialogs
+│   │       ├── components/  # Board, Column, TaskCard, AgentPanel, TerminalView, FilterChips, Header, dialogs
 │   │       ├── hooks/       # useTasks, useTheme, useDebounce, useKeyboardShortcuts
-│   │       ├── lib/         # api.ts (REST + WebSocket), agent-config.ts, columns.ts, utils
+│   │       ├── lib/         # api.ts (REST + WebSocket), agent-config.ts, priority-config.ts, columns.ts, utils
 │   │       └── types/       # Client-side type re-exports
-│   ├── server/          # Express + better-sqlite3/pg + ws + multi-agent SDKs
+│   ├── server/          # Express + @codewithdan/agent-sdk-core + better-sqlite3/pg + ws
 │   │   └── src/
-│   │       ├── agents/      # Provider pattern: base.ts (interface), copilot.ts, claude.ts, codex.ts, detection.ts
-│   │       ├── routes/      # tasks.ts (CRUD + agent lifecycle)
+│   │       ├── middleware/  # auth.ts (Bearer token auth)
+│   │       ├── routes/      # tasks.ts, agent.ts, git.ts, templates.ts, helpers.ts
 │   │       ├── services/    # agent-manager.ts (session orchestration, event caching)
-│   │       ├── repositories/# sqlite.ts, postgres.ts, types.ts (repository pattern)
+│   │       ├── repositories/# sqlite.ts, postgres.ts, sqlite-templates.ts, postgres-templates.ts, types.ts, template-types.ts
 │   │       ├── db.ts        # SQLite + PostgreSQL init + migrations
 │   │       ├── websocket.ts # WebSocket broadcast
 │   │       └── index.ts     # Express app setup + graceful shutdown
 │   └── e2e/             # Playwright tests
-├── shared/              # Shared types (Task, AgentEvent, ColumnId, AgentType, etc.) + validation constants
+├── shared/              # Shared types (Task, TaskTemplate, AgentEvent, ColumnId, AgentType, etc.) + validation constants
 ├── scripts/             # test-sdk-e2e.sh
 └── k8s/                 # Kubernetes manifests (namespace, deployments, services, ingress)
 ```
 
 ## Key Technical Decisions
 
-- **Multi-agent support** — pluggable `AgentProvider`/`AgentSession` interfaces in `agents/base.ts`. Three providers: `copilot` (`@github/copilot-sdk`), `claude` (`@anthropic-ai/claude-agent-sdk`), `codex` (`@openai/codex-sdk`). Auto-detected at startup via `detection.ts`.
-- **Dual database backends** — SQLite via `better-sqlite3` (default, zero config) or PostgreSQL via `pg` (set `DATABASE_URL`). Both implement the `TaskRepository` interface.
+- **Multi-agent support** — pluggable `AgentProvider`/`AgentSession` interfaces from `@codewithdan/agent-sdk-core`. Four providers: `copilot` (`@github/copilot-sdk`), `claude` (`@anthropic-ai/claude-agent-sdk`), `codex` (`@openai/codex-sdk`), `opencode` (`@opencode-ai/sdk`). Auto-detected at startup via `detectAgents()`.
+- **Agent SDK abstraction** — all provider implementations live in the external `@codewithdan/agent-sdk-core` package. The server imports providers and the detection function from this package.
+- **Dual database backends** — SQLite via `better-sqlite3` (default, zero config) or PostgreSQL via `pg` (set `DATABASE_URL`). Both implement the `TaskRepository` and `TemplateRepository` interfaces.
+- **Route splitting** — REST API is split across `tasks.ts` (CRUD), `agent.ts` (start/stop/events), `git.ts` (PR creation, worktree cleanup), and `templates.ts` (task template CRUD).
+- **API key auth** — optional Bearer token via `API_KEY` env var. When set, all API and WebSocket requests require `Authorization: Bearer <key>`. Middleware in `middleware/auth.ts`.
 - **Event streaming** — SDK events mapped to `AgentEvent`s, persisted to database, broadcast via WebSocket. In-memory LRU cache (200 tasks max, 100 events per task).
 - **Git worktrees** — optional per-task branch isolation. Agent works in worktree directory, path rewriting via `onPreToolUse` hook.
 - **Vite proxy** — client proxies `/api` and `/ws` to the server. In Docker, `API_URL` env var points to `http://server:3001`.
@@ -116,15 +119,15 @@ npm test
 cd packages/e2e && npx playwright test
 ```
 
-4 test files, 39 tests: board tests (CRUD, drag, edit, theme, priority, agent panel), agent SDK tests, agent selector tests, API improvement tests.
+4 test files, 43 tests: board tests (CRUD, drag, edit, theme, priority, agent panel), agent SDK tests, agent selector tests, API improvement tests.
 
 ## Code Patterns
 
 - **Task lifecycle**: backlog → in-progress → review → done (validated transitions in `VALID_TRANSITIONS` from `shared/constants.ts`)
 - **Agent lifecycle**: idle → planning → executing → complete/failed (set via `agentStatus`)
-- **Agent types**: `copilot | claude | codex` — each task can specify which agent to use via `agentType`
-- **Provider pattern**: `AgentProvider` creates `AgentSession`s. `AgentManager` orchestrates sessions with timeouts, event caching, and graceful cleanup.
-- **Repository pattern**: `TaskRepository` interface with `SqliteTaskRepository` and `PostgresTaskRepository` implementations.
+- **Agent types**: `copilot | claude | codex | opencode` — each task can specify which agent to use via `agentType`
+- **Provider pattern**: `AgentProvider` creates `AgentSession`s (from `@codewithdan/agent-sdk-core`). `AgentManager` orchestrates sessions with timeouts, event caching, and graceful cleanup.
+- **Repository pattern**: `TaskRepository` and `TemplateRepository` interfaces with SQLite and PostgreSQL implementations.
 - **Event coalescing**: AgentPanel merges consecutive thinking/output events for readability
 - **Graceful shutdown**: 5s force-exit timeout after `SIGINT`/`SIGTERM`, all SDK sessions cleaned up
 - **Copilot permission request**: SDK uses `req.kind` (shell/read/write/mcp/url/memory), NOT `req.toolName`
