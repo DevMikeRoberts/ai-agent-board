@@ -63,6 +63,11 @@ export function createGitRouter(repo: TaskRepository, agentManager: AgentManager
     }
     try {
       const result = agentManager.mergeLocal(task);
+      // Clean up worktree after successful merge — branch is merged, directory is no longer needed
+      if (task.worktreePath) {
+        try { agentManager.removeWorktree(task); } catch { /* best effort */ }
+        await repo.update(id, { worktreePath: undefined });
+      }
       res.json(result);
     } catch (err: unknown) {
       res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to merge' });
