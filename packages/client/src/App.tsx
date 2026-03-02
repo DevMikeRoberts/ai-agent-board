@@ -14,16 +14,19 @@ import { statusFilterToStatuses } from '@/components/FilterChips';
 import { Board } from '@/components/Board';
 import { TaskDialog } from '@/components/TaskDialog';
 import { TaskGroupDialog } from '@/components/TaskGroupDialog';
+import { GroupPanel } from '@/components/GroupPanel';
 import { AgentPanel } from '@/components/AgentPanel';
+import type { TaskGroupWithChildren } from '@/lib/api';
 import { WorktreeDialog } from '@/components/WorktreeDialog';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 
 export function App() {
   const { theme, toggleTheme } = useTheme();
   const { tasks, error, clearError, showArchived, setShowArchived, addTask, updateTask, moveTask, runTask, stopTask, deleteTask, archiveTask, unarchiveTask, configureAndRunTask, createPR, cleanupWorktree } = useTasks();
-  const { createGroup } = useTaskGroups();
+  const { groups, createGroup, runGroup, stopGroup, deleteGroup, refreshGroup } = useTaskGroups();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [worktreeDialogTaskId, setWorktreeDialogTaskId] = useState<string | null>(null);
@@ -62,6 +65,39 @@ export function App() {
     () => (selectedTaskId ? tasks.find((t) => t.id === selectedTaskId) ?? null : null),
     [selectedTaskId, tasks]
   );
+
+  const selectedGroup = useMemo(
+    () => (selectedGroupId ? groups.find((g) => g.id === selectedGroupId) ?? null : null),
+    [selectedGroupId, groups]
+  );
+
+  const handleClickGroup = useCallback((group: TaskGroupWithChildren) => {
+    setSelectedGroupId(group.id);
+    setSelectedTaskId(null);
+  }, []);
+
+  const handleRunGroup = useCallback(async (id: string) => {
+    await runGroup(id);
+  }, [runGroup]);
+
+  const handleStopGroup = useCallback(async (id: string) => {
+    await stopGroup(id);
+  }, [stopGroup]);
+
+  const handleDeleteGroup = useCallback(async (id: string) => {
+    await deleteGroup(id);
+    if (selectedGroupId === id) setSelectedGroupId(null);
+  }, [deleteGroup, selectedGroupId]);
+
+  const handleRetryChild = useCallback(async (taskId: string) => {
+    await runTask(taskId);
+    if (selectedGroupId) refreshGroup(selectedGroupId);
+  }, [runTask, selectedGroupId, refreshGroup]);
+
+  const handleChildClick = useCallback((task: Task) => {
+    setSelectedGroupId(null);
+    setSelectedTaskId(task.id);
+  }, []);
 
   // Filter tasks by search query, agent type, and status
   const filteredTasks = useMemo(() => {
@@ -227,18 +263,21 @@ export function App() {
       setGroupDialogOpen(false);
     } else if (dialogOpen) {
       setDialogOpen(false);
+    } else if (selectedGroupId) {
+      setSelectedGroupId(null);
     } else if (selectedTaskId) {
       setSelectedTaskId(null);
     }
-  }, [deletingTask, worktreeDialogTaskId, groupDialogOpen, dialogOpen, selectedTaskId]);
+  }, [deletingTask, worktreeDialogTaskId, groupDialogOpen, dialogOpen, selectedGroupId, selectedTaskId]);
 
   const isAnyOpen = useCallback(
-    () => dialogOpen || groupDialogOpen || selectedTaskId !== null || worktreeDialogTaskId !== null || deletingTask !== null,
-    [dialogOpen, groupDialogOpen, selectedTaskId, worktreeDialogTaskId, deletingTask]
+    () => dialogOpen || groupDialogOpen || selectedTaskId !== null || selectedGroupId !== null || worktreeDialogTaskId !== null || deletingTask !== null,
+    [dialogOpen, groupDialogOpen, selectedTaskId, selectedGroupId, worktreeDialogTaskId, deletingTask]
   );
 
   useKeyboardShortcuts({
     onNewTask: handleOpenDialog,
+    onNewGroup: handleOpenGroupDialog,
     onCloseAll: handleCloseAll,
     isAnyOpen,
   });
@@ -275,6 +314,7 @@ export function App() {
       <main className="flex-1 overflow-hidden">
         <Board
           tasks={filteredTasks}
+          groups={groups}
           getTasksByColumn={getFilteredTasksByColumn}
           onMoveTask={moveTask}
           onTaskClick={handleTaskClick}
@@ -285,10 +325,11 @@ export function App() {
           onRetryTask={handleRetryTask}
           onAddTask={handleOpenDialog}
           showArchived={showArchived}
-          // onDropInProgress receives the pre-move task object, but task.id is stable.
-          // React batches this setState with the WS-driven tasks array update from moveTask,
-          // so selectedTask (derived via useMemo) resolves to the already-moved task.
           onDropInProgress={(task) => setSelectedTaskId(task.id)}
+          onClickGroup={handleClickGroup}
+          onRunGroup={handleRunGroup}
+          onStopGroup={handleStopGroup}
+          onDeleteGroup={handleDeleteGroup}
         />
       </main>
 
@@ -307,6 +348,15 @@ export function App() {
       />
 
       <AgentPanel task={selectedTask} onClose={handleClosePanel} onRun={handleRunWithConfig} onStop={stopTask} onCreatePR={createPR} onCleanupWorktree={cleanupWorktree} onReconfigureRetry={handleReconfigureRetry} theme={theme} />
+
+      <GroupPanel
+        group={selectedGroup}
+        onClose={() => setSelectedGroupId(null)}
+        onRunGroup={handleRunGroup}
+        onStopGroup={handleStopGroup}
+        onRetryChild={handleRetryChild}
+        onChildClick={handleChildClick}
+      />
 
       <WorktreeDialog
         open={worktreeDialogTaskId !== null}

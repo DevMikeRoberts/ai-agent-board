@@ -31,9 +31,10 @@ interface ColumnProps {
   onUnarchiveTask?: (task: Task) => void;
   onRetryTask?: (task: Task) => void;
   onAddTask?: () => void;
+  extraContent?: React.ReactNode;
 }
 
-export function Column({ column, tasks, onTaskClick, onEditTask, onDeleteTask, onArchiveTask, onUnarchiveTask, onRetryTask, onAddTask }: ColumnProps) {
+export function Column({ column, tasks, onTaskClick, onEditTask, onDeleteTask, onArchiveTask, onUnarchiveTask, onRetryTask, onAddTask, extraContent }: ColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
   const Icon = iconMap[column.icon] || Inbox;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -97,6 +98,9 @@ export function Column({ column, tasks, onTaskClick, onEditTask, onDeleteTask, o
               : 'bg-[var(--column-bg)]'
           )}
         >
+          {/* Group cards rendered before tasks */}
+          {extraContent}
+
           {tasks.map((task) => (
             <TaskCard
               key={task.id}

@@ -17,10 +17,13 @@ import { VALID_TRANSITIONS } from '@/types';
 import { columns as baseColumns } from '@/lib/columns';
 import { Column } from './Column';
 import { TaskCard } from './TaskCard';
+import { TaskGroupCard } from './TaskGroupCard';
+import type { TaskGroupWithChildren } from '@/lib/api';
 
 
 interface BoardProps {
   tasks: Task[];
+  groups?: TaskGroupWithChildren[];
   getTasksByColumn: (columnId: ColumnId) => Task[];
   onMoveTask: (taskId: string, targetColumn: ColumnId) => void;
   onTaskClick: (task: Task) => void;
@@ -32,6 +35,10 @@ interface BoardProps {
   onAddTask: () => void;
   onDropInProgress?: (task: Task) => void;
   showArchived?: boolean;
+  onClickGroup?: (group: TaskGroupWithChildren) => void;
+  onRunGroup?: (id: string) => void;
+  onStopGroup?: (id: string) => void;
+  onDeleteGroup?: (id: string) => void;
 }
 
 // Use pointerWithin first (ideal for dropping into columns),
@@ -44,6 +51,7 @@ const kanbanCollision: CollisionDetection = (args) => {
 
 export function Board({
   tasks,
+  groups = [],
   getTasksByColumn,
   onMoveTask,
   onTaskClick,
@@ -55,6 +63,10 @@ export function Board({
   onAddTask,
   onDropInProgress,
   showArchived = false,
+  onClickGroup,
+  onRunGroup,
+  onStopGroup,
+  onDeleteGroup,
 }: BoardProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
 
@@ -79,6 +91,10 @@ export function Board({
     }
     return getTasksByColumn(columnId as ColumnId);
   }, [tasks, getTasksByColumn]);
+
+  const getGroupsForColumn = useCallback((columnId: ColumnId | string) => {
+    return groups.filter(g => g.columnId === columnId && !g.archived);
+  }, [groups]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -169,6 +185,18 @@ export function Board({
               onUnarchiveTask={onUnarchiveTask}
               onRetryTask={onRetryTask}
               onAddTask={column.id === 'backlog' ? onAddTask : undefined}
+              extraContent={
+                getGroupsForColumn(column.id).map((g) => (
+                  <TaskGroupCard
+                    key={g.id}
+                    group={g}
+                    onClickGroup={onClickGroup ?? (() => {})}
+                    onRunGroup={onRunGroup ?? (() => {})}
+                    onStopGroup={onStopGroup ?? (() => {})}
+                    onDeleteGroup={onDeleteGroup ?? (() => {})}
+                  />
+                ))
+              }
             />
           </motion.div>
         ))}

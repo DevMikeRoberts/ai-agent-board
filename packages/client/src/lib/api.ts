@@ -126,6 +126,12 @@ export const api = {
 
   stopGroup: (id: string) =>
     request<{ stopped: boolean }>(`/groups/${id}/stop`, { method: 'POST' }),
+
+  archiveGroup: (id: string) =>
+    request<TaskGroupWithChildren>(`/groups/${id}/archive`, { method: 'PATCH' }),
+
+  unarchiveGroup: (id: string) =>
+    request<TaskGroupWithChildren>(`/groups/${id}/unarchive`, { method: 'PATCH' }),
 };
 
 // --- WebSocket (shared singleton) ---

@@ -2,12 +2,13 @@ import { useEffect } from 'react';
 
 interface ShortcutHandlers {
   onNewTask: () => void;
+  onNewGroup?: () => void;
   onCloseAll: () => void;
   /** Return true if any dialog or panel is currently open */
   isAnyOpen: () => boolean;
 }
 
-export function useKeyboardShortcuts({ onNewTask, onCloseAll, isAnyOpen }: ShortcutHandlers) {
+export function useKeyboardShortcuts({ onNewTask, onNewGroup, onCloseAll, isAnyOpen }: ShortcutHandlers) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore when typing in inputs/textareas/contenteditable
@@ -27,6 +28,13 @@ export function useKeyboardShortcuts({ onNewTask, onCloseAll, isAnyOpen }: Short
         if (!e.ctrlKey && !e.metaKey && !e.altKey && !isAnyOpen()) {
           e.preventDefault();
           onNewTask();
+        }
+      }
+
+      if ((e.key === 'g' || e.key === 'G') && onNewGroup) {
+        if (!e.ctrlKey && !e.metaKey && !e.altKey && !isAnyOpen()) {
+          e.preventDefault();
+          onNewGroup();
         }
       }
     };

@@ -261,6 +261,44 @@ export function createGroupsRouter(
     res.json({ stopped: true });
   });
 
+  // PATCH /api/groups/:id/archive — archive group + all children
+  router.patch('/:id/archive', async (req: Request, res: Response) => {
+    const id = paramId(req);
+    const group = await groupRepo.getById(id);
+    if (!group) { res.status(404).json({ error: 'group not found' }); return; }
+
+    // Stop running agents first
+    if (agentManager.isGroupRunning(id)) {
+      await agentManager.stopGroup(id);
+    }
+
+    // Archive all children
+    const children = await groupRepo.getChildTasks(id);
+    for (const child of children) {
+      await taskRepo.update(child.id, { archived: true });
+    }
+
+    const updated = await groupRepo.update(id, { archived: true });
+    if (updated) broadcastGroupUpdate(updated);
+    res.json(updated);
+  });
+
+  // PATCH /api/groups/:id/unarchive — restore group + children to backlog
+  router.patch('/:id/unarchive', async (req: Request, res: Response) => {
+    const id = paramId(req);
+    const group = await groupRepo.getById(id);
+    if (!group) { res.status(404).json({ error: 'group not found' }); return; }
+
+    const children = await groupRepo.getChildTasks(id);
+    for (const child of children) {
+      await taskRepo.update(child.id, { archived: false, agentStatus: 'idle', columnId: 'backlog' });
+    }
+
+    const updated = await groupRepo.update(id, { archived: false, columnId: 'backlog', startedAt: undefined, completedAt: undefined });
+    if (updated) broadcastGroupUpdate(updated);
+    res.json(updated);
+  });
+
   return router;
 }
 
