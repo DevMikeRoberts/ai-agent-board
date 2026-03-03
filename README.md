@@ -1,4 +1,4 @@
-# Agentic AI Kanban Board
+# AI Agent Board
 
 A drag-and-drop Kanban board that assigns coding tasks to AI agents — GitHub Copilot, Claude Code, OpenAI Codex, or OpenCode. Drop a task into "In Progress," pick an agent, and it will plan, execute, and complete the work, streaming live progress back to the board.
 
@@ -12,7 +12,7 @@ A drag-and-drop Kanban board that assigns coding tasks to AI agents — GitHub C
 | AI Agents | @codewithdan/agent-sdk-core (wraps @github/copilot-sdk, @anthropic-ai/claude-agent-sdk, @openai/codex-sdk, @opencode-ai/sdk) |
 | Terminal UI | @xterm/xterm |
 | Monorepo | npm workspaces |
-| Dev Environment | Docker Compose with live-reload volumes |
+| Dev Environment | Direct install (Linux, macOS, Windows) |
 
 ## Features
 
@@ -49,42 +49,14 @@ A drag-and-drop Kanban board that assigns coding tasks to AI agents — GitHub C
   - **Claude Code**: `claude` CLI installed and authenticated
   - **OpenAI Codex**: `codex` CLI installed with API key configured
   - **OpenCode**: `opencode` CLI installed and configured
-- Docker & Docker Compose (for containerized dev)
 
-### Option 1: Docker Compose (Recommended)
+Works on **Linux**, **macOS**, and **Windows**.
 
-```bash
-git clone https://github.com/DanWahlin/agentic-ai-kanban-board.git
-cd agentic-ai-kanban-board
-cp .env.example .env        # Edit .env if you need PostgreSQL or custom settings
-docker compose up -d
-```
-
-Open [http://localhost:4175](http://localhost:4175).
-
-- **Client** runs on port 4175 with Vite HMR
-- **Server** runs on port 3001 with tsx watch
-- Edit source files locally — changes are picked up instantly via volume mounts
+### Quick Start
 
 ```bash
-docker compose logs -f           # Watch logs
-docker compose down              # Stop
-docker compose build --no-cache  # Rebuild after dependency changes
-```
-
-#### Repo Paths in Docker
-
-When configuring a task's repository path, use `/host-projects/my-app` instead of `~/projects/my-app`. Your `~/projects` directory is mounted at `/host-projects` inside the server container.
-
-To change the host projects directory:
-
-```bash
-PROJECTS_DIR=/path/to/your/projects docker compose up -d
-```
-
-### Option 2: Run Directly
-
-```bash
+git clone https://github.com/DanWahlin/ai-agent-board.git
+cd ai-agent-board
 npm install
 
 # Terminal 1 — API server (port 3001)
@@ -95,6 +67,29 @@ npm run dev:client
 ```
 
 Open [http://localhost:4175](http://localhost:4175).
+
+> **Why not Docker?** The agents need direct access to your project directories, git config, and CLI credentials on the host machine. Running the app directly avoids volume-mount complexity and path translation issues.
+
+### Database Options
+
+By default the app uses **SQLite** — zero configuration required.
+
+For **PostgreSQL**, run it in a Docker container and set `DATABASE_URL`:
+
+```bash
+# Start a PostgreSQL container
+docker run -d --name ai-agent-board-db \
+  --restart unless-stopped \
+  -e POSTGRES_USER=kanban \
+  -e POSTGRES_PASSWORD=your_password \
+  -e POSTGRES_DB=kanban \
+  -p 5433:5432 \
+  -v ai-agent-board-pgdata:/var/lib/postgresql/data \
+  postgres:16-alpine
+
+# Set the connection string in packages/server/.env
+DATABASE_URL=postgresql://kanban:your_password@localhost:5433/kanban
+```
 
 ### Build for Production
 
@@ -119,16 +114,13 @@ npm run build:client
 | `ALLOWED_REPO_ROOTS` | `$HOME,/tmp` | Allowed repo root paths (comma-separated) |
 | `ALLOWED_ORIGINS` | `http://localhost:4175,http://localhost:4176` | CORS origins |
 | `AGENT_TIMEOUT_MS` | `600000` | Max agent execution time (ms) |
-| `API_URL` | `http://localhost:3001` | Vite proxy target (auto-set in Docker) |
-| `PROJECTS_DIR` | `~/projects` | Host projects path for Docker volume |
+| `API_URL` | `http://localhost:3001` | Vite proxy target |
+| `PROJECTS_DIR` | `~/projects` | Host projects path |
 
 ## Project Structure
 
 ```
-agentic-ai-kanban-board/
-├── docker-compose.yml         # Two-container dev setup
-├── Dockerfile.client          # Vite dev server image
-├── Dockerfile.server          # Express + agent SDKs image
+ai-agent-board/
 ├── packages/
 │   ├── client/                # React frontend
 │   │   └── src/
