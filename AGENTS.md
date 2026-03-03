@@ -78,7 +78,7 @@ systemctl restart ai-agent-board-server
 systemctl restart ai-agent-board-client
 ```
 
-**Important:** The server reads `packages/server/.env` via dotenv. Production uses PostgreSQL via the `ai-agent-board-db` Docker container (postgres:16-alpine on port 5433). DB credentials: `user=kanban, db=kanban`. If the password needs resetting: `docker exec ai-agent-board-db psql -U kanban -c "ALTER USER kanban WITH PASSWORD '<pass>'"`. Do **not** fall back to SQLite in production.
+**Important:** The server reads `packages/server/.env` via dotenv. Production uses PostgreSQL via the `ai-agent-board-db` Docker container (postgres:16-alpine on port 5433). DB credentials: `user=agentboard, db=agentboard`. If the password needs resetting: `docker exec ai-agent-board-db psql -U agentboard -c "ALTER USER agentboard WITH PASSWORD '<pass>'"`. Do **not** fall back to SQLite in production.
 
 ## Build
 

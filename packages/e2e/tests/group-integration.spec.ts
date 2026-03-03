@@ -15,7 +15,7 @@ import os from 'os';
 
 const API = 'http://localhost:3002';
 const AGENT_TIMEOUT = 180_000; // 3 minutes for all children to complete
-const TEST_REPO_BASE = path.join(os.tmpdir(), 'kanban-group-e2e');
+const TEST_REPO_BASE = path.join(os.tmpdir(), 'agentboard-group-e2e');
 
 async function getAvailableAgent(request: any): Promise<string | null> {
   const res = await request.get(`${API}/api/agents`);

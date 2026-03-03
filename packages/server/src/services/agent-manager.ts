@@ -13,7 +13,7 @@ import { broadcast } from '../websocket.js';
 const AGENT_TIMEOUT_MS = parseInt(process.env.AGENT_TIMEOUT_MS || '600000', 10);
 
 interface ManagedSession {
-  session: AgentSession;
+  session?: AgentSession;
   timeoutId?: ReturnType<typeof setTimeout>;
   startTime: number;
   agentType: AgentType;
@@ -25,6 +25,14 @@ const MAX_EVENT_LOG_TASKS = 200;
 
 // Deleted-task guard TTL
 const DELETED_TASK_TTL_MS = 60_000;
+
+function getErrorStderr(err: unknown): string {
+  if (err instanceof Error && 'stderr' in err) {
+    const stderr = (err as Error & { stderr?: Buffer | string }).stderr;
+    return stderr?.toString() ?? '';
+  }
+  return '';
+}
 
 interface GroupQueue {
   groupId: string;
@@ -144,9 +152,8 @@ export class AgentManager {
       } else {
         // Different type or no buffer — flush existing, start new buffer
         if (existing) flushBuffer(event.taskId);
-        const entry = { event: { ...event }, timer: null as unknown as ReturnType<typeof setTimeout> };
-        entry.timer = setTimeout(() => flushBuffer(event.taskId), 40);
-        this.streamBuffer.set(event.taskId, entry);
+        const timer = setTimeout(() => flushBuffer(event.taskId), 40);
+        this.streamBuffer.set(event.taskId, { event: { ...event }, timer });
       }
     } else {
       // Non-streamable: flush pending buffer first, then broadcast immediately
@@ -192,7 +199,7 @@ export class AgentManager {
   setupWorktree(task: Task): string | undefined {
     if (!task.useWorktree || !task.repoPath || !task.branchName) return undefined;
 
-    const worktreePath = fs.mkdtempSync(path.join(os.tmpdir(), `kanban-${task.id}-`));
+    const worktreePath = fs.mkdtempSync(path.join(os.tmpdir(), `agentboard-${task.id}-`));
     const baseBranch = task.baseBranch || 'main';
 
     try {
@@ -263,7 +270,7 @@ export class AgentManager {
       console.log(`[pr] created: ${url}`);
       return { url };
     } catch (err: unknown) {
-      const stderr = err instanceof Error && 'stderr' in err ? (err as any).stderr?.toString() : '';
+      const stderr = getErrorStderr(err);
       const msg = stderr || (err instanceof Error ? err.message : String(err));
       console.error(`[pr] creation failed:`, msg);
       throw new Error(`PR creation failed: ${msg.trim()}`);
@@ -288,20 +295,22 @@ export class AgentManager {
     if (!task.repoPath || !task.branchName) {
       throw new Error('Task has no repo path or branch name configured');
     }
+    const repoPath = task.repoPath;
+    const branchName = task.branchName;
     const baseBranch = task.baseBranch || 'main';
 
-    return this.withRepoLock(task.repoPath, () => {
+    return this.withRepoLock(repoPath, () => {
       try {
-        execFileSync('git', ['checkout', baseBranch], { cwd: task.repoPath, stdio: 'pipe' });
-        execFileSync('git', ['merge', task.branchName!, '--no-edit'], { cwd: task.repoPath, stdio: 'pipe' });
-        console.log(`[merge] merged ${task.branchName} into ${baseBranch}`);
+        execFileSync('git', ['checkout', baseBranch], { cwd: repoPath, stdio: 'pipe' });
+        execFileSync('git', ['merge', branchName, '--no-edit'], { cwd: repoPath, stdio: 'pipe' });
+        console.log(`[merge] merged ${branchName} into ${baseBranch}`);
         return { merged: true as const, baseBranch };
       } catch (err: unknown) {
-        try { execFileSync('git', ['merge', '--abort'], { cwd: task.repoPath!, stdio: 'pipe' }); } catch { /* already clean */ }
-        const stderr = err instanceof Error && 'stderr' in err ? (err as any).stderr?.toString() : '';
+        try { execFileSync('git', ['merge', '--abort'], { cwd: repoPath, stdio: 'pipe' }); } catch { /* already clean */ }
+        const stderr = getErrorStderr(err);
         const msg = stderr || (err instanceof Error ? err.message : String(err));
         console.error(`[merge] failed:`, msg);
-        throw new Error(`Merge failed (conflicts?). Branch ${task.branchName} was not merged:\n${msg.trim()}`);
+        throw new Error(`Merge failed (conflicts?). Branch ${branchName} was not merged:\n${msg.trim()}`);
       }
     });
   }
@@ -343,7 +352,7 @@ export class AgentManager {
     const sessionStartTime = Date.now();
 
     // Synchronous placeholder to prevent duplicate starts during async session creation
-    this.sessions.set(task.id, { session: null as any, startTime: sessionStartTime, agentType });
+    this.sessions.set(task.id, { startTime: sessionStartTime, agentType });
 
     // Guard for single terminal state (complete OR failed — prevents races)
     let terminated = false;
@@ -462,8 +471,8 @@ make precise edits, and verify your changes compile/pass tests when applicable.
           const entry = this.sessions.get(task.id);
           if (entry) {
             this.sessions.delete(task.id);
-            entry.session.abort().catch(() => {});
-            entry.session.destroy().catch(() => {});
+            entry.session?.abort().catch(() => {});
+            entry.session?.destroy().catch(() => {});
           }
           terminateOnce('failed', timeoutMsg);
         }, AGENT_TIMEOUT_MS);
@@ -515,7 +524,7 @@ make precise edits, and verify your changes compile/pass tests when applicable.
 
   async sendMessage(taskId: string, message: string): Promise<boolean> {
     const entry = this.sessions.get(taskId);
-    if (!entry) return false;
+    if (!entry?.session) return false;
 
     this.emitEvent(taskId, {
       id: uuid(), taskId, type: 'command',
@@ -545,8 +554,8 @@ make precise edits, and verify your changes compile/pass tests when applicable.
     setTimeout(() => this.stoppedTasks.delete(taskId), 30_000);
 
     (async () => {
-      try { await entry.session.abort(); } catch { /* ignore */ }
-      try { await entry.session.destroy(); } catch { /* ignore */ }
+      try { await entry.session?.abort(); } catch { /* ignore */ }
+      try { await entry.session?.destroy(); } catch { /* ignore */ }
     })();
 
     this.emitEvent(taskId, {
@@ -582,8 +591,8 @@ make precise edits, and verify your changes compile/pass tests when applicable.
     for (const [, entry] of entries) {
       if (entry.timeoutId) clearTimeout(entry.timeoutId);
       (async () => {
-        try { await entry.session.abort(); } catch { /* ignore */ }
-        try { await entry.session.destroy(); } catch { /* ignore */ }
+        try { await entry.session?.abort(); } catch { /* ignore */ }
+        try { await entry.session?.destroy(); } catch { /* ignore */ }
       })();
     }
 

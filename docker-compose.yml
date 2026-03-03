@@ -4,9 +4,9 @@ services:
     container_name: ai-agent-board-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: kanban
+      POSTGRES_USER: agentboard
       POSTGRES_PASSWORD: your_password
-      POSTGRES_DB: kanban
+      POSTGRES_DB: agentboard
     ports:
       - "5433:5432"
     volumes:

@@ -1,4 +1,4 @@
-const LS_KEY = 'kanban-recent-repo-paths';
+const LS_KEY = 'agentboard-recent-repo-paths';
 const MAX_RECENT = 5;
 
 export function getRecentRepoPaths(): string[] {

@@ -11,7 +11,7 @@ import os from 'os';
  */
 
 const API = 'http://localhost:3002';
-const TEST_REPO_BASE = path.join(os.tmpdir(), 'kanban-git-e2e');
+const TEST_REPO_BASE = path.join(os.tmpdir(), 'agentboard-git-e2e');
 
 function createTestRepo(): string {
   const repo = path.join(TEST_REPO_BASE, `repo-${Date.now()}`);
@@ -48,7 +48,7 @@ async function createConfiguredTask(
   });
 
   // Simulate what agent-manager does: create worktree, make a commit
-  const worktreePath = path.join(os.tmpdir(), `kanban-test-wt-${Date.now()}`);
+  const worktreePath = path.join(os.tmpdir(), `agentboard-test-wt-${Date.now()}`);
   mkdirSync(worktreePath, { recursive: true });
   execSync(`git worktree add -b ${branchName} ${worktreePath} main`, { cwd: repo, stdio: 'pipe' });
   writeFileSync(path.join(worktreePath, 'hello.py'), 'print("Hello, World!")\n');

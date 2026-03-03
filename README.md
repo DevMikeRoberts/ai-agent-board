@@ -66,7 +66,7 @@ For **PostgreSQL**, start the database container and set `DATABASE_URL`:
 docker compose up -d
 
 # Set the connection string in packages/server/.env
-DATABASE_URL=postgresql://kanban:your_password@localhost:5433/kanban
+DATABASE_URL=postgresql://agentboard:your_password@localhost:5433/agentboard
 ```
 
 ### Build for Production
