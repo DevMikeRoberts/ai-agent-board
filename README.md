@@ -60,18 +60,10 @@ Open [http://localhost:4175](http://localhost:4175).
 
 By default the app uses **SQLite** — zero configuration required.
 
-For **PostgreSQL**, run it in a Docker container and set `DATABASE_URL`:
+For **PostgreSQL**, start the database container and set `DATABASE_URL`:
 
 ```bash
-# Start a PostgreSQL container
-docker run -d --name ai-agent-board-db \
-  --restart unless-stopped \
-  -e POSTGRES_USER=kanban \
-  -e POSTGRES_PASSWORD=your_password \
-  -e POSTGRES_DB=kanban \
-  -p 5433:5432 \
-  -v ai-agent-board-pgdata:/var/lib/postgresql/data \
-  postgres:16-alpine
+docker compose up -d
 
 # Set the connection string in packages/server/.env
 DATABASE_URL=postgresql://kanban:your_password@localhost:5433/kanban
