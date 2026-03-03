@@ -9,11 +9,11 @@
     "shared"
   ],
   "scripts": {
-    "dev:client": "npm run dev -w @agentic-kanban/client",
-    "dev:server": "npm run dev -w @agentic-kanban/server",
-    "build:client": "npm run build -w @agentic-kanban/client",
-    "build:server": "npm run build -w @agentic-kanban/server",
-    "test": "npm run test -w @agentic-kanban/e2e",
-    "test:e2e": "npm run test -w @agentic-kanban/e2e"
+    "dev:client": "npm run dev -w @ai-agent-board/client",
+    "dev:server": "npm run dev -w @ai-agent-board/server",
+    "build:client": "npm run build -w @ai-agent-board/client",
+    "build:server": "npm run build -w @ai-agent-board/server",
+    "test": "npm run test -w @ai-agent-board/e2e",
+    "test:e2e": "npm run test -w @ai-agent-board/e2e"
   }
 }

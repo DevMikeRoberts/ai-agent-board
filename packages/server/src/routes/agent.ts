@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import path from 'path';
 import type { Task } from '../types.js';
-import { isValidAgentType } from '@agentic-kanban/shared/constants.js';
+import { isValidAgentType } from '@ai-agent-board/shared/constants.js';
 import type { TaskRepository } from '../repositories/types.js';
 import type { TaskGroupRepository } from '../repositories/group-types.js';
 import { broadcast } from '../websocket.js';

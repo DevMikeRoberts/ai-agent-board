@@ -95,7 +95,7 @@ npm run build:server   # tsc -b tsconfig.build.json
 | `VITE_API_KEY` | _(none)_ | Client-side API key (must match `API_KEY`) |
 | `PORT` | `3001` | Server port |
 | `DATABASE_URL` | _(none)_ | PostgreSQL connection string; when unset, uses SQLite |
-| `DB_PATH` | `./data/kanban.db` | SQLite database file path |
+| `DB_PATH` | `./data/agentboard.db` | SQLite database file path |
 | `COPILOT_MODEL` | `claude-opus-4-20250514` | Model for Copilot SDK sessions |
 | `CLAUDE_MODEL` | `claude-opus-4-20250514` | Model for Claude Code sessions |
 | `CODEX_MODEL` | `gpt-5.2-codex` | Model for OpenAI Codex sessions |

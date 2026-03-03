@@ -1,5 +1,5 @@
 {
-  "name": "@agentic-kanban/e2e",
+  "name": "@ai-agent-board/e2e",
   "private": true,
   "version": "0.1.0",
   "type": "module",

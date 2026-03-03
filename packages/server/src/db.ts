@@ -5,7 +5,7 @@ import fs from 'fs';
 
 // ─── SQLite ──────────────────────────────────────────────────────────────────
 
-const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), 'data', 'kanban.db');
+const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), 'data', 'agentboard.db');
 const DATA_DIR = path.dirname(DB_PATH);
 
 function migrate(db: Database.Database): void {
