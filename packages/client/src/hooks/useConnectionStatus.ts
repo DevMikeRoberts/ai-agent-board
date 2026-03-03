@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react';
-import { getConnectionStatus, subscribeConnectionStatus, type ConnectionStatus } from '@/lib/api';
+import { getConnectionStatus, subscribeConnectionStatus, hasEverConnected, type ConnectionStatus } from '@/lib/api';
 
-export function useConnectionStatus(): ConnectionStatus {
+export function useConnectionStatus(): { status: ConnectionStatus; wasConnected: boolean } {
   const [status, setStatus] = useState<ConnectionStatus>(getConnectionStatus);
+  const [wasConnected, setWasConnected] = useState(hasEverConnected);
 
-  useEffect(() => subscribeConnectionStatus(setStatus), []);
+  useEffect(() => subscribeConnectionStatus((s) => {
+    setStatus(s);
+    if (s === 'connected') setWasConnected(true);
+  }), []);
 
-  return status;
+  return { status, wasConnected };
 }

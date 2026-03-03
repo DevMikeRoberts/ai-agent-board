@@ -114,7 +114,7 @@ export function Column({ column, tasks, onTaskClick, onEditTask, onDeleteTask, o
             />
           ))}
 
-          {tasks.length === 0 && !extraContent && (
+          {tasks.length === 0 && (!extraContent || (Array.isArray(extraContent) && extraContent.length === 0)) && (
             <div className="flex flex-1 items-center justify-center py-4">
               <div className="text-center">
                 <Icon className="mx-auto h-6 w-6 text-muted-foreground/30" />

@@ -38,7 +38,7 @@ const SORT_OPTIONS: { value: SortBy; label: string }[] = [
 export function Header({ theme, toggleTheme, searchQuery, onSearchChange, showArchived, onToggleArchived, sortBy, sortDir, onSortByChange, onSortDirChange, activeAgentTypes, activeStatuses, onToggleAgentType, onToggleStatus, onClearFilters, onNewTask, onNewGroup }: HeaderProps) {
   const [showFilters, setShowFilters] = useState(false);
   const hasActiveFilters = activeAgentTypes.length > 0 || activeStatuses.length > 0;
-  const wsStatus = useConnectionStatus();
+  const { status: wsStatus, wasConnected } = useConnectionStatus();
 
   return (
     <header className="sticky top-0 z-50 border-b border-zinc-700/30 bg-zinc-900 shadow-md">
@@ -55,7 +55,7 @@ export function Header({ theme, toggleTheme, searchQuery, onSearchChange, showAr
               <p className="text-sm text-zinc-400">
                 AI Agent Task Board
               </p>
-              {wsStatus === 'disconnected' && (
+              {wsStatus === 'disconnected' && wasConnected && (
                 <span className="flex items-center gap-1 text-[10px] text-red-400">
                   <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
                   Reconnecting…

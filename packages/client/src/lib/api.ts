@@ -153,16 +153,23 @@ let reconnectTimer: ReturnType<typeof setTimeout>;
 
 // Connection status tracking
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting';
-let connectionStatus: ConnectionStatus = 'disconnected';
+let connectionStatus: ConnectionStatus = 'connecting';
+let hasConnectedOnce = false;
 const statusListeners = new Set<(status: ConnectionStatus) => void>();
 
 function setConnectionStatus(status: ConnectionStatus) {
+  if (status === 'connected') hasConnectedOnce = true;
   connectionStatus = status;
   statusListeners.forEach((fn) => fn(status));
 }
 
 export function getConnectionStatus(): ConnectionStatus {
   return connectionStatus;
+}
+
+/** Returns true only after a successful connection has been made at least once */
+export function hasEverConnected(): boolean {
+  return hasConnectedOnce;
 }
 
 export function subscribeConnectionStatus(listener: (status: ConnectionStatus) => void): () => void {
