@@ -148,3 +148,6 @@ agent-sdk-core/
 
 # Serena AI tooling
 .serena/
+
+test-results/
+packages/e2e/test-results-old/

@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import { Layers, Play, Square, Trash2, Pencil, CheckCircle2, AlertCircle, Cog, Brain } from 'lucide-react';
-import type { Task, AgentStatus } from '@/types';
+import { Layers, Play, Square, Trash2, Pencil } from 'lucide-react';
 import type { TaskGroupWithChildren } from '@/lib/api';
 import { AGENT_DISPLAY } from '@/lib/agent-config';
 import { PRIORITY_DISPLAY } from '@/lib/priority-config';
+import { computeGroupStatus, statusIcon } from '@/lib/group-utils';
 import { cn } from '@/lib/utils';
 
 interface TaskGroupCardProps {
@@ -15,39 +15,8 @@ interface TaskGroupCardProps {
   onEditGroup?: (group: TaskGroupWithChildren) => void;
 }
 
-interface GroupStatus {
-  total: number;
-  completed: number;
-  failed: number;
-  executing: number;
-  planning: number;
-  idle: number;
-}
-
-function computeStatus(children: Task[]): GroupStatus {
-  const s: GroupStatus = { total: children.length, completed: 0, failed: 0, executing: 0, planning: 0, idle: 0 };
-  for (const c of children) {
-    if (c.agentStatus === 'complete') s.completed++;
-    else if (c.agentStatus === 'failed') s.failed++;
-    else if (c.agentStatus === 'executing') s.executing++;
-    else if (c.agentStatus === 'planning') s.planning++;
-    else s.idle++;
-  }
-  return s;
-}
-
-function statusIcon(status: AgentStatus) {
-  switch (status) {
-    case 'executing': return <Cog className="h-3 w-3 animate-spin text-blue-400" />;
-    case 'planning': return <Brain className="h-3 w-3 animate-pulse text-purple-400" />;
-    case 'complete': return <CheckCircle2 className="h-3 w-3 text-emerald-400" />;
-    case 'failed': return <AlertCircle className="h-3 w-3 text-red-400" />;
-    default: return <div className="h-3 w-3 rounded-full border border-zinc-500" />;
-  }
-}
-
 export function TaskGroupCard({ group, onClickGroup, onRunGroup, onStopGroup, onDeleteGroup, onEditGroup }: TaskGroupCardProps) {
-  const status = useMemo(() => computeStatus(group.children), [group.children]);
+  const status = useMemo(() => computeGroupStatus(group.children), [group.children]);
   const isRunning = status.executing > 0 || status.planning > 0;
   const pct = status.total > 0 ? ((status.completed / status.total) * 100) : 0;
   const priorityInfo = PRIORITY_DISPLAY[group.priority];
@@ -149,10 +118,10 @@ export function TaskGroupCard({ group, onClickGroup, onRunGroup, onStopGroup, on
 
       {/* Child status summary */}
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">
-        {status.executing > 0 && <span className="flex items-center gap-1"><Cog className="h-3 w-3 animate-spin text-blue-400" /> {status.executing} running</span>}
-        {status.planning > 0 && <span className="flex items-center gap-1"><Brain className="h-3 w-3 text-purple-400" /> {status.planning} planning</span>}
-        {status.completed > 0 && <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-emerald-400" /> {status.completed} done</span>}
-        {status.failed > 0 && <span className="flex items-center gap-1"><AlertCircle className="h-3 w-3 text-red-400" /> {status.failed} failed</span>}
+        {status.executing > 0 && <span className="flex items-center gap-1">{statusIcon('executing', 'h-3 w-3')} {status.executing} running</span>}
+        {status.planning > 0 && <span className="flex items-center gap-1">{statusIcon('planning', 'h-3 w-3')} {status.planning} planning</span>}
+        {status.completed > 0 && <span className="flex items-center gap-1">{statusIcon('complete', 'h-3 w-3')} {status.completed} done</span>}
+        {status.failed > 0 && <span className="flex items-center gap-1">{statusIcon('failed', 'h-3 w-3')} {status.failed} failed</span>}
         {status.idle > 0 && <span className="text-zinc-500">{status.idle} pending</span>}
       </div>
 
@@ -175,7 +144,7 @@ export function TaskGroupCard({ group, onClickGroup, onRunGroup, onStopGroup, on
                     {priorityInfo && <span className="mr-0.5">{priorityInfo.emoji}</span>}
                     {child.title}
                   </h4>
-                  {statusIcon(child.agentStatus)}
+                  {statusIcon(child.agentStatus, 'h-3 w-3')}
                 </div>
                 {child.description && (
                   <p className="mt-0.5 text-[10px] leading-snug text-zinc-500 line-clamp-1">{child.description}</p>

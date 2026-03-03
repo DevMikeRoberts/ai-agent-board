@@ -1,12 +1,13 @@
 import { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  X, Layers, Play, Square, RotateCcw, CheckCircle2, AlertCircle,
-  Cog, Brain, ChevronRight,
+  X, Layers, Play, Square, RotateCcw,
+  ChevronRight,
 } from 'lucide-react';
 import type { Task, AgentStatus } from '@/types';
 import type { TaskGroupWithChildren } from '@/lib/api';
 import { AGENT_DISPLAY } from '@/lib/agent-config';
+import { computeGroupStatus, statusIcon } from '@/lib/group-utils';
 import { cn } from '@/lib/utils';
 
 interface GroupPanelProps {
@@ -25,16 +26,6 @@ function formatDuration(ms: number): string {
   return `${m}m ${s % 60}s`;
 }
 
-function statusIcon(status: AgentStatus, size = 'h-4 w-4') {
-  switch (status) {
-    case 'executing': return <Cog className={cn(size, 'animate-spin text-blue-400')} />;
-    case 'planning': return <Brain className={cn(size, 'animate-pulse text-purple-400')} />;
-    case 'complete': return <CheckCircle2 className={cn(size, 'text-emerald-400')} />;
-    case 'failed': return <AlertCircle className={cn(size, 'text-red-400')} />;
-    default: return <div className={cn(size, 'rounded-full border border-zinc-500')} />;
-  }
-}
-
 function statusLabel(status: AgentStatus): string {
   switch (status) {
     case 'executing': return 'Running';
@@ -48,17 +39,7 @@ function statusLabel(status: AgentStatus): string {
 export function GroupPanel({ group, onClose, onRunGroup, onStopGroup, onRetryChild, onChildClick }: GroupPanelProps) {
   if (!group) return null;
 
-  const status = useMemo(() => {
-    const s = { total: group.children.length, completed: 0, failed: 0, executing: 0, planning: 0, idle: 0 };
-    for (const c of group.children) {
-      if (c.agentStatus === 'complete') s.completed++;
-      else if (c.agentStatus === 'failed') s.failed++;
-      else if (c.agentStatus === 'executing') s.executing++;
-      else if (c.agentStatus === 'planning') s.planning++;
-      else s.idle++;
-    }
-    return s;
-  }, [group.children]);
+  const status = useMemo(() => computeGroupStatus(group.children), [group.children]);
 
   const isRunning = status.executing > 0 || status.planning > 0;
   const pct = status.total > 0 ? (status.completed / status.total) * 100 : 0;

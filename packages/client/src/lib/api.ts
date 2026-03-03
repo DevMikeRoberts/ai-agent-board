@@ -193,7 +193,9 @@ function ensureConnection() {
   ws.onopen = () => {
     console.log('[WS] connected');
     setConnectionStatus('connected');
-    reconnectListeners.forEach((fn) => fn());
+    reconnectListeners.forEach((fn) => {
+      try { fn(); } catch (err) { console.error('[WS] reconnect listener error:', err); }
+    });
   };
 
   ws.onmessage = (e) => {
