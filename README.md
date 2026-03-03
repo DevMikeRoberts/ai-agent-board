@@ -79,10 +79,10 @@ Groups appear as a single card on the board showing aggregate progress. Click to
 - Node.js 20+
 - npm 10+
 - At least one agent CLI authenticated on your machine:
-  - **GitHub Copilot**: `npm install -g @github/copilot` + `gh auth login`
-  - **Claude Code**: `claude` CLI installed and authenticated
-  - **OpenAI Codex**: `codex` CLI installed with API key configured
-  - **OpenCode**: `opencode` CLI installed and configured
+  - **GitHub Copilot**: CLI installed and authenticated
+  - **Claude Code**: CLI installed and authenticated
+  - **OpenAI Codex**: CLI installed and authenticated
+  - **OpenCode**: CLI installed and authenticated
 
 Works on **Linux**, **macOS**, and **Windows**.
 
