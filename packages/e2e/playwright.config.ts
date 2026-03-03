@@ -1,7 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
 // Use separate ports for E2E tests so they don't collide with
-// the Docker dev server (3001/4175) running in the background.
+// the dev server (3001/4175) running in the background.
 const TEST_SERVER_PORT = 3002;
 const TEST_CLIENT_PORT = 4176;
 

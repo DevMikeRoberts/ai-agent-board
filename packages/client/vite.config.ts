@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
 
-// In Docker, the server runs as a separate container named "server"
+// API_URL can override the default proxy target
 const apiTarget = process.env.API_URL || 'http://localhost:3001';
 
 export default defineConfig({
@@ -16,7 +16,7 @@ export default defineConfig({
   server: {
     host: true,
     port: 4175,
-    allowedHosts: ['kanban.codewithdan.com'],
+    allowedHosts: true,
     proxy: {
       '/api': apiTarget,
       '/ws': {

@@ -1,16 +1,10 @@
 # Contributing
 
-Thanks for your interest in contributing to Agentic AI Kanban Board!
+Thanks for your interest in contributing to AI Agent Board!
 
 ## Getting Started
 
 See the [README](README.md) for setup instructions. The quickest path is:
-
-```bash
-docker compose up -d
-```
-
-Or run directly:
 
 ```bash
 npm install
@@ -27,7 +21,7 @@ npm test
 
 ## Making Changes
 
-1. Fork the repo and create a branch from `master`
+1. Fork the repo and create a branch from `main`
 2. Make your changes
 3. Run the E2E tests to make sure nothing is broken
 4. Submit a pull request

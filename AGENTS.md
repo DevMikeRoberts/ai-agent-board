@@ -42,43 +42,10 @@ ai-agent-board/
 - **Git worktrees** — optional per-task branch isolation. Agent works in worktree directory, path rewriting via `onPreToolUse` hook. Worktrees auto-cleaned after successful merge or PR creation.
 - **Local merge** — `mergeLocal()` merges worktree branch into base branch locally with per-repo mutex to prevent concurrent checkout races. Auto-aborts on conflict.
 - **Smart PR/merge buttons** — `GET /api/tasks/:id/git-info` checks for remote; UI shows "Create PR" only when remote exists, "Merge to main" always available.
-- **Vite proxy** — client proxies `/api` and `/ws` to the server. In Docker, `API_URL` env var points to `http://server:3001`.
+- **Vite proxy** — client proxies `/api` and `/ws` to the server.
 - **Shared validation** — `shared/constants.ts` exports validators (`isValidPriority`, `isValidColumnId`, etc.) and limits (`MAX_TITLE_LENGTH`, `MAX_DESCRIPTION_LENGTH`) used by both client and server.
 
-## Docker Setup
-
-Two-container dev environment via Docker Compose with live-reload volumes:
-
-```bash
-docker compose up -d          # Start both containers
-docker compose logs -f        # Watch logs
-docker compose down           # Stop
-docker compose build --no-cache  # Rebuild after dependency changes
-```
-
-### Containers
-
-| Service | Port | Description |
-|---------|------|-------------|
-| `client` | 4175 | Vite dev server with HMR |
-| `server` | 3001 | Express API + WebSocket + agent SDKs |
-
-### Volumes (live reload)
-
-- `packages/client/src` → edit React components, Vite hot-reloads
-- `packages/server/src` → edit server code, tsx watch restarts
-- `shared/` → type changes picked up by both
-- `packages/server/data` → SQLite persistence across restarts
-- `~/projects` → mounted at `/host-projects` for agent file access
-- Agent CLI binaries (`claude`, `codex`) and auth credentials mounted read-only from host
-
-### Important: Repo Paths in Docker
-
-When running in Docker, agents access host files via the `/host-projects` mount. In the "Configure Agent Run" dialog, use `/host-projects/my-app` instead of `~/projects/my-app`.
-
-The `ALLOWED_REPO_ROOTS` env is set to `/host-projects,/tmp` in docker-compose.yml.
-
-## Running Without Docker
+## Running Locally
 
 ```bash
 npm install
@@ -136,8 +103,8 @@ npm run build:server   # tsc -b tsconfig.build.json
 | `ALLOWED_REPO_ROOTS` | `$HOME,/tmp` | Comma-separated allowed repo root paths (security whitelist) |
 | `ALLOWED_ORIGINS` | `http://localhost:4175,http://localhost:4176` | CORS origins |
 | `AGENT_TIMEOUT_MS` | `600000` (10 min) | Max agent execution time |
-| `API_URL` | `http://localhost:3001` | Vite proxy target (set in Docker) |
-| `PROJECTS_DIR` | `~/projects` | Host projects path for Docker volume |
+| `API_URL` | `http://localhost:3001` | Vite proxy target |
+| `PROJECTS_DIR` | `~/projects` | Host projects path |
 
 ## Tests
 
