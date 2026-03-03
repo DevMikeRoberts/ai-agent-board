@@ -55,12 +55,26 @@ export function Header({ theme, toggleTheme, searchQuery, onSearchChange, showAr
               <p className="text-sm text-zinc-400">
                 AI Agent Task Board
               </p>
-              {wsStatus === 'disconnected' && wasConnected && (
-                <span className="flex items-center gap-1 text-[10px] text-red-400">
-                  <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                  Reconnecting…
-                </span>
-              )}
+              <span className="flex items-center gap-1 text-[10px]">
+                {wsStatus === 'connected' && (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-emerald-500/70">Live</span>
+                  </>
+                )}
+                {wsStatus === 'disconnected' && wasConnected && (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                    <span className="text-red-400">Reconnecting…</span>
+                  </>
+                )}
+                {wsStatus === 'connecting' && (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                    <span className="text-amber-400/70">Connecting…</span>
+                  </>
+                )}
+              </span>
             </div>
           </div>
         </div>
