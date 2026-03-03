@@ -2,18 +2,6 @@
 
 A drag-and-drop Kanban board that assigns coding tasks to AI agents — GitHub Copilot, Claude Code, OpenAI Codex, or OpenCode. Drop a task into "In Progress," pick an agent, and it will plan, execute, and complete the work, streaming live progress back to the board.
 
-## Tech Stack
-
-| Layer | Technology |
-|-------|------------|
-| Frontend | React 19, Vite, Tailwind CSS 4, Framer Motion |
-| Drag & Drop | @dnd-kit |
-| Backend | Express, better-sqlite3 / PostgreSQL, ws (WebSocket) |
-| AI Agents | @codewithdan/agent-sdk-core (wraps @github/copilot-sdk, @anthropic-ai/claude-agent-sdk, @openai/codex-sdk, @opencode-ai/sdk) |
-| Terminal UI | @xterm/xterm |
-| Monorepo | npm workspaces |
-| Dev Environment | Direct install (Linux, macOS, Windows) |
-
 ## Features
 
 - Kanban board with Backlog, In Progress, Review, Done columns
@@ -67,8 +55,6 @@ npm run dev:client
 ```
 
 Open [http://localhost:4175](http://localhost:4175).
-
-> **Why not Docker?** The agents need direct access to your project directories, git config, and CLI credentials on the host machine. Running the app directly avoids volume-mount complexity and path translation issues.
 
 ### Database Options
 
@@ -191,6 +177,18 @@ cd packages/e2e && npx playwright test --reporter=list
 | `git-operations.spec.ts` | 8 | Local merge, conflict handling, PR creation, worktree cleanup |
 | `group-integration.spec.ts` | 2 | Full agent execution with real agents, stop & cleanup |
 | `agent-sdk.spec.ts` | 2 | Real Copilot SDK execution (skipped without test repo) |
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Frontend | React 19, Vite, Tailwind CSS 4, Framer Motion |
+| Drag & Drop | @dnd-kit |
+| Backend | Express, better-sqlite3 / PostgreSQL, ws (WebSocket) |
+| AI Agents | @codewithdan/agent-sdk-core (wraps @github/copilot-sdk, @anthropic-ai/claude-agent-sdk, @openai/codex-sdk, @opencode-ai/sdk) |
+| Terminal UI | @xterm/xterm |
+| Monorepo | npm workspaces |
+| Dev Environment | Direct install (Linux, macOS, Windows) |
 
 ## Contributing
 
