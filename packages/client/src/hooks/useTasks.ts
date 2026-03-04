@@ -155,8 +155,10 @@ export function useTasks() {
     try {
       const updated = await api.updateTask(id, updates);
       setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
+      return updated;
     } catch (err) {
       setError(`Failed to update task: ${(err as Error).message}`);
+      return undefined;
     }
   }, []);
 

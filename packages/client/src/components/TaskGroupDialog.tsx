@@ -30,9 +30,9 @@ interface TaskGroupDialogProps {
     maxConcurrency: number;
     children: CreateGroupChild[];
     autoRun?: boolean;
-  }) => void;
+  }) => Promise<unknown>;
   editGroup?: TaskGroupWithChildren | null;
-  onEditSubmit?: (id: string, updates: { title: string; description?: string; priority: Priority; maxConcurrency: number }) => void;
+  onEditSubmit?: (id: string, updates: { title: string; description?: string; priority: Priority; maxConcurrency: number }) => Promise<unknown>;
 }
 
 const agents: { value: AgentType; label: string; emoji: string }[] = (
@@ -58,6 +58,8 @@ export function TaskGroupDialog({ open, onClose, onSubmit, editGroup, onEditSubm
   const [children, setChildren] = useState<ChildRow[]>([makeRow(), makeRow()]);
   const [autoRun, setAutoRun] = useState(false);
   const [showPriority, setShowPriority] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [pathError, setPathError] = useState('');
 
   const isEditMode = !!editGroup;
 
@@ -86,6 +88,8 @@ export function TaskGroupDialog({ open, onClose, onSubmit, editGroup, onEditSubm
       setMaxConcurrency(2);
       setChildren([makeRow(), makeRow()]);
       setAutoRun(false);
+      setSubmitting(false);
+      setPathError('');
     }
   }, [editGroup, open]);
 
@@ -96,39 +100,56 @@ export function TaskGroupDialog({ open, onClose, onSubmit, editGroup, onEditSubm
 
   const hasWorktreeWarning = children.length >= 2 && children.some((c) => !c.useWorktree);
 
-  function handleSubmit() {
-    if (!title.trim()) return;
+  async function handleSubmit() {
+    if (!title.trim() || submitting) return;
 
-    if (isEditMode && onEditSubmit && editGroup) {
-      onEditSubmit(editGroup.id, {
+    // Client-side path validation
+    const trimmedPath = repoPath.trim();
+    if (trimmedPath) {
+      if (!trimmedPath.startsWith('/') && !trimmedPath.startsWith('~')) {
+        setPathError('Path must be absolute (start with / or ~)');
+        return;
+      }
+    }
+    setPathError('');
+
+    setSubmitting(true);
+    try {
+      if (isEditMode && onEditSubmit && editGroup) {
+        const result = await onEditSubmit(editGroup.id, {
+          title: title.trim(),
+          description: description.trim() || undefined,
+          priority,
+          maxConcurrency,
+        });
+        if (result === undefined) return;
+        onClose();
+        return;
+      }
+
+      if (children.some((c) => !c.title.trim())) return;
+
+      if (trimmedPath) addRepoPath(trimmedPath);
+      const result = await onSubmit({
         title: title.trim(),
         description: description.trim() || undefined,
         priority,
+        repoPath: trimmedPath || undefined,
+        baseBranch: baseBranch.trim() || undefined,
         maxConcurrency,
+        children: children.map((c) => ({
+          title: c.title.trim(),
+          description: c.description.trim() || undefined,
+          agentType: c.agentType,
+          useWorktree: c.useWorktree,
+        })),
+        autoRun,
       });
+      if (result === undefined) return;
       onClose();
-      return;
+    } finally {
+      setSubmitting(false);
     }
-
-    if (children.some((c) => !c.title.trim())) return;
-
-    if (repoPath.trim()) addRepoPath(repoPath.trim());
-    onSubmit({
-      title: title.trim(),
-      description: description.trim() || undefined,
-      priority,
-      repoPath: repoPath.trim() || undefined,
-      baseBranch: baseBranch.trim() || undefined,
-      maxConcurrency,
-      children: children.map((c) => ({
-        title: c.title.trim(),
-        description: c.description.trim() || undefined,
-        agentType: c.agentType,
-        useWorktree: c.useWorktree,
-      })),
-      autoRun,
-    });
-    onClose();
   }
 
   function addChild() {
@@ -233,11 +254,16 @@ export function TaskGroupDialog({ open, onClose, onSubmit, editGroup, onEditSubm
                   <input
                     type="text"
                     value={repoPath}
-                    onChange={(e) => setRepoPath(e.target.value)}
+                    onChange={(e) => { setRepoPath(e.target.value); setPathError(''); }}
                     placeholder="/host-projects/my-app"
                     list="recent-group-repo-paths"
-                    className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
+                    className={`w-full rounded-lg border bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none ${
+                      pathError ? 'border-red-500 focus:border-red-500' : 'border-zinc-700 focus:border-blue-500'
+                    }`}
                   />
+                  {pathError && (
+                    <p className="mt-1 text-xs text-red-500">{pathError}</p>
+                  )}
                   <datalist id="recent-group-repo-paths">
                     {getRecentRepoPaths().map((p) => <option key={p} value={p} />)}
                   </datalist>
@@ -368,26 +394,26 @@ export function TaskGroupDialog({ open, onClose, onSubmit, editGroup, onEditSubm
               {isEditMode ? (
                 <button
                   onClick={handleSubmit}
-                  disabled={!title.trim()}
+                  disabled={!title.trim() || submitting}
                   className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  Save Changes
+                  {submitting ? 'Saving…' : 'Save Changes'}
                 </button>
               ) : (
                 <>
                   <button
                     onClick={() => { setAutoRun(false); handleSubmit(); }}
-                    disabled={!title.trim() || children.some((c) => !c.title.trim())}
+                    disabled={!title.trim() || children.some((c) => !c.title.trim()) || submitting}
                     className="rounded-lg bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-600 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Create Group
+                    {submitting ? 'Creating…' : 'Create Group'}
                   </button>
                   <button
                     onClick={() => { setAutoRun(true); handleSubmit(); }}
-                    disabled={!title.trim() || children.some((c) => !c.title.trim())}
+                    disabled={!title.trim() || children.some((c) => !c.title.trim()) || submitting}
                     className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Create & Run
+                    {submitting ? 'Creating…' : 'Create & Run'}
                   </button>
                 </>
               )}

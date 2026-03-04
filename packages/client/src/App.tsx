@@ -106,7 +106,7 @@ export function App() {
   }, []);
 
   const handleEditGroupSubmit = useCallback(async (id: string, updates: { title: string; description?: string; priority: Priority; maxConcurrency: number }) => {
-    await updateGroup(id, updates);
+    return updateGroup(id, updates);
   }, [updateGroup]);
 
   const handleRetryChild = useCallback(async (taskId: string) => {
@@ -222,8 +222,8 @@ export function App() {
     setDialogOpen(true);
   }, []);
 
-  const handleEditSubmit = useCallback((id: string, updates: { title: string; description: string; priority: Priority; agentType: AgentType; repoPath?: string; baseBranch?: string; useWorktree?: boolean }) => {
-    updateTask(id, updates);
+  const handleEditSubmit = useCallback(async (id: string, updates: { title: string; description: string; priority: Priority; agentType: AgentType; repoPath?: string; baseBranch?: string; useWorktree?: boolean }) => {
+    return updateTask(id, updates);
   }, [updateTask]);
 
   const handleDeleteTask = useCallback((task: Task) => {

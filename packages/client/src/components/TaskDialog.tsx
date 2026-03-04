@@ -13,11 +13,11 @@ import { getRecentRepoPaths, addRepoPath } from '@/lib/repo-history';
 interface TaskDialogProps {
   open: boolean;
   onClose: () => void;
-  onSubmit: (task: { title: string; description: string; priority: Priority; columnId: ColumnId; agentType: AgentType; autoRun?: boolean; repoPath?: string; branchName?: string; baseBranch?: string; useWorktree?: boolean }) => void;
+  onSubmit: (task: { title: string; description: string; priority: Priority; columnId: ColumnId; agentType: AgentType; autoRun?: boolean; repoPath?: string; branchName?: string; baseBranch?: string; useWorktree?: boolean }) => Promise<unknown>;
   /** When set, dialog is in edit mode with pre-populated fields */
   editTask?: Task | null;
   /** Called on save in edit mode */
-  onEditSubmit?: (id: string, updates: { title: string; description: string; priority: Priority; agentType: AgentType; repoPath?: string; baseBranch?: string; useWorktree?: boolean }) => void;
+  onEditSubmit?: (id: string, updates: { title: string; description: string; priority: Priority; agentType: AgentType; repoPath?: string; baseBranch?: string; useWorktree?: boolean }) => Promise<unknown>;
 }
 
 const agents: { value: AgentType; label: string; emoji: string }[] = (
@@ -39,6 +39,8 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
   const [repoPath, setRepoPath] = useState('');
   const [baseBranch, setBaseBranch] = useState('main');
   const [useWorktree, setUseWorktree] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [pathError, setPathError] = useState('');
 
   const isEditMode = !!editTask;
 
@@ -64,50 +66,70 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
       setRepoPath('');
       setBaseBranch('main');
       setUseWorktree(true);
+      setSubmitting(false);
+      setPathError('');
     }
   }, [editTask, open]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
-    if (isEditMode && onEditSubmit) {
-      if (repoPath.trim()) addRepoPath(repoPath.trim());
-      onEditSubmit(editTask!.id, {
-        title: title.trim(),
-        description: description.trim(),
-        priority,
-        agentType,
-        ...(repoPath.trim() ? {
-          repoPath: repoPath.trim(),
-          baseBranch: baseBranch.trim() || 'main',
-          useWorktree,
-        } : {}),
-      });
-    } else {
-      if (repoPath.trim()) addRepoPath(repoPath.trim());
-      onSubmit({
-        title: title.trim(),
-        description: description.trim(),
-        priority,
-        columnId: autoRun ? 'in-progress' : 'backlog',
-        agentType,
-        autoRun: autoRun || undefined,
-        ...(repoPath.trim() ? {
-          repoPath: repoPath.trim(),
-          baseBranch: baseBranch.trim() || 'main',
-          useWorktree,
-        } : {}),
-      });
+    if (!title.trim() || submitting) return;
+
+    // Client-side path validation
+    const trimmedPath = repoPath.trim();
+    if (trimmedPath) {
+      if (!trimmedPath.startsWith('/') && !trimmedPath.startsWith('~')) {
+        setPathError('Path must be absolute (start with / or ~)');
+        return;
+      }
     }
-    setTitle('');
-    setDescription('');
-    setPriority('medium');
-    setAgentType('copilot');
-    setAutoRun(false);
-    setRepoPath('');
-    setBaseBranch('main');
-    setUseWorktree(true);
-    onClose();
+    setPathError('');
+
+    const repoFields = trimmedPath ? {
+      repoPath: trimmedPath,
+      baseBranch: baseBranch.trim() || 'main',
+      useWorktree,
+    } : {};
+
+    setSubmitting(true);
+    try {
+      if (isEditMode && onEditSubmit) {
+        if (trimmedPath) addRepoPath(trimmedPath);
+        const result = await onEditSubmit(editTask!.id, {
+          title: title.trim(),
+          description: description.trim(),
+          priority,
+          agentType,
+          ...repoFields,
+        });
+        if (result === undefined) return; // Server error — keep dialog open
+      } else {
+        if (trimmedPath) addRepoPath(trimmedPath);
+        const result = await onSubmit({
+          title: title.trim(),
+          description: description.trim(),
+          priority,
+          columnId: autoRun ? 'in-progress' : 'backlog',
+          agentType,
+          autoRun: autoRun || undefined,
+          ...repoFields,
+        });
+        if (result === undefined) return; // Server error — keep dialog open
+      }
+
+      // Success — reset and close
+      setTitle('');
+      setDescription('');
+      setPriority('medium');
+      setAgentType('copilot');
+      setAutoRun(false);
+      setRepoPath('');
+      setBaseBranch('main');
+      setUseWorktree(true);
+      onClose();
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // Close dropdowns on outside click
@@ -310,11 +332,16 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
                     <input
                       type="text"
                       value={repoPath}
-                      onChange={(e) => setRepoPath(e.target.value)}
+                      onChange={(e) => { setRepoPath(e.target.value); setPathError(''); }}
                       placeholder="/host-projects/my-app"
                       list="task-recent-repo-paths"
-                      className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-mono placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
+                      className={`w-full rounded-lg border bg-background px-3 py-1.5 text-sm font-mono placeholder:text-muted-foreground/50 focus:outline-none ${
+                        pathError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-primary'
+                      }`}
                     />
+                    {pathError && (
+                      <p className="mt-1 text-xs text-red-500">{pathError}</p>
+                    )}
                     <datalist id="task-recent-repo-paths">
                       {getRecentRepoPaths().map((p) => <option key={p} value={p} />)}
                     </datalist>
@@ -355,10 +382,10 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
                 </button>
                 <button
                   type="submit"
-                  disabled={!title.trim()}
+                  disabled={!title.trim() || submitting}
                   className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  {isEditMode ? 'Save Changes' : 'Create Task'}
+                  {submitting ? 'Saving…' : isEditMode ? 'Save Changes' : 'Create Task'}
                 </button>
               </div>
             </form>
