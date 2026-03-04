@@ -58,12 +58,9 @@ export function Header({ theme, toggleTheme, searchQuery, onSearchChange, showAr
           </div>
           <div className="min-w-0">
             <h1 className="truncate text-base font-semibold tracking-tight text-white md:text-lg">
-              Agentic AI Kanban
+              AI Agent Board
             </h1>
             <div className="hidden items-center gap-2 md:flex">
-              <p className="text-sm text-zinc-400">
-                AI Agent Task Board
-              </p>
               <span className="flex items-center gap-1 text-[10px]">
                 {wsStatus === 'connected' && (
                   <>
