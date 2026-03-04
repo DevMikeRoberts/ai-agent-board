@@ -1,4 +1,4 @@
-import type { Task, TaskGroup, TaskTemplate, AgentEvent, AgentInfo, AgentType, ColumnId, Priority } from '@/types';
+import type { Task, TaskGroup, TaskTemplate, TaskAttachment, AgentEvent, AgentInfo, AgentType, ColumnId, Priority } from '@/types';
 
 export type { AgentInfo };
 
@@ -81,8 +81,30 @@ export const api = {
   getGitInfo: (id: string) =>
     request<{ hasRemote: boolean }>(`/tasks/${id}/git-info`),
 
-  sendMessage: (id: string, message: string) =>
-    request<{ success: boolean }>(`/tasks/${id}/message`, { method: 'POST', body: JSON.stringify({ message }) }),
+  sendMessage: (id: string, message: string, attachmentIds?: string[]) =>
+    request<{ success: boolean }>(`/tasks/${id}/message`, { method: 'POST', body: JSON.stringify({ message, attachmentIds }) }),
+
+  // --- Attachments ---
+  uploadAttachments: async (taskId: string, files: File[]): Promise<TaskAttachment[]> => {
+    const form = new FormData();
+    for (const f of files) form.append('images', f);
+    const headers: Record<string, string> = {};
+    if (API_KEY) headers['Authorization'] = `Bearer ${API_KEY}`;
+    const res = await fetch(`${BASE}/tasks/${taskId}/attachments`, { method: 'POST', headers, body: form });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `Upload failed (HTTP ${res.status})`);
+    }
+    return res.json();
+  },
+
+  getAttachments: (taskId: string) =>
+    request<TaskAttachment[]>(`/tasks/${taskId}/attachments`),
+
+  deleteAttachment: (id: string) =>
+    request<void>(`/attachments/${id}`, { method: 'DELETE' }),
+
+  getAttachmentUrl: (id: string) => `${BASE}/attachments/${id}/file`,
 
   archiveTask: (id: string) =>
     request<Task>(`/tasks/${id}/archive`, { method: 'PATCH' }),

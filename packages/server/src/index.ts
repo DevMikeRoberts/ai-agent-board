@@ -11,6 +11,8 @@ import { createAgentRouter } from './routes/agent.js';
 import { createGitRouter } from './routes/git.js';
 import { createTemplateRouter } from './routes/templates.js';
 import { createGroupsRouter } from './routes/groups.js';
+import { createAttachmentsRouter } from './routes/attachments.js';
+import type { AttachmentStore } from './routes/attachments.js';
 import { AgentManager } from './services/agent-manager.js';
 import { authMiddleware } from './middleware/auth.js';
 import type { TaskRepository } from './repositories/types.js';
@@ -33,6 +35,7 @@ const DATABASE_URL = process.env.DATABASE_URL;
 let taskRepo: TaskRepository;
 let templateRepo: TemplateRepository;
 let groupRepo: TaskGroupRepository;
+let attachmentStore: AttachmentStore;
 let cleanupDb: () => void;
 
 // Initialize AgentManager
@@ -49,6 +52,8 @@ const agentManager = new AgentManager();
     templateRepo = new PostgresTemplateRepository(pool);
     const { PostgresTaskGroupRepository } = await import('./repositories/postgres-groups.js');
     groupRepo = new PostgresTaskGroupRepository(pool);
+    const { PostgresAttachmentStore } = await import('./repositories/postgres-attachments.js');
+    attachmentStore = new PostgresAttachmentStore(pool);
     cleanupDb = () => { pool.end(); };
     console.log('[server] using PostgreSQL backend');
   } else {
@@ -59,17 +64,21 @@ const agentManager = new AgentManager();
     templateRepo = new SqliteTemplateRepository(db);
     const { SqliteTaskGroupRepository } = await import('./repositories/sqlite-groups.js');
     groupRepo = new SqliteTaskGroupRepository(db);
+    const { SqliteAttachmentStore } = await import('./repositories/sqlite-attachments.js');
+    attachmentStore = new SqliteAttachmentStore(db);
     cleanupDb = () => { db.close(); };
     console.log('[server] using SQLite backend');
   }
 
   agentManager.initEventPersistence(taskRepo);
+  agentManager.initAttachmentStore(attachmentStore);
 
   app.use('/api/tasks', createTaskRouter(taskRepo, agentManager));
   app.use('/api/tasks', createAgentRouter(taskRepo, agentManager, groupRepo));
   app.use('/api/tasks', createGitRouter(taskRepo, agentManager));
   app.use('/api/templates', createTemplateRouter(templateRepo));
   app.use('/api/groups', createGroupsRouter(groupRepo, taskRepo, agentManager));
+  app.use('/api', createAttachmentsRouter(taskRepo, attachmentStore));
 
   // GET /api/agents — list available agents
   app.get('/api/agents', (_req, res) => {

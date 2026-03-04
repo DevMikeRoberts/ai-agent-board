@@ -4,11 +4,13 @@ import {
   X,
   ChevronDown,
 } from 'lucide-react';
-import type { Task, ColumnId, AgentType, Priority } from '@/types';
+import type { Task, TaskAttachment, ColumnId, AgentType, Priority } from '@/types';
 import { AGENT_DISPLAY } from '@/lib/agent-config';
 import { PRIORITY_DISPLAY } from '@/lib/priority-config';
 import { cn } from '@/lib/utils';
 import { getRecentRepoPaths, addRepoPath } from '@/lib/repo-history';
+import { api } from '@/lib/api';
+import ImageUpload from './ImageUpload';
 
 interface TaskDialogProps {
   open: boolean;
@@ -41,6 +43,8 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
   const [useWorktree, setUseWorktree] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [pathError, setPathError] = useState('');
+  const [pendingImages, setPendingImages] = useState<File[]>([]);
+  const [existingAttachments, setExistingAttachments] = useState<TaskAttachment[]>([]);
 
   const isEditMode = !!editTask;
 
@@ -54,6 +58,8 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
       setRepoPath(editTask.repoPath || '');
       setBaseBranch(editTask.baseBranch || 'main');
       setUseWorktree(editTask.useWorktree ?? true);
+      // Load attachments from server
+      api.getAttachments(editTask.id).then(setExistingAttachments).catch(() => setExistingAttachments([]));
     } else if (!open) {
       // Reset when dialog closes
       setTitle('');
@@ -68,6 +74,8 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
       setUseWorktree(true);
       setSubmitting(false);
       setPathError('');
+      setPendingImages([]);
+      setExistingAttachments([]);
     }
   }, [editTask, open]);
 
@@ -113,8 +121,18 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
           agentType,
           autoRun: autoRun || undefined,
           ...repoFields,
-        });
+        }) as Task | undefined;
         if (result === undefined) return; // Server error — keep dialog open
+
+        // Upload pending images after task creation
+        if (pendingImages.length > 0 && result?.id) {
+          try {
+            await api.uploadAttachments(result.id, pendingImages);
+          } catch {
+            // Non-blocking — task created but images failed
+            console.warn('Failed to upload images for new task', result.id);
+          }
+        }
       }
 
       // Success — reset and close
@@ -126,6 +144,8 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
       setRepoPath('');
       setBaseBranch('main');
       setUseWorktree(true);
+      setPendingImages([]);
+      setExistingAttachments([]);
       onClose();
     } finally {
       setSubmitting(false);
@@ -173,7 +193,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-card p-6 shadow-2xl"
+            className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-card p-6 shadow-2xl max-h-[90vh] flex flex-col"
           >
             {/* Header */}
             <div className="flex items-center justify-between mb-5">
@@ -186,7 +206,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto flex-1 min-h-0 pr-1">
               {/* Title */}
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
@@ -213,6 +233,19 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
                   placeholder="Describe the task for the Copilot agent..."
                   rows={4}
                   className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+
+              {/* Image attachments */}
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                  Images
+                </label>
+                <ImageUpload
+                  taskId={isEditMode ? editTask!.id : undefined}
+                  existing={existingAttachments}
+                  onPendingChange={setPendingImages}
+                  onAttachmentsChange={setExistingAttachments}
                 />
               </div>
 

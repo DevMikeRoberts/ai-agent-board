@@ -5,10 +5,11 @@ import os from 'os';
 import path from 'path';
 import type { Task, TaskGroup, AgentEvent, AgentType } from '../types.js';
 import type { TaskRepository } from '../repositories/types.js';
-import type { AgentProvider, AgentSession, AgentInfo } from '@codewithdan/agent-sdk-core';
+import type { AgentProvider, AgentSession, AgentInfo, AgentAttachment } from '@codewithdan/agent-sdk-core';
 import type { AgentEvent as CoreAgentEvent } from '@codewithdan/agent-sdk-core';
 import { CopilotProvider, ClaudeProvider, CodexProvider, OpenCodeProvider, detectAgents } from '@codewithdan/agent-sdk-core';
 import { broadcast } from '../websocket.js';
+import type { AttachmentStore } from '../routes/attachments.js';
 
 const AGENT_TIMEOUT_MS = parseInt(process.env.AGENT_TIMEOUT_MS || '600000', 10);
 
@@ -55,6 +56,7 @@ export class AgentManager {
   private stoppedTasks = new Set<string>();
   private eventLogs = new Map<string, AgentEvent[]>();
   private eventRepo: TaskRepository | null = null;
+  private attachmentStore: AttachmentStore | null = null;
   private availableAgents: AgentInfo[] = [];
   /** Pending coalesced output/thinking broadcast per task */
   private streamBuffer = new Map<string, { event: AgentEvent; timer: ReturnType<typeof setTimeout> }>();
@@ -65,6 +67,10 @@ export class AgentManager {
   /** Call once at startup to enable event persistence. */
   initEventPersistence(repo: TaskRepository): void {
     this.eventRepo = repo;
+  }
+
+  initAttachmentStore(store: AttachmentStore): void {
+    this.attachmentStore = store;
   }
 
   /** Detect available agents, register providers, start the ones that are available. */
@@ -483,8 +489,25 @@ make precise edits, and verify your changes compile/pass tests when applicable.
         // Build prompt and execute — each provider returns a typed AgentResult
         const safeDescription = (task.description || '').replace(/[<>]/g, '');
         const prompt = `${safeTitle}\n\n${safeDescription}`;
-        console.log(`[agent-manager] executing ${agentType} for task ${task.id}`);
-        const result = await session.execute(prompt);
+
+        // Load image attachments if available
+        let agentAttachments: AgentAttachment[] | undefined;
+        if (this.attachmentStore) {
+          const taskAttachments = await this.attachmentStore.getByTaskId(task.id);
+          if (taskAttachments.length > 0) {
+            const uploadsDir = path.join(process.cwd(), 'data', 'uploads');
+            const loaded: AgentAttachment[] = [];
+            for (const a of taskAttachments) {
+              const filePath = path.join(uploadsDir, a.taskId, a.filename);
+              if (!fs.existsSync(filePath)) continue;
+              loaded.push({ type: 'local_image', path: filePath, displayName: a.originalName, mediaType: a.mimeType });
+            }
+            if (loaded.length > 0) agentAttachments = loaded;
+          }
+        }
+
+        console.log(`[agent-manager] executing ${agentType} for task ${task.id}${agentAttachments?.length ? ` with ${agentAttachments.length} image(s)` : ''}`);
+        const result = await session.execute(prompt, agentAttachments);
         console.log(`[agent-manager] ${agentType} ${result.status} for task ${task.id}${result.error ? `: ${result.error}` : ''}`);
 
         clearTimeout(timeoutId);
@@ -522,18 +545,38 @@ make precise edits, and verify your changes compile/pass tests when applicable.
     });
   }
 
-  async sendMessage(taskId: string, message: string): Promise<boolean> {
+  async sendMessage(taskId: string, message: string, attachmentIds?: string[]): Promise<boolean> {
     const entry = this.sessions.get(taskId);
     if (!entry?.session) return false;
 
     this.emitEvent(taskId, {
       id: uuid(), taskId, type: 'command',
-      content: `Follow-up message sent: ${message}`,
+      content: `Follow-up message sent: ${message}${attachmentIds?.length ? ` (with ${attachmentIds.length} image(s))` : ''}`,
       timestamp: Date.now(),
     });
 
+    // Load attachments if IDs provided
+    let agentAttachments: AgentAttachment[] | undefined;
+    if (attachmentIds?.length && this.attachmentStore) {
+      const UPLOADS_DIR = path.join(process.cwd(), 'data', 'uploads');
+      const loaded: AgentAttachment[] = [];
+      for (const id of attachmentIds) {
+        const a = await this.attachmentStore.getById(id);
+        if (!a) continue;
+        const filePath = path.join(UPLOADS_DIR, a.taskId, a.filename);
+        if (!fs.existsSync(filePath)) continue;
+        loaded.push({
+          type: 'local_image' as const,
+          path: filePath,
+          displayName: a.originalName,
+          mediaType: a.mimeType,
+        });
+      }
+      if (loaded.length > 0) agentAttachments = loaded;
+    }
+
     try {
-      await entry.session.send(message);
+      await entry.session.send(message, agentAttachments);
     } catch (err: unknown) {
       const providerName = this.providers.get(entry.agentType)?.displayName || entry.agentType;
       throw new Error(`${providerName} failed to process follow-up: ${err instanceof Error ? err.message : String(err)}`);

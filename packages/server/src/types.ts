@@ -7,6 +7,7 @@ export type {
   Task,
   TaskGroup,
   TaskTemplate,
+  TaskAttachment,
   AgentEventType,
   AgentEvent,
   WSMessage,

@@ -132,6 +132,21 @@ function migrate(db: Database.Database): void {
       created_at    INTEGER NOT NULL
     )
   `);
+
+  // Task attachments table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS task_attachments (
+      id            TEXT PRIMARY KEY,
+      task_id       TEXT NOT NULL,
+      filename      TEXT NOT NULL,
+      original_name TEXT NOT NULL,
+      mime_type     TEXT NOT NULL,
+      size          INTEGER NOT NULL,
+      created_at    INTEGER NOT NULL,
+      FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+    )
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_task_attachments_task_id ON task_attachments(task_id)`);
 }
 
 export function initDatabase(): Database.Database {
@@ -251,6 +266,20 @@ export async function initPostgresDatabase(pool: Pool): Promise<void> {
       created_at    BIGINT NOT NULL
     )
   `);
+
+  // Task attachments table
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS task_attachments (
+      id            TEXT PRIMARY KEY,
+      task_id       TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+      filename      TEXT NOT NULL,
+      original_name TEXT NOT NULL,
+      mime_type     TEXT NOT NULL,
+      size          INTEGER NOT NULL,
+      created_at    BIGINT NOT NULL
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_task_attachments_task_id ON task_attachments(task_id)`);
 
   // Migrate existing FK to ON DELETE CASCADE if not already set
   const { rows: fkRows } = await pool.query(`

@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import Markdown from 'react-markdown';
+import { motion, AnimatePresence } from 'framer-motion';import Markdown from 'react-markdown';
 import {
   X,
   Brain,
@@ -23,6 +22,7 @@ import {
   FileText,
   RotateCw,
   Download,
+  Paperclip,
 } from 'lucide-react';
 import type { Task, AgentEvent, AgentEventType } from '@/types';
 import { getAgentDisplay } from '@/lib/agent-config';
@@ -344,6 +344,8 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onMergeLo
   const [mergeError, setMergeError] = useState<string | null>(null);
   const [followUpMessage, setFollowUpMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [followUpImages, setFollowUpImages] = useState<File[]>([]);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [descExpanded, setDescExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<'events' | 'terminal' | 'changes'>('events');
   const [showWorktreeConfirm, setShowWorktreeConfirm] = useState(false);
@@ -372,6 +374,7 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onMergeLo
     setHasRemote(null);
     setFollowUpMessage('');
     setSending(false);
+    setFollowUpImages([]);
 
     // Load existing events from server
     api.getEvents(taskId).then(setEvents).catch(console.error);
@@ -455,20 +458,29 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onMergeLo
   }, [events]);
 
   const handleSendFollowUp = async () => {
-    if (!task || !followUpMessage.trim() || sending) return;
+    if (!task || (!followUpMessage.trim() && followUpImages.length === 0) || sending) return;
     const message = followUpMessage.trim();
     setSending(true);
     setFollowUpMessage('');
+    const imagesToUpload = [...followUpImages];
+    setFollowUpImages([]);
+
     // Show locally immediately
+    const imageNote = imagesToUpload.length > 0 ? ` [+${imagesToUpload.length} image${imagesToUpload.length > 1 ? 's' : ''}]` : '';
     setEvents((prev) => [...prev, {
       id: `fu-${Date.now()}`,
       taskId: task.id,
       type: 'command' as const,
-      content: `You: ${message}`,
+      content: `You: ${message || '(images only)'}${imageNote}`,
       timestamp: Date.now(),
     }]);
     try {
-      await api.sendMessage(task.id, message);
+      let attachmentIds: string[] | undefined;
+      if (imagesToUpload.length > 0) {
+        const uploaded = await api.uploadAttachments(task.id, imagesToUpload);
+        attachmentIds = uploaded.map(a => a.id);
+      }
+      await api.sendMessage(task.id, message || 'See the attached images.', attachmentIds);
     } catch (err) {
       console.error('[AgentPanel] failed to send follow-up:', err);
     } finally {
@@ -934,7 +946,46 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onMergeLo
 
           {/* Follow-up message input — fixed at bottom */}
           <div className="shrink-0 border-t border-border bg-card px-3 py-2">
+            {/* Image previews */}
+            {followUpImages.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {followUpImages.map((f, i) => (
+                  <div key={i} className="relative group">
+                    <img src={URL.createObjectURL(f)} alt={f.name} className="w-10 h-10 object-cover rounded border border-border" />
+                    <button
+                      type="button"
+                      onClick={() => setFollowUpImages(prev => prev.filter((_, j) => j !== i))}
+                      className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[10px] leading-none flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => imageInputRef.current?.click()}
+                disabled={agentStatus !== 'executing' || sending}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Attach images"
+              >
+                <Paperclip className="h-3.5 w-3.5" />
+              </button>
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files) {
+                    setFollowUpImages(prev => [...prev, ...Array.from(e.target.files!)]);
+                    e.target.value = '';
+                  }
+                }}
+              />
               <input
                 type="text"
                 value={followUpMessage}
@@ -951,7 +1002,7 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onMergeLo
               />
               <button
                 onClick={handleSendFollowUp}
-                disabled={agentStatus !== 'executing' || sending || !followUpMessage.trim()}
+                disabled={agentStatus !== 'executing' || sending || (!followUpMessage.trim() && followUpImages.length === 0)}
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-primary hover:bg-primary/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Send message"
               >

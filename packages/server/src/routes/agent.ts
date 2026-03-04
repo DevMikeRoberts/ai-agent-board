@@ -169,7 +169,7 @@ export function createAgentRouter(repo: TaskRepository, agentManager: AgentManag
       return;
     }
 
-    const { message } = req.body;
+    const { message, attachmentIds } = req.body;
     if (!message || typeof message !== 'string' || !message.trim()) {
       res.status(400).json({ error: 'message is required and must be a non-empty string' });
       return;
@@ -181,8 +181,9 @@ export function createAgentRouter(repo: TaskRepository, agentManager: AgentManag
     }
 
     try {
-      await agentManager.sendMessage(task.id, message);
-      broadcast({ type: 'agent_follow_up', payload: { taskId: task.id, message } });
+      const validIds = Array.isArray(attachmentIds) ? attachmentIds.filter((id: unknown) => typeof id === 'string') : undefined;
+      await agentManager.sendMessage(task.id, message, validIds);
+      broadcast({ type: 'agent_follow_up', payload: { taskId: task.id, message, attachmentIds: validIds } });
       res.json({ success: true });
     } catch (err: unknown) {
       res.status(500).json({ error: err instanceof Error ? err.message : 'failed to send message' });

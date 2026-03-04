@@ -30,6 +30,7 @@ export interface Task {
   archived?: boolean;
   groupId?: string;
   groupOrder?: number;
+  attachments?: TaskAttachment[];
 }
 
 export interface TaskGroup {
@@ -108,6 +109,17 @@ export interface TaskTemplate {
 export interface AgentFollowUpPayload {
   taskId: string;
   message: string;
+  attachmentIds?: string[];
+}
+
+export interface TaskAttachment {
+  id: string;
+  taskId: string;
+  filename: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  createdAt: number;
 }
 
 export type WSMessage =
