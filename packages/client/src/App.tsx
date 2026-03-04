@@ -222,7 +222,7 @@ export function App() {
     setDialogOpen(true);
   }, []);
 
-  const handleEditSubmit = useCallback((id: string, updates: { title: string; description: string; priority: Priority; agentType: AgentType }) => {
+  const handleEditSubmit = useCallback((id: string, updates: { title: string; description: string; priority: Priority; agentType: AgentType; repoPath?: string; baseBranch?: string; useWorktree?: boolean }) => {
     updateTask(id, updates);
   }, [updateTask]);
 

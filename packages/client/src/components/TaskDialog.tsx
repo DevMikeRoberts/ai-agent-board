@@ -17,7 +17,7 @@ interface TaskDialogProps {
   /** When set, dialog is in edit mode with pre-populated fields */
   editTask?: Task | null;
   /** Called on save in edit mode */
-  onEditSubmit?: (id: string, updates: { title: string; description: string; priority: Priority; agentType: AgentType }) => void;
+  onEditSubmit?: (id: string, updates: { title: string; description: string; priority: Priority; agentType: AgentType; repoPath?: string; baseBranch?: string; useWorktree?: boolean }) => void;
 }
 
 const agents: { value: AgentType; label: string; emoji: string }[] = (
@@ -49,6 +49,9 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
       setDescription(editTask.description);
       setPriority(editTask.priority || 'medium');
       setAgentType(editTask.agentType || 'copilot');
+      setRepoPath(editTask.repoPath || '');
+      setBaseBranch(editTask.baseBranch || 'main');
+      setUseWorktree(editTask.useWorktree ?? true);
     } else if (!open) {
       // Reset when dialog closes
       setTitle('');
@@ -68,14 +71,20 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
     e.preventDefault();
     if (!title.trim()) return;
     if (isEditMode && onEditSubmit) {
+      if (repoPath.trim()) addRepoPath(repoPath.trim());
       onEditSubmit(editTask!.id, {
         title: title.trim(),
         description: description.trim(),
         priority,
         agentType,
+        ...(repoPath.trim() ? {
+          repoPath: repoPath.trim(),
+          baseBranch: baseBranch.trim() || 'main',
+          useWorktree,
+        } : {}),
       });
     } else {
-      if (autoRun && repoPath.trim()) addRepoPath(repoPath.trim());
+      if (repoPath.trim()) addRepoPath(repoPath.trim());
       onSubmit({
         title: title.trim(),
         description: description.trim(),
@@ -83,7 +92,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
         columnId: autoRun ? 'in-progress' : 'backlog',
         agentType,
         autoRun: autoRun || undefined,
-        ...(autoRun && repoPath.trim() ? {
+        ...(repoPath.trim() ? {
           repoPath: repoPath.trim(),
           baseBranch: baseBranch.trim() || 'main',
           useWorktree,
@@ -294,11 +303,10 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
                 </label>
               )}
 
-              {/* Run configuration (visible when auto-run is checked) */}
-              {!isEditMode && autoRun && (
-                <div className="space-y-3 rounded-lg border border-border/50 bg-muted/30 p-3">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Repository Path</label>
+              {/* Repository configuration */}
+              <div className="space-y-3 rounded-lg border border-border/50 bg-muted/30 p-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground">Repository Path</label>
                     <input
                       type="text"
                       value={repoPath}
@@ -335,7 +343,6 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
                     </div>
                   </div>
                 </div>
-              )}
 
               {/* Actions */}
               <div className="flex justify-end gap-2 pt-2">
