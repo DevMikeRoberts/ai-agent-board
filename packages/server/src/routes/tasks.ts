@@ -208,7 +208,7 @@ export function createTaskRouter(repo: TaskRepository, agentManager: AgentManage
     if (agentStatus !== undefined) updates.agentStatus = agentStatus;
     if (agentType !== undefined) updates.agentType = agentType;
     if (repoPath !== undefined) updates.repoPath = typeof repoPath === 'string' ? expandTilde(repoPath) : repoPath;
-    if (branchName !== undefined) updates.branchName = branchName;
+    if (branchName !== undefined) updates.branchName = branchName || undefined;
     if (baseBranch !== undefined) updates.baseBranch = baseBranch;
     if (useWorktree !== undefined) updates.useWorktree = Boolean(useWorktree);
     if (archived !== undefined) updates.archived = Boolean(archived);

@@ -261,12 +261,15 @@ export function App() {
 
     if (task.repoPath) {
       // Task already configured — run directly
+      const wantWorktree = task.useWorktree ?? false;
       setSelectedTaskId(taskId);
       configureAndRunTask(taskId, {
         repoPath: task.repoPath,
-        branchName: task.branchName || `task/${task.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60)}`,
+        branchName: wantWorktree
+          ? (task.branchName || `task/${task.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60)}`)
+          : '',
         baseBranch: task.baseBranch || 'main',
-        useWorktree: task.useWorktree ?? true,
+        useWorktree: wantWorktree,
         agentType: task.agentType,
       });
     } else {

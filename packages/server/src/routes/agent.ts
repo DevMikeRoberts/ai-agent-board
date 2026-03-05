@@ -68,7 +68,7 @@ export function createAgentRouter(repo: TaskRepository, agentManager: AgentManag
 
     const updates: Partial<Task> = {};
     if (repoPath !== undefined) updates.repoPath = typeof repoPath === 'string' ? expandTilde(repoPath) : repoPath;
-    if (branchName !== undefined) updates.branchName = branchName;
+    if (branchName !== undefined) updates.branchName = branchName || undefined;
     if (baseBranch !== undefined) updates.baseBranch = baseBranch;
     if (useWorktree !== undefined) updates.useWorktree = useWorktree;
     if (agentType !== undefined) updates.agentType = agentType;
