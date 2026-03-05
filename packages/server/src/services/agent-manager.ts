@@ -511,19 +511,15 @@ make precise edits, and verify your changes compile/pass tests when applicable.
         let agentAttachments: AgentAttachment[] | undefined;
         if (this.attachmentStore) {
           const taskAttachments = await this.attachmentStore.getByTaskId(task.id);
-          console.log(`[agent-manager] found ${taskAttachments.length} attachment record(s) in DB for task ${task.id}`);
           if (taskAttachments.length > 0) {
             const loaded: AgentAttachment[] = [];
             for (const a of taskAttachments) {
               const srcPath = path.join(UPLOADS_DIR, a.taskId, a.filename);
-              console.log(`[agent-manager] loading attachment: ${srcPath} (${a.originalName}, ${a.mimeType})`);
               const att = loadAttachmentAsBase64(srcPath, a.originalName, a.mimeType);
               if (att) loaded.push(att);
             }
             if (loaded.length > 0) agentAttachments = loaded;
           }
-        } else {
-          console.log(`[agent-manager] no attachmentStore configured`);
         }
 
         console.log(`[agent-manager] executing ${agentType} for task ${task.id}${agentAttachments?.length ? ` with ${agentAttachments.length} image(s)` : ''}`);
