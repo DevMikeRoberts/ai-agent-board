@@ -128,9 +128,8 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
         if (pendingImages.length > 0 && result?.id) {
           try {
             await api.uploadAttachments(result.id, pendingImages);
-          } catch {
-            // Non-blocking — task created but images failed
-            console.warn('Failed to upload images for new task', result.id);
+          } catch (uploadErr) {
+            console.warn('Failed to upload images for new task', result.id, uploadErr);
           }
         }
       }
