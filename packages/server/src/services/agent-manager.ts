@@ -474,9 +474,15 @@ make precise edits, and verify your changes compile/pass tests when applicable.
           systemPrompt,
           onEvent: (coreEvent: CoreAgentEvent) => {
             const metadata: Record<string, unknown> = { ...coreEvent.metadata };
+            let eventType = coreEvent.type;
+
+            // Reclassify 'create' tool as file_write
+            if (coreEvent.type === 'command' && metadata.command === 'create') {
+              eventType = 'file_write';
+            }
 
             // Enrich file events with metadata.file extracted from tool arguments
-            if ((coreEvent.type === 'file_write' || coreEvent.type === 'file_edit' || coreEvent.type === 'file_read') && !metadata.file) {
+            if ((eventType === 'file_write' || eventType === 'file_edit' || eventType === 'file_read') && !metadata.file) {
               const colonIdx = coreEvent.content.indexOf(':');
               if (colonIdx > 0) {
                 try {
@@ -485,9 +491,22 @@ make precise edits, and verify your changes compile/pass tests when applicable.
                   if (filePath) {
                     metadata.file = filePath;
                     lastFileEventFile = filePath;
-                    lastFileEventType = coreEvent.type;
+                    lastFileEventType = eventType;
                   }
                 } catch { /* not JSON args, skip */ }
+              }
+            }
+
+            // Detect file writes from bash commands (cat > file, echo > file, mkdir, etc.)
+            if (coreEvent.type === 'command' && metadata.command === 'bash') {
+              const content = coreEvent.content;
+              // Match: cat > path, cat >> path, echo ... > path, tee path
+              const redirectMatch = content.match(/(?:cat|echo|printf)\s+.*?>\s*(\S+)/);
+              const teeMatch = content.match(/tee\s+(\S+)/);
+              const filePath = redirectMatch?.[1] || teeMatch?.[1];
+              if (filePath && !filePath.startsWith('-')) {
+                metadata.file = filePath.replace(/['"]/g, '');
+                metadata.fileEventType = 'file_write';
               }
             }
 
@@ -497,7 +516,7 @@ make precise edits, and verify your changes compile/pass tests when applicable.
               metadata.fileEventType = lastFileEventType;
               lastFileEventFile = null;
               lastFileEventType = null;
-            } else if (coreEvent.type !== 'file_write' && coreEvent.type !== 'file_edit' && coreEvent.type !== 'file_read') {
+            } else if (eventType !== 'file_write' && eventType !== 'file_edit' && eventType !== 'file_read') {
               lastFileEventFile = null;
               lastFileEventType = null;
             }
@@ -505,7 +524,7 @@ make precise edits, and verify your changes compile/pass tests when applicable.
             this.emitEvent(task.id, {
               id: coreEvent.id,
               taskId: task.id,
-              type: coreEvent.type,
+              type: eventType as AgentEvent['type'],
               content: coreEvent.content,
               timestamp: coreEvent.timestamp,
               metadata,

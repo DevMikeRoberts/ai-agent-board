@@ -39,10 +39,17 @@ function eventToLines(event: AgentEvent): string {
       return `${ANSI.blue}$ ${ANSI.reset}${cmd}\r\n`;
     }
     case 'command_output': {
-      // Filter empty lines and progress-only noise (e.g. "(0.3s)")
+      // Filter empty lines and build progress noise (dotnet timestamps, fragments)
       const meaningful = event.content.split('\n').filter(l => {
         const trimmed = l.trim();
-        return trimmed.length > 0 && !/^\(\d+\.\d+s\)$/.test(trimmed);
+        if (trimmed.length === 0) return false;
+        // Strip ANSI escape codes for matching
+        const clean = trimmed.replace(/\x1b\[[0-9;]*m/g, '');
+        // Filter progress timestamps: (0.3s), (1.2s)csproj, etc.
+        if (/^\(?\d+\.\d+s\)/.test(clean)) return false;
+        // Filter bare fragments that are just part of progress output
+        if (/^(csproj|sln|props|targets)$/i.test(clean)) return false;
+        return true;
       });
       if (meaningful.length === 0) return '';
       const lines = meaningful.map(l => `  ${l}`).join('\r\n');

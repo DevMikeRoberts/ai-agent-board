@@ -450,8 +450,10 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onMergeLo
         files.set(file, { type: files.has(file) ? 'modified' : 'created', content: event.content, diff: event.metadata?.diff });
       } else if (event.type === 'file_edit') {
         files.set(file, { type: 'modified', content: event.content, diff: event.metadata?.diff });
+      } else if (event.type === 'command' && event.metadata?.fileEventType === 'file_write') {
+        // bash commands that write files (cat > file, etc.)
+        files.set(file, { type: files.has(file) ? 'modified' : 'created', content: event.content });
       } else if (event.type === 'command_output' && event.metadata?.fileEventType) {
-        // command_output following a file_write/file_edit — carries the result content
         const isWrite = event.metadata.fileEventType === 'file_write' || event.metadata.fileEventType === 'file_edit';
         if (isWrite) {
           files.set(file, { type: files.has(file) ? 'modified' : 'created', content: event.content, diff: event.metadata?.diff });
