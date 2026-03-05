@@ -116,7 +116,7 @@ export function WorktreeDialog({ open, task, onClose, onSubmit }: WorktreeDialog
               {/* Repo path */}
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                  Local Repository Path
+                  Local Path
                 </label>
                 <input
                   type="text"

@@ -361,7 +361,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit }: 
               {/* Repository configuration */}
               <div className="space-y-3 rounded-lg border border-border/50 bg-muted/30 p-3">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">Repository Path</label>
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground">Local Path</label>
                     <input
                       type="text"
                       value={repoPath}

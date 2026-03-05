@@ -248,9 +248,9 @@ export function TaskGroupDialog({ open, onClose, onSubmit, editGroup, onEditSubm
                   )}
                 </div>
 
-                {/* Repository path */}
+                {/* Local path */}
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-zinc-300">Repository</label>
+                  <label className="mb-1 block text-sm font-medium text-zinc-300">Local Path</label>
                   <input
                     type="text"
                     value={repoPath}
