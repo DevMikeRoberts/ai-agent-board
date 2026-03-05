@@ -69,6 +69,7 @@ export interface AgentEvent {
   timestamp: number;
   metadata?: {
     file?: string;
+    fileEventType?: string;
     language?: string;
     command?: string;
     diff?: string;

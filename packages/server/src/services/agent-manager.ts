@@ -463,19 +463,54 @@ make precise edits, and verify your changes compile/pass tests when applicable.
 </context>
 `;
 
+        // Track file context across tool_execution_start → command_output pairs
+        let lastFileEventFile: string | null = null;
+        let lastFileEventType: string | null = null;
+
         const session = await provider.createSession({
           contextId: task.id,
           workingDirectory,
           repoPath: task.repoPath,
           systemPrompt,
-          onEvent: (coreEvent: CoreAgentEvent) => this.emitEvent(task.id, {
-            id: coreEvent.id,
-            taskId: task.id,
-            type: coreEvent.type,
-            content: coreEvent.content,
-            timestamp: coreEvent.timestamp,
-            metadata: coreEvent.metadata,
-          }),
+          onEvent: (coreEvent: CoreAgentEvent) => {
+            const metadata: Record<string, unknown> = { ...coreEvent.metadata };
+
+            // Enrich file events with metadata.file extracted from tool arguments
+            if ((coreEvent.type === 'file_write' || coreEvent.type === 'file_edit' || coreEvent.type === 'file_read') && !metadata.file) {
+              const colonIdx = coreEvent.content.indexOf(':');
+              if (colonIdx > 0) {
+                try {
+                  const args = JSON.parse(coreEvent.content.slice(colonIdx + 1).trim());
+                  const filePath = args.path || args.file_path || args.file || args.filename;
+                  if (filePath) {
+                    metadata.file = filePath;
+                    lastFileEventFile = filePath;
+                    lastFileEventType = coreEvent.type;
+                  }
+                } catch { /* not JSON args, skip */ }
+              }
+            }
+
+            // Carry file metadata from preceding file_write/file_edit to its command_output
+            if (coreEvent.type === 'command_output' && lastFileEventFile && lastFileEventType) {
+              metadata.file = lastFileEventFile;
+              metadata.fileEventType = lastFileEventType;
+              lastFileEventFile = null;
+              lastFileEventType = null;
+            } else if (coreEvent.type !== 'file_write' && coreEvent.type !== 'file_edit' && coreEvent.type !== 'file_read') {
+              lastFileEventFile = null;
+              lastFileEventType = null;
+            }
+
+            this.emitEvent(task.id, {
+              id: coreEvent.id,
+              taskId: task.id,
+              type: coreEvent.type,
+              content: coreEvent.content,
+              timestamp: coreEvent.timestamp,
+              metadata,
+            });
+          },
         });
 
         this.sessions.set(task.id, { session, startTime: sessionStartTime, agentType });
