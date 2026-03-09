@@ -32,6 +32,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Fix rollup native module (npm/cli#4828)
+        run: npm ls @rollup/rollup-linux-x64-gnu 2>/dev/null || npm i @rollup/rollup-linux-x64-gnu --no-save
+        working-directory: packages/client
+
       - name: Build shared types
         run: npx tsc -b shared/tsconfig.json
 
