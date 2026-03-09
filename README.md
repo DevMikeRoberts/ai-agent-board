@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="images/logo.png" alt="AI Agent Board logo" width="120">
+  <img src="images/logo.png" alt="AI Agent Board logo" width="400">
 </p>
 
 <p align="center">
