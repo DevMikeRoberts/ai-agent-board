@@ -140,8 +140,10 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 
-# Database
+# Database and uploads
 data/
+*.db
+uploads/
 packages/e2e/test-results/
 packages/e2e/playwright-report/
 agent-sdk-core/

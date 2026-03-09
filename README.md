@@ -95,14 +95,17 @@ git clone https://github.com/DanWahlin/ai-agent-board.git
 cd ai-agent-board
 npm install
 
-# Terminal 1 — API server (port 3001)
-npm run dev:server
+# Start both server and client together
+npm run dev
 
-# Terminal 2 — Vite dev server (port 4175)
+# Or run them separately:
+# Terminal 1 — API server (port 8080)
+npm run dev:server
+# Terminal 2 — Vite dev server (port 8081)
 npm run dev:client
 ```
 
-Open [http://localhost:4175](http://localhost:4175).
+Open [http://localhost:8081](http://localhost:8081).
 
 ### Database Options
 
@@ -130,7 +133,7 @@ npm run build:client
 |----------|---------|-------------|
 | `API_KEY` | _(unset)_ | Bearer token for API + WebSocket auth; unset = open access |
 | `VITE_API_KEY` | _(unset)_ | Client-side API key (must match `API_KEY`) |
-| `PORT` | `3001` | Server port |
+| `PORT` | `8080` | Server port |
 | `DATABASE_URL` | _(unset)_ | PostgreSQL connection string; when unset, uses SQLite |
 | `DB_PATH` | `./data/agentboard.db` | SQLite database file path |
 | `COPILOT_MODEL` | `claude-opus-4-20250514` | Model for Copilot SDK sessions |
@@ -138,9 +141,9 @@ npm run build:client
 | `CODEX_MODEL` | `gpt-5.2-codex` | Model for OpenAI Codex sessions |
 | `COPILOT_DENIED_TOOLS` | _(unset)_ | Comma-separated tool names to deny in Copilot sessions |
 | `ALLOWED_REPO_ROOTS` | `$HOME,/tmp` | Allowed repo root paths (comma-separated) |
-| `ALLOWED_ORIGINS` | `http://localhost:4175,http://localhost:4176` | CORS origins |
+| `ALLOWED_ORIGINS` | `http://localhost:8081,http://localhost:4175,http://localhost:4176` | CORS origins |
 | `AGENT_TIMEOUT_MS` | `600000` | Max agent execution time (ms) |
-| `API_URL` | `http://localhost:3001` | Vite proxy target |
+| `API_URL` | `http://localhost:8080` | Vite proxy target |
 | `PROJECTS_DIR` | `~/projects` | Host projects path |
 
 ## Project Structure
