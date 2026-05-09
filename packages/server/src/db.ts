@@ -9,6 +9,24 @@ const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), 'data', 'agentbo
 const DATA_DIR = path.dirname(DB_PATH);
 
 function migrate(db: Database.Database): void {
+  const now = Date.now();
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS projects (
+      id          TEXT PRIMARY KEY,
+      name        TEXT NOT NULL,
+      repo_path   TEXT,
+      is_default  INTEGER NOT NULL DEFAULT 0,
+      created_at  INTEGER NOT NULL,
+      updated_at  INTEGER NOT NULL
+    )
+  `);
+
+  db.prepare(`
+    INSERT OR IGNORE INTO projects (id, name, repo_path, is_default, created_at, updated_at)
+    VALUES ('default', 'Default', NULL, 1, ?, ?)
+  `).run(now, now);
+  db.exec(`UPDATE projects SET is_default = CASE WHEN id = 'default' THEN 1 ELSE 0 END`);
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS tasks (
@@ -91,6 +109,9 @@ function migrate(db: Database.Database): void {
   if (!colNames.has('archived')) {
     db.exec(`ALTER TABLE tasks ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`);
   }
+  if (!colNames.has('project_id')) {
+    db.exec(`ALTER TABLE tasks ADD COLUMN project_id TEXT NOT NULL DEFAULT 'default'`);
+  }
   if (!colNames.has('group_id')) {
     db.exec(`ALTER TABLE tasks ADD COLUMN group_id TEXT REFERENCES task_groups(id) ON DELETE CASCADE`);
   }
@@ -102,6 +123,7 @@ function migrate(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS task_groups (
       id              TEXT PRIMARY KEY,
+      project_id      TEXT NOT NULL DEFAULT 'default',
       title           TEXT NOT NULL,
       description     TEXT NOT NULL DEFAULT '',
       priority        TEXT NOT NULL DEFAULT 'medium',
@@ -115,7 +137,18 @@ function migrate(db: Database.Database): void {
       archived        INTEGER NOT NULL DEFAULT 0
     )
   `);
+  const groupCols = db.pragma('table_info(task_groups)') as { name: string }[];
+  const groupColNames = new Set(groupCols.map((c) => c.name));
+  if (!groupColNames.has('project_id')) {
+    db.exec(`ALTER TABLE task_groups ADD COLUMN project_id TEXT NOT NULL DEFAULT 'default'`);
+  }
+  ensureSqliteProjectForeignKeys(db);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_column_id ON tasks(column_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_agent_status ON tasks(agent_status)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_column_created ON tasks(column_id, created_at)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_group_id ON tasks(group_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_project_column ON tasks(project_id, archived, group_id, column_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_task_groups_project_column ON task_groups(project_id, archived, column_id)`);
 
   // Templates table
   db.exec(`
@@ -149,6 +182,125 @@ function migrate(db: Database.Database): void {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_task_attachments_task_id ON task_attachments(task_id)`);
 }
 
+function hasSqliteForeignKey(
+  db: Database.Database,
+  table: string,
+  fromColumn: string,
+  referencedTable: string,
+): boolean {
+  const fkList = db.pragma(`foreign_key_list(${table})`) as Array<{ from: string; table: string }>;
+  return fkList.some((fk) => fk.from === fromColumn && fk.table === referencedTable);
+}
+
+function ensureSqliteProjectForeignKeys(db: Database.Database): void {
+  db.exec(`
+    UPDATE tasks
+    SET project_id = 'default'
+    WHERE project_id IS NULL
+       OR NOT EXISTS (SELECT 1 FROM projects WHERE projects.id = tasks.project_id);
+
+    UPDATE task_groups
+    SET project_id = 'default'
+    WHERE project_id IS NULL
+       OR NOT EXISTS (SELECT 1 FROM projects WHERE projects.id = task_groups.project_id);
+
+    UPDATE tasks
+    SET group_id = NULL, group_order = NULL
+    WHERE group_id IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM task_groups WHERE task_groups.id = tasks.group_id);
+  `);
+
+  const hasTaskProjectFk = hasSqliteForeignKey(db, 'tasks', 'project_id', 'projects');
+  const hasTaskGroupFk = hasSqliteForeignKey(db, 'tasks', 'group_id', 'task_groups');
+  const hasGroupProjectFk = hasSqliteForeignKey(db, 'task_groups', 'project_id', 'projects');
+  if (hasTaskProjectFk && hasTaskGroupFk && hasGroupProjectFk) return;
+
+  db.pragma('foreign_keys = OFF');
+  try {
+    db.exec(`
+      BEGIN;
+
+      CREATE TABLE task_groups_new (
+        id              TEXT PRIMARY KEY,
+        project_id      TEXT NOT NULL DEFAULT 'default',
+        title           TEXT NOT NULL,
+        description     TEXT NOT NULL DEFAULT '',
+        priority        TEXT NOT NULL DEFAULT 'medium',
+        column_id       TEXT NOT NULL DEFAULT 'backlog',
+        repo_path       TEXT,
+        base_branch     TEXT,
+        max_concurrency INTEGER NOT NULL DEFAULT 2,
+        created_at      INTEGER NOT NULL,
+        started_at      INTEGER,
+        completed_at    INTEGER,
+        archived        INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (project_id) REFERENCES projects(id)
+      );
+
+      INSERT INTO task_groups_new (
+        id, project_id, title, description, priority, column_id, repo_path, base_branch,
+        max_concurrency, created_at, started_at, completed_at, archived
+      )
+      SELECT
+        id, project_id, title, description, priority, column_id, repo_path, base_branch,
+        max_concurrency, created_at, started_at, completed_at, archived
+      FROM task_groups;
+
+      CREATE TABLE tasks_new (
+        id            TEXT PRIMARY KEY,
+        title         TEXT NOT NULL,
+        description   TEXT NOT NULL DEFAULT '',
+        priority      TEXT NOT NULL DEFAULT 'medium',
+        column_id     TEXT NOT NULL DEFAULT 'backlog',
+        agent_status  TEXT NOT NULL DEFAULT 'idle',
+        created_at    INTEGER NOT NULL,
+        started_at    INTEGER,
+        completed_at  INTEGER,
+        repo_path     TEXT,
+        branch_name   TEXT,
+        base_branch   TEXT,
+        use_worktree  INTEGER,
+        worktree_path TEXT,
+        agent_type    TEXT NOT NULL DEFAULT 'copilot',
+        archived      INTEGER NOT NULL DEFAULT 0,
+        project_id    TEXT NOT NULL DEFAULT 'default',
+        group_id      TEXT,
+        group_order   INTEGER,
+        FOREIGN KEY (project_id) REFERENCES projects(id),
+        FOREIGN KEY (group_id) REFERENCES task_groups(id) ON DELETE CASCADE
+      );
+
+      INSERT INTO tasks_new (
+        id, title, description, priority, column_id, agent_status, created_at,
+        started_at, completed_at, repo_path, branch_name, base_branch, use_worktree,
+        worktree_path, agent_type, archived, project_id, group_id, group_order
+      )
+      SELECT
+        id, title, description, priority, column_id, agent_status, created_at,
+        started_at, completed_at, repo_path, branch_name, base_branch, use_worktree,
+        worktree_path, agent_type, archived, project_id, group_id, group_order
+      FROM tasks;
+
+      DROP TABLE tasks;
+      DROP TABLE task_groups;
+      ALTER TABLE task_groups_new RENAME TO task_groups;
+      ALTER TABLE tasks_new RENAME TO tasks;
+
+      COMMIT;
+    `);
+  } catch (err) {
+    try { db.exec('ROLLBACK'); } catch { /* ignore rollback failure */ }
+    throw err;
+  } finally {
+    db.pragma('foreign_keys = ON');
+  }
+
+  const violations = db.pragma('foreign_key_check') as unknown[];
+  if (violations.length > 0) {
+    throw new Error('SQLite foreign key migration failed integrity check');
+  }
+}
+
 export function initDatabase(): Database.Database {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const db = new Database(DB_PATH);
@@ -163,6 +315,25 @@ export function initDatabase(): Database.Database {
 // ─── PostgreSQL ──────────────────────────────────────────────────────────────
 
 export async function initPostgresDatabase(pool: Pool): Promise<void> {
+  const now = Date.now();
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS projects (
+      id          TEXT PRIMARY KEY,
+      name        TEXT NOT NULL,
+      repo_path   TEXT,
+      is_default  BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at  BIGINT NOT NULL,
+      updated_at  BIGINT NOT NULL
+    )
+  `);
+  await pool.query(
+    `INSERT INTO projects (id, name, repo_path, is_default, created_at, updated_at)
+     VALUES ('default', 'Default', NULL, TRUE, $1, $2)
+     ON CONFLICT (id) DO NOTHING`,
+    [now, now],
+  );
+  await pool.query(`UPDATE projects SET is_default = (id = 'default')`);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS tasks (
       id            TEXT PRIMARY KEY,
@@ -180,7 +351,8 @@ export async function initPostgresDatabase(pool: Pool): Promise<void> {
       use_worktree  BOOLEAN,
       worktree_path TEXT,
       agent_type    TEXT NOT NULL DEFAULT 'copilot',
-      archived      BOOLEAN NOT NULL DEFAULT FALSE
+      archived      BOOLEAN NOT NULL DEFAULT FALSE,
+      project_id    TEXT NOT NULL DEFAULT 'default'
     )
   `);
 
@@ -201,6 +373,7 @@ export async function initPostgresDatabase(pool: Pool): Promise<void> {
   await addCol('worktree_path', 'TEXT');
   await addCol('agent_type', "TEXT NOT NULL DEFAULT 'copilot'");
   await addCol('archived', 'BOOLEAN NOT NULL DEFAULT FALSE');
+  await addCol('project_id', "TEXT NOT NULL DEFAULT 'default'");
   await addCol('group_id', 'TEXT');
   await addCol('group_order', 'INTEGER');
 
@@ -208,6 +381,7 @@ export async function initPostgresDatabase(pool: Pool): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS task_groups (
       id              TEXT PRIMARY KEY,
+      project_id      TEXT NOT NULL DEFAULT 'default',
       title           TEXT NOT NULL,
       description     TEXT NOT NULL DEFAULT '',
       priority        TEXT NOT NULL DEFAULT 'medium',
@@ -221,7 +395,28 @@ export async function initPostgresDatabase(pool: Pool): Promise<void> {
       archived        BOOLEAN NOT NULL DEFAULT FALSE
     )
   `);
+  const { rows: groupColRows } = await pool.query(`
+    SELECT column_name FROM information_schema.columns WHERE table_name = 'task_groups'
+  `);
+  const groupColNames = new Set(groupColRows.map((r: { column_name: string }) => r.column_name));
+  if (!groupColNames.has('project_id')) {
+    await pool.query(`ALTER TABLE task_groups ADD COLUMN project_id TEXT NOT NULL DEFAULT 'default'`);
+  }
+  await pool.query(`
+    UPDATE tasks
+    SET project_id = 'default'
+    WHERE project_id IS NULL
+       OR NOT EXISTS (SELECT 1 FROM projects WHERE projects.id = tasks.project_id)
+  `);
+  await pool.query(`
+    UPDATE task_groups
+    SET project_id = 'default'
+    WHERE project_id IS NULL
+       OR NOT EXISTS (SELECT 1 FROM projects WHERE projects.id = task_groups.project_id)
+  `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_group_id ON tasks(group_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_project_column ON tasks(project_id, archived, group_id, column_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_task_groups_project_column ON task_groups(project_id, archived, column_id)`);
 
   // Add FK for group_id if not present
   const { rows: gfkRows } = await pool.query(`
@@ -234,6 +429,30 @@ export async function initPostgresDatabase(pool: Pool): Promise<void> {
       ALTER TABLE tasks ADD CONSTRAINT tasks_group_id_fkey
         FOREIGN KEY (group_id) REFERENCES task_groups(id) ON DELETE CASCADE
     `).catch(() => { /* constraint may already exist */ });
+  }
+
+  const { rows: pfkRows } = await pool.query(`
+    SELECT constraint_name FROM information_schema.table_constraints
+    WHERE table_name = 'tasks' AND constraint_type = 'FOREIGN KEY'
+      AND constraint_name = 'tasks_project_id_fkey'
+  `);
+  if (pfkRows.length === 0) {
+    await pool.query(`
+      ALTER TABLE tasks ADD CONSTRAINT tasks_project_id_fkey
+        FOREIGN KEY (project_id) REFERENCES projects(id)
+    `).catch(() => { /* constraint may already exist or be blocked by existing data */ });
+  }
+
+  const { rows: gpfkRows } = await pool.query(`
+    SELECT constraint_name FROM information_schema.table_constraints
+    WHERE table_name = 'task_groups' AND constraint_type = 'FOREIGN KEY'
+      AND constraint_name = 'task_groups_project_id_fkey'
+  `);
+  if (gpfkRows.length === 0) {
+    await pool.query(`
+      ALTER TABLE task_groups ADD CONSTRAINT task_groups_project_id_fkey
+        FOREIGN KEY (project_id) REFERENCES projects(id)
+    `).catch(() => { /* constraint may already exist or be blocked by existing data */ });
   }
 
   await pool.query(`

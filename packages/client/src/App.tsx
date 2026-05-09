@@ -1,9 +1,10 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
-import type { Task, AgentType, Priority, ColumnId } from '@/types';
+import type { Task, AgentType, Priority, ColumnId, Project } from '@/types';
 import { useTheme } from '@/hooks/useTheme';
 import { useTasks } from '@/hooks/useTasks';
+import { useProjects } from '@/hooks/useProjects';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useTaskGroups } from '@/hooks/useTaskGroups';
@@ -20,13 +21,37 @@ import { GroupPanel } from '@/components/GroupPanel';
 import { AgentPanel } from '@/components/AgentPanel';
 import type { TaskGroupWithChildren } from '@/lib/api';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import { ProjectsPage } from '@/components/ProjectsPage';
 
 const STATUS_WEIGHT: Record<string, number> = { executing: 0, planning: 1, failed: 2, idle: 3, complete: 4 };
 
-export function App() {
-  const { theme, toggleTheme } = useTheme();
-  const { tasks, error, clearError, showArchived, setShowArchived, addTask, updateTask, moveTask, runTask, stopTask, deleteTask, archiveTask, unarchiveTask, configureAndRunTask, createPR, mergeLocal, cleanupWorktree } = useTasks();
-  const { groups, createGroup, runGroup, stopGroup, deleteGroup, updateGroup, refreshGroup } = useTaskGroups();
+type TaskSubmitData = {
+  title: string;
+  description: string;
+  priority: Priority;
+  columnId: ColumnId;
+  agentType: AgentType;
+  autoRun?: boolean;
+  repoPath?: string;
+  branchName?: string;
+  baseBranch?: string;
+  useWorktree?: boolean;
+};
+
+function BoardPage({
+  project,
+  theme,
+  toggleTheme,
+  onBackToProjects,
+}: {
+  project: Project;
+  theme: 'dark' | 'light';
+  toggleTheme: () => void;
+  onBackToProjects: () => void;
+}) {
+  const lockedRepoPath = project.repoPath;
+  const { tasks, error, clearError, showArchived, setShowArchived, addTask, updateTask, moveTask, runTask, stopTask, deleteTask, archiveTask, unarchiveTask, configureAndRunTask, createPR, mergeLocal, cleanupWorktree } = useTasks(project.id);
+  const { groups, createGroup, runGroup, stopGroup, deleteGroup, updateGroup, refreshGroup } = useTaskGroups(project.id);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState<TaskGroupWithChildren | null>(null);
@@ -217,6 +242,22 @@ export function App() {
     setDialogOpen(true);
   }, []);
 
+  const handleCreateTask = useCallback((task: TaskSubmitData) => {
+    return addTask({
+      ...task,
+      projectId: project.id,
+      repoPath: lockedRepoPath || task.repoPath,
+    });
+  }, [addTask, project.id, lockedRepoPath]);
+
+  const handleCreateGroup = useCallback((group: Parameters<typeof createGroup>[0]) => {
+    return createGroup({
+      ...group,
+      projectId: project.id,
+      repoPath: lockedRepoPath || group.repoPath,
+    });
+  }, [createGroup, project.id, lockedRepoPath]);
+
   const handleDeleteTask = useCallback((task: Task) => {
     setDeletingTask(task);
   }, []);
@@ -324,6 +365,8 @@ export function App() {
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <Header
+        title={project.name === 'Default' ? 'AI Agent Board' : project.name}
+        onBackToProjects={onBackToProjects}
         theme={theme}
         toggleTheme={toggleTheme}
         searchQuery={searchQuery}
@@ -369,18 +412,20 @@ export function App() {
       <TaskDialog
         open={dialogOpen}
         onClose={handleCloseDialog}
-        onSubmit={addTask}
+        onSubmit={handleCreateTask}
         editTask={editingTask}
         onEditSubmit={updateTask}
         highlightRequired={highlightRequiredFields}
+        lockedRepoPath={lockedRepoPath}
       />
 
       <TaskGroupDialog
         open={groupDialogOpen}
         onClose={() => { setGroupDialogOpen(false); setEditingGroup(null); }}
-        onSubmit={createGroup}
+        onSubmit={handleCreateGroup}
         editGroup={editingGroup}
         onEditSubmit={handleEditGroupSubmit}
+        lockedRepoPath={lockedRepoPath}
       />
 
       <AgentPanel task={selectedTask} onClose={handleClosePanel} onRun={handleRunWithConfig} onStop={stopTask} onCreatePR={createPR} onMergeLocal={mergeLocal} onCleanupWorktree={cleanupWorktree} onReconfigureRetry={handleReconfigureRetry} theme={theme} />
@@ -418,5 +463,81 @@ export function App() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+type RouteState =
+  | { view: 'projects' }
+  | { view: 'board'; projectId?: string };
+
+function readRoute(): RouteState {
+  const path = window.location.pathname.replace(/\/+$/, '') || '/';
+  if (path === '/projects') return { view: 'projects' };
+  const match = path.match(/^\/projects\/([^/]+)$/);
+  if (match) return { view: 'board', projectId: decodeURIComponent(match[1]) };
+  return { view: 'board' };
+}
+
+export function App() {
+  const { theme, toggleTheme } = useTheme();
+  const { projects, loading, error, clearError, createProject } = useProjects();
+  const [route, setRoute] = useState<RouteState>(() => readRoute());
+
+  useEffect(() => {
+    const onPopState = () => setRoute(readRoute());
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  const navigate = useCallback((path: string) => {
+    window.history.pushState(null, '', path);
+    setRoute(readRoute());
+  }, []);
+
+  const openProject = useCallback((project: Project) => {
+    navigate(project.isDefault ? '/' : `/projects/${encodeURIComponent(project.id)}`);
+  }, [navigate]);
+
+  const defaultProject = useMemo(
+    () => projects.find((project) => project.isDefault) ?? projects.find((project) => project.id === 'default') ?? projects[0],
+    [projects],
+  );
+
+  const selectedProject = useMemo(() => {
+    if (route.view !== 'board') return undefined;
+    if (route.projectId) return projects.find((project) => project.id === route.projectId);
+    return defaultProject;
+  }, [defaultProject, projects, route]);
+
+  if (route.view === 'projects' || (!loading && !selectedProject)) {
+    return (
+      <ProjectsPage
+        projects={projects}
+        loading={loading}
+        error={error}
+        onClearError={clearError}
+        onCreateProject={createProject}
+        onOpenProject={openProject}
+        theme={theme}
+        toggleTheme={toggleTheme}
+      />
+    );
+  }
+
+  if (loading || !selectedProject) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background text-sm text-muted-foreground">
+        Loading project…
+      </div>
+    );
+  }
+
+  return (
+    <BoardPage
+      project={selectedProject}
+      theme={theme}
+      toggleTheme={toggleTheme}
+      onBackToProjects={() => navigate('/projects')}
+    />
   );
 }

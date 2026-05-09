@@ -13,3 +13,4 @@
 - Production must not silently fall back to SQLite; `packages/server/.env` drives production PostgreSQL.
 - Repository interfaces should stay aligned across SQLite and PostgreSQL implementations.
 - 2026-05-08T06:01:23.732-07:00: Local Windows experimentation needs explicit `ALLOWED_REPO_ROOTS` entries such as `D:\git`; preserve the allowlist and compare Windows paths case-insensitively.
+- 2026-05-08T16:37:11.274-07:00: Projects are now a backend scope boundary; repo-backed Projects force task and group repo paths server-side, while no-repo Projects preserve manual Local Path behavior.

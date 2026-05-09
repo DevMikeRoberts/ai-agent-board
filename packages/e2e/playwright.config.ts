@@ -23,13 +23,13 @@ export default defineConfig({
       command: 'node ../../scripts/e2e-server.cjs',
       port: TEST_SERVER_PORT,
       reuseExistingServer: false,
-      timeout: 15_000,
+      timeout: 30_000,
     },
     {
       command: 'node ../../scripts/e2e-client.cjs',
       port: TEST_CLIENT_PORT,
       reuseExistingServer: false,
-      timeout: 15_000,
+      timeout: 30_000,
     },
   ],
 });

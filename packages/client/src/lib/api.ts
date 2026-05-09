@@ -1,4 +1,17 @@
-import type { Task, TaskGroup, TaskAttachment, AgentEvent, AgentInfo, AgentType, ColumnId, Priority, WSMessage } from '@/types';
+import type {
+  Task,
+  TaskGroup,
+  TaskAttachment,
+  AgentEvent,
+  AgentInfo,
+  AgentType,
+  ColumnId,
+  Priority,
+  WSMessage,
+  Project,
+  CreateProjectRequest,
+  UpdateProjectRequest,
+} from '@/types';
 
 export interface TaskGroupWithChildren extends TaskGroup {
   children: Task[];
@@ -9,6 +22,15 @@ export interface CreateGroupChild {
   description?: string;
   agentType?: AgentType;
   useWorktree?: boolean;
+}
+
+function withQuery(path: string, params: Record<string, string | boolean | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== false) search.set(key, String(value));
+  }
+  const qs = search.toString();
+  return qs ? `${path}?${qs}` : path;
 }
 
 const BASE = '/api';
@@ -38,10 +60,27 @@ async function request<T>(url: string, opts?: RequestInit): Promise<T> {
 // --- Task CRUD ---
 
 export const api = {
-  getTasks: (includeArchived = false) =>
-    request<Task[]>(`/tasks${includeArchived ? '?includeArchived=true' : ''}`),
+  // --- Projects ---
+  getProjects: () =>
+    request<Project[]>('/projects'),
 
-  createTask: (data: { title: string; description?: string; priority?: Priority; columnId?: ColumnId; agentType?: AgentType; repoPath?: string; branchName?: string; baseBranch?: string; useWorktree?: boolean; autoRun?: boolean }) =>
+  getProject: (id: string) =>
+    request<Project>(`/projects/${encodeURIComponent(id)}`),
+
+  getDefaultProject: () =>
+    request<Project>('/projects/default'),
+
+  createProject: (data: CreateProjectRequest) =>
+    request<Project>('/projects', { method: 'POST', body: JSON.stringify(data) }),
+
+  updateProject: (id: string, data: UpdateProjectRequest) =>
+    request<Project>(`/projects/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  // --- Task CRUD ---
+  getTasks: (includeArchived = false, projectId?: string) =>
+    request<Task[]>(withQuery('/tasks', { includeArchived, projectId })),
+
+  createTask: (data: { title: string; description?: string; priority?: Priority; columnId?: ColumnId; agentType?: AgentType; repoPath?: string; branchName?: string; baseBranch?: string; useWorktree?: boolean; autoRun?: boolean; projectId?: string }) =>
     request<Task>('/tasks', { method: 'POST', body: JSON.stringify(data) }),
 
   updateTask: (id: string, data: Partial<Task>) =>
@@ -108,8 +147,8 @@ export const api = {
     request<Task>(`/tasks/${id}/unarchive`, { method: 'PATCH' }),
 
   // --- Groups ---
-  getGroups: (includeArchived = false) =>
-    request<TaskGroupWithChildren[]>(`/groups${includeArchived ? '?archived=true' : ''}`),
+  getGroups: (includeArchived = false, projectId?: string) =>
+    request<TaskGroupWithChildren[]>(withQuery('/groups', { archived: includeArchived, projectId })),
 
   getGroup: (id: string) =>
     request<TaskGroupWithChildren>(`/groups/${id}`),
@@ -123,6 +162,7 @@ export const api = {
     maxConcurrency: number;
     children: CreateGroupChild[];
     autoRun?: boolean;
+    projectId?: string;
   }) => request<TaskGroupWithChildren>('/groups', { method: 'POST', body: JSON.stringify(data) }),
 
   updateGroup: (id: string, data: Partial<TaskGroup>) =>

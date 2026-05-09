@@ -4,14 +4,20 @@ import type { Task } from '../types.js';
 import { isValidAgentType, VALID_AGENT_TYPES } from '@ai-agent-board/shared/constants.js';
 import type { TaskRepository } from '../repositories/types.js';
 import type { TaskGroupRepository } from '../repositories/group-types.js';
+import type { ProjectRepository } from '../repositories/project-types.js';
 import { broadcast } from '../websocket.js';
 import type { AgentManager } from '../services/agent-manager.js';
 import {
-  asyncHandler, paramId, isAllowedRepoPath, expandTilde, isValidGitRef,
+  asyncHandler, paramId, isAllowedRepoPath, expandTilde, isValidGitRef, normalizeRepoPathForCompare,
   broadcastTaskUpdate, broadcastGroupUpdate, makeStatusCallback, makeWorktreeCallback, isRateLimited,
 } from './helpers.js';
 
-export function createAgentRouter(repo: TaskRepository, agentManager: AgentManager, groupRepo?: TaskGroupRepository): Router {
+export function createAgentRouter(
+  repo: TaskRepository,
+  agentManager: AgentManager,
+  groupRepo?: TaskGroupRepository,
+  projectRepo?: ProjectRepository,
+): Router {
   const router = Router();
 
   // POST /api/tasks/:id/configure — store worktree config before running
@@ -24,6 +30,15 @@ export function createAgentRouter(repo: TaskRepository, agentManager: AgentManag
     }
 
     const { repoPath, branchName, baseBranch, useWorktree, agentType } = req.body;
+    const project = projectRepo ? await projectRepo.getById(task.projectId ?? 'default') : undefined;
+    if (req.body.projectId !== undefined && req.body.projectId !== (task.projectId ?? 'default')) {
+      res.status(400).json({ error: 'projectId is immutable' });
+      return;
+    }
+    if (projectRepo && !project) {
+      res.status(400).json({ error: 'task project not found' });
+      return;
+    }
 
     if (repoPath !== undefined && typeof repoPath !== 'string') {
       res.status(400).json({ error: 'repoPath must be a string' });
@@ -54,6 +69,10 @@ export function createAgentRouter(repo: TaskRepository, agentManager: AgentManag
       return;
     }
     if (typeof repoPath === 'string') {
+      if (project?.repoPath && normalizeRepoPathForCompare(repoPath) !== normalizeRepoPathForCompare(project.repoPath)) {
+        res.status(400).json({ error: 'repoPath is locked by the task project' });
+        return;
+      }
       const expandedRepoPath = expandTilde(repoPath);
       if (!path.isAbsolute(expandedRepoPath)) {
         res.status(400).json({ error: 'repoPath must be an absolute path (e.g. ~/projects/my-app or C:\\Users\\you\\projects\\my-app)' });
@@ -67,7 +86,7 @@ export function createAgentRouter(repo: TaskRepository, agentManager: AgentManag
     }
 
     const updates: Partial<Task> = {};
-    if (repoPath !== undefined) updates.repoPath = typeof repoPath === 'string' ? expandTilde(repoPath) : repoPath;
+    if (repoPath !== undefined && !project?.repoPath) updates.repoPath = typeof repoPath === 'string' ? expandTilde(repoPath) : repoPath;
     if (branchName !== undefined) updates.branchName = branchName || undefined;
     if (baseBranch !== undefined) updates.baseBranch = baseBranch;
     if (useWorktree !== undefined) updates.useWorktree = useWorktree;

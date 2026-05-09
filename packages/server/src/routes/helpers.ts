@@ -4,7 +4,7 @@ import { execFileSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import type { Task, TaskGroup } from '../types.js';
+import type { Project, Task, TaskGroup } from '../types.js';
 import { isValidPriority, isValidColumnId, isValidAgentType, MAX_TITLE_LENGTH, MAX_DESCRIPTION_LENGTH } from '@ai-agent-board/shared/constants.js';
 import { errorMessage } from '../utils.js';
 import type { TaskRepository } from '../repositories/types.js';
@@ -183,6 +183,10 @@ export function expandTilde(p: string): string {
   return path.join(os.homedir(), rest);
 }
 
+export function normalizeRepoPathForCompare(repoPath: string): string {
+  return normalizeForBoundaryCheck(realOrResolve(expandTilde(repoPath)));
+}
+
 // ─── Broadcast helpers ──────────────────────────────────────────────
 
 export function broadcastTaskUpdate(task: Task): void {
@@ -191,6 +195,14 @@ export function broadcastTaskUpdate(task: Task): void {
 
 export function broadcastGroupUpdate(group: TaskGroup): void {
   broadcast({ type: 'group_updated', payload: group });
+}
+
+export function broadcastProjectUpdate(project: Project): void {
+  broadcast({ type: 'project_updated', payload: project });
+}
+
+export function broadcastProjectDelete(id: string): void {
+  broadcast({ type: 'project_deleted', payload: { id } });
 }
 
 export async function failTaskWithEvent(
@@ -312,9 +324,10 @@ export function validateTaskFields(body: Record<string, any>): string | null {
 // ─── Task builder ───────────────────────────────────────────────────
 
 export function buildTask(body: Record<string, any>): Task {
-  const { title, description, priority, columnId, agentType, repoPath, branchName, baseBranch, useWorktree } = body;
+  const { title, description, priority, columnId, agentType, repoPath, branchName, baseBranch, useWorktree, projectId } = body;
   return {
     id: uuid(),
+    projectId: typeof projectId === 'string' && projectId ? projectId : 'default',
     title,
     description: description || '',
     priority: priority || 'medium',

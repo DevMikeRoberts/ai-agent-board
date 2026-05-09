@@ -22,12 +22,14 @@ interface TaskDialogProps {
   onEditSubmit?: (id: string, updates: { title: string; description: string; priority: Priority; agentType: AgentType; repoPath?: string; branchName?: string; baseBranch?: string; useWorktree?: boolean }) => Promise<unknown>;
   /** When true, highlight missing required fields (e.g. opened from Play button) */
   highlightRequired?: boolean;
+  /** Project-level repo path that cannot be changed per task. */
+  lockedRepoPath?: string;
 }
 
 const agents = AGENT_OPTIONS;
 const priorities = PRIORITY_OPTIONS;
 
-export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, highlightRequired }: TaskDialogProps) {
+export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, highlightRequired, lockedRepoPath }: TaskDialogProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<Priority>('medium');
@@ -46,6 +48,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
   const [availableAgents, setAvailableAgents] = useState<AgentInfo[]>([]);
 
   const isEditMode = !!editTask;
+  const hasLockedRepoPath = !!lockedRepoPath;
 
   // Pre-populate fields when editing
   useEffect(() => {
@@ -54,7 +57,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
       setDescription(editTask.description);
       setPriority(editTask.priority || 'medium');
       setAgentType(editTask.agentType || 'copilot');
-      setRepoPath(editTask.repoPath || '');
+      setRepoPath(lockedRepoPath || editTask.repoPath || '');
       setBranchName(editTask.branchName || `task/${slugify(editTask.title)}`);
       setBaseBranch(editTask.baseBranch || 'main');
       setUseWorktree(editTask.useWorktree ?? false);
@@ -82,7 +85,14 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
       setPendingImages([]);
       setExistingAttachments([]);
     }
-  }, [editTask, open, highlightRequired]);
+  }, [editTask, open, highlightRequired, lockedRepoPath]);
+
+  useEffect(() => {
+    if (open && lockedRepoPath) {
+      setRepoPath(lockedRepoPath);
+      setPathError('');
+    }
+  }, [open, lockedRepoPath]);
 
   useEffect(() => {
     if (!open) return;
@@ -113,7 +123,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
     if (!title.trim() || submitting) return;
 
     // Client-side path validation — required
-    const trimmedPath = repoPath.trim();
+    const trimmedPath = (lockedRepoPath || repoPath).trim();
     if (!trimmedPath) {
       setPathError('Local path is required');
       return;
@@ -139,7 +149,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
     setSubmitting(true);
     try {
       if (isEditMode && onEditSubmit) {
-        addRepoPath(trimmedPath);
+        if (!hasLockedRepoPath) addRepoPath(trimmedPath);
         const result = await onEditSubmit(editTask!.id, {
           title: title.trim(),
           description: description.trim(),
@@ -149,7 +159,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
         });
         if (result === undefined) return; // Server error — keep dialog open
       } else {
-        addRepoPath(trimmedPath);
+        if (!hasLockedRepoPath) addRepoPath(trimmedPath);
         const result = await onSubmit({
           title: title.trim(),
           description: description.trim(),
@@ -426,22 +436,34 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
                       id="task-repo-path"
                       type="text"
                       value={repoPath}
-                      onChange={(e) => { setRepoPath(e.target.value); setPathError(''); }}
+                      onChange={(e) => {
+                        if (hasLockedRepoPath) return;
+                        setRepoPath(e.target.value);
+                        setPathError('');
+                      }}
                       placeholder={repoPathPlaceholder}
-                      list="task-recent-repo-paths"
+                      list={hasLockedRepoPath ? undefined : 'task-recent-repo-paths'}
+                      readOnly={hasLockedRepoPath}
+                      aria-readonly={hasLockedRepoPath}
                       className={`w-full rounded-lg border bg-background px-3 py-1.5 text-sm font-mono placeholder:text-muted-foreground/50 focus:outline-none ${
-                        pathError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-primary'
+                        hasLockedRepoPath
+                          ? 'border-border text-muted-foreground'
+                          : pathError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-primary'
                       }`}
                     />
                     {pathError && (
                       <p className="mt-1 text-xs text-red-500">{pathError}</p>
                     )}
                     {!pathError && (
-                      <p className="mt-1 text-xs text-muted-foreground/60">{repoPathHelpText}</p>
+                      <p className="mt-1 text-xs text-muted-foreground/60">
+                        {hasLockedRepoPath ? 'Locked to this Project local path.' : repoPathHelpText}
+                      </p>
                     )}
-                    <datalist id="task-recent-repo-paths">
-                      {getRecentRepoPaths().map((p) => <option key={p} value={p} />)}
-                    </datalist>
+                    {!hasLockedRepoPath && (
+                      <datalist id="task-recent-repo-paths">
+                        {getRecentRepoPaths().map((p) => <option key={p} value={p} />)}
+                      </datalist>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>

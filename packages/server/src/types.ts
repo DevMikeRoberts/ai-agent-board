@@ -8,6 +8,10 @@ export type {
   TaskGroup,
   TaskTemplate,
   TaskAttachment,
+  Project,
+  ProjectTaskCounts,
+  CreateProjectRequest,
+  UpdateProjectRequest,
   AgentEvent,
   WSMessage,
 } from '../../../shared/types.js';

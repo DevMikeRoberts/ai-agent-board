@@ -5,6 +5,7 @@ import type { TaskGroupRepository } from './group-types.js';
 
 interface GroupRow {
   id: string;
+  project_id: string;
   title: string;
   description: string;
   priority: string;
@@ -20,6 +21,7 @@ interface GroupRow {
 
 interface TaskRow {
   id: string;
+  project_id: string;
   title: string;
   description: string;
   priority: string;
@@ -42,6 +44,7 @@ interface TaskRow {
 function rowToGroup(row: GroupRow): TaskGroup {
   return {
     id: row.id,
+    projectId: row.project_id,
     title: row.title,
     description: row.description || undefined,
     priority: row.priority as Priority,
@@ -59,6 +62,7 @@ function rowToGroup(row: GroupRow): TaskGroup {
 function rowToTask(row: TaskRow): Task {
   return {
     id: row.id,
+    projectId: row.project_id,
     title: row.title,
     description: row.description,
     priority: row.priority as Priority,
@@ -86,11 +90,11 @@ export class PostgresTaskGroupRepository implements TaskGroupRepository {
     this.pool = pool;
   }
 
-  async getAll(includeArchived = false): Promise<TaskGroup[]> {
+  async getAll(includeArchived = false, projectId = 'default'): Promise<TaskGroup[]> {
     const query = includeArchived
-      ? 'SELECT * FROM task_groups ORDER BY created_at ASC'
-      : 'SELECT * FROM task_groups WHERE archived = FALSE ORDER BY created_at ASC';
-    const { rows } = await this.pool.query<GroupRow>(query);
+      ? 'SELECT * FROM task_groups WHERE project_id = $1 ORDER BY created_at ASC'
+      : 'SELECT * FROM task_groups WHERE project_id = $1 AND archived = FALSE ORDER BY created_at ASC';
+    const { rows } = await this.pool.query<GroupRow>(query, [projectId]);
     return rows.map(rowToGroup);
   }
 
@@ -108,10 +112,10 @@ export class PostgresTaskGroupRepository implements TaskGroupRepository {
       await client.query('BEGIN');
 
       await client.query(
-        `INSERT INTO task_groups (id, title, description, priority, column_id, repo_path, base_branch,
+        `INSERT INTO task_groups (id, project_id, title, description, priority, column_id, repo_path, base_branch,
           max_concurrency, created_at, started_at, completed_at, archived)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-        [group.id, group.title, group.description ?? '', group.priority, group.columnId,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+        [group.id, group.projectId, group.title, group.description ?? '', group.priority, group.columnId,
          group.repoPath ?? null, group.baseBranch ?? null, group.maxConcurrency,
          group.createdAt, group.startedAt ?? null, group.completedAt ?? null, group.archived ?? false],
       );
@@ -122,6 +126,7 @@ export class PostgresTaskGroupRepository implements TaskGroupRepository {
         const taskId = child.id || uuid();
         const task: Task = {
           id: taskId,
+          projectId: group.projectId,
           title: child.title,
           description: child.description,
           priority: child.priority ?? group.priority,
@@ -138,10 +143,10 @@ export class PostgresTaskGroupRepository implements TaskGroupRepository {
         };
 
         await client.query(
-          `INSERT INTO tasks (id, title, description, priority, column_id, agent_status, agent_type,
+          `INSERT INTO tasks (id, project_id, title, description, priority, column_id, agent_status, agent_type,
             created_at, repo_path, base_branch, use_worktree, branch_name, archived, group_id, group_order)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
-          [task.id, task.title, task.description, task.priority, task.columnId, task.agentStatus,
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+          [task.id, task.projectId, task.title, task.description, task.priority, task.columnId, task.agentStatus,
            task.agentType ?? 'copilot', task.createdAt, task.repoPath ?? null,
            task.baseBranch ?? null, task.useWorktree ?? null, task.branchName ?? null,
            false, group.id, task.groupOrder ?? i],

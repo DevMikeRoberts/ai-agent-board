@@ -1,7 +1,7 @@
 import type { Task, AgentEvent } from '../types.js';
 
 export interface TaskRepository {
-  getAll(includeArchived?: boolean): Promise<Task[]>;
+  getAll(includeArchived?: boolean, projectId?: string): Promise<Task[]>;
   getById(id: string): Promise<Task | undefined>;
   create(task: Task): Promise<Task>;
   update(id: string, updates: Partial<Task>): Promise<Task | undefined>;
@@ -10,5 +10,5 @@ export interface TaskRepository {
   insertEvent(event: AgentEvent): Promise<void>;
   getEventsByTaskId(taskId: string): Promise<AgentEvent[]>;
   deleteEventsByTaskId(taskId: string): Promise<void>;
-  getArchivedTasks(): Promise<Task[]>;
+  getArchivedTasks(projectId?: string): Promise<Task[]>;
 }

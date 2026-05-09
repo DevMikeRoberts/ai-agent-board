@@ -3,17 +3,19 @@ import type { Task, AgentType, ColumnId } from '@/types';
 import { VALID_TRANSITIONS } from '@/types';
 import { api, connectWS } from '@/lib/api';
 
-export function useTasks() {
+const getProjectId = (task: Task) => task.projectId ?? 'default';
+
+export function useTasks(projectId = 'default') {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
 
   // Fetch tasks on mount and when showArchived changes
   useEffect(() => {
-    api.getTasks(showArchived).then(setTasks).catch((err) => {
+    api.getTasks(showArchived, projectId).then(setTasks).catch((err) => {
       setError(`Failed to load tasks: ${err.message}`);
     });
-  }, [showArchived]);
+  }, [showArchived, projectId]);
 
   // WebSocket: live task updates from server, re-sync on reconnect
   useEffect(() => {
@@ -21,6 +23,7 @@ export function useTasks() {
       (msg) => {
         if (msg.type === 'task_updated') {
           const task = msg.payload;
+          if (getProjectId(task) !== projectId) return;
           // Skip grouped children — they're managed by useTaskGroups
           if (task.groupId) return;
           setTasks((prev) => {
@@ -34,13 +37,13 @@ export function useTasks() {
         }
       },
       // Re-fetch all tasks after WS reconnect to catch missed updates
-      () => { api.getTasks(showArchived).then(setTasks).catch(console.error); }
+      () => { api.getTasks(showArchived, projectId).then(setTasks).catch(console.error); }
     );
-  }, [showArchived]);
+  }, [showArchived, projectId]);
 
   const addTask = useCallback(async (task: Omit<Task, 'id' | 'createdAt' | 'agentStatus'> & { autoRun?: boolean }) => {
     try {
-      const newTask = await api.createTask(task);
+      const newTask = await api.createTask({ ...task, projectId: task.projectId ?? projectId });
       // Deduplicate: WS broadcast may have already added this task
       setTasks((prev) =>
         prev.some((t) => t.id === newTask.id) ? prev : [...prev, newTask]
@@ -50,7 +53,7 @@ export function useTasks() {
       setError(`Failed to create task: ${(err as Error).message}`);
       return undefined;
     }
-  }, []);
+  }, [projectId]);
 
   const moveTask = useCallback((taskId: string, targetColumn: ColumnId) => {
     setTasks((prev) => {
@@ -76,12 +79,12 @@ export function useTasks() {
       console.error('[moveTask] server rejected:', err);
       setError(`Move failed: ${err.message}`);
       // Revert optimistic update by re-fetching
-      api.getTasks().then(setTasks).catch((fetchErr) => {
+      api.getTasks(showArchived, projectId).then(setTasks).catch((fetchErr) => {
         console.error('[moveTask] re-fetch also failed:', fetchErr);
         setError(`Move failed and could not refresh: ${fetchErr.message}`);
       });
     });
-  }, []);
+  }, [showArchived, projectId]);
 
   const runTask = useCallback(async (id: string) => {
     try {

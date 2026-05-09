@@ -20,6 +20,7 @@ interface TaskRow {
   worktree_path: string | null;
   agent_type: AgentType;
   archived: number;
+  project_id: string;
   group_id: string | null;
   group_order: number | null;
 }
@@ -27,6 +28,7 @@ interface TaskRow {
 function rowToTask(row: TaskRow): Task {
   return {
     id: row.id,
+    projectId: row.project_id,
     title: row.title,
     description: row.description,
     priority: row.priority,
@@ -66,14 +68,14 @@ export class SqliteTaskRepository implements TaskRepository {
   constructor(db: Database.Database) {
     this.db = db;
     this.stmts = {
-      getAll: db.prepare('SELECT * FROM tasks WHERE archived = 0 AND group_id IS NULL ORDER BY created_at ASC'),
-      getAllIncludingArchived: db.prepare('SELECT * FROM tasks WHERE group_id IS NULL ORDER BY created_at ASC'),
-      getArchived: db.prepare('SELECT * FROM tasks WHERE archived = 1 ORDER BY created_at DESC'),
+      getAll: db.prepare('SELECT * FROM tasks WHERE project_id = ? AND archived = 0 AND group_id IS NULL ORDER BY created_at ASC'),
+      getAllIncludingArchived: db.prepare('SELECT * FROM tasks WHERE project_id = ? AND group_id IS NULL ORDER BY created_at ASC'),
+      getArchived: db.prepare('SELECT * FROM tasks WHERE project_id = ? AND archived = 1 ORDER BY created_at DESC'),
       getById: db.prepare('SELECT * FROM tasks WHERE id = ?'),
       insert: db.prepare(`
-        INSERT INTO tasks (id, title, description, priority, column_id, agent_status, agent_type, created_at, started_at, completed_at,
+        INSERT INTO tasks (id, project_id, title, description, priority, column_id, agent_status, agent_type, created_at, started_at, completed_at,
           repo_path, branch_name, base_branch, use_worktree, worktree_path, archived, group_id, group_order)
-        VALUES (@id, @title, @description, @priority, @column_id, @agent_status, @agent_type, @created_at, @started_at, @completed_at,
+        VALUES (@id, @project_id, @title, @description, @priority, @column_id, @agent_status, @agent_type, @created_at, @started_at, @completed_at,
           @repo_path, @branch_name, @base_branch, @use_worktree, @worktree_path, @archived, @group_id, @group_order)
       `),
       update: db.prepare(`
@@ -105,9 +107,9 @@ export class SqliteTaskRepository implements TaskRepository {
     };
   }
 
-  async getAll(includeArchived = false): Promise<Task[]> {
+  async getAll(includeArchived = false, projectId = 'default'): Promise<Task[]> {
     const stmt = includeArchived ? this.stmts.getAllIncludingArchived : this.stmts.getAll;
-    return (stmt.all() as TaskRow[]).map(rowToTask);
+    return (stmt.all(projectId) as TaskRow[]).map(rowToTask);
   }
 
   async getById(id: string): Promise<Task | undefined> {
@@ -118,6 +120,7 @@ export class SqliteTaskRepository implements TaskRepository {
   async create(task: Task): Promise<Task> {
     this.stmts.insert.run({
       id: task.id,
+      project_id: task.projectId,
       title: task.title,
       description: task.description,
       priority: task.priority,
@@ -221,7 +224,7 @@ export class SqliteTaskRepository implements TaskRepository {
     this.stmts.deleteEventsByTaskId.run(taskId);
   }
 
-  async getArchivedTasks(): Promise<Task[]> {
-    return (this.stmts.getArchived.all() as TaskRow[]).map(rowToTask);
+  async getArchivedTasks(projectId = 'default'): Promise<Task[]> {
+    return (this.stmts.getArchived.all(projectId) as TaskRow[]).map(rowToTask);
   }
 }
