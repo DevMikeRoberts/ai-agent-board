@@ -266,7 +266,7 @@ test.describe('agent_complete WebSocket event', () => {
     const repoPath = prepareTestRepo('api-improvements');
 
     // 1. Connect to WebSocket FIRST so we don't miss the event
-    const ws = new WebSocket('ws://localhost:3002/ws');
+    const ws = new WebSocket(`${API.replace(/^http/, 'ws')}/ws`);
     await new Promise<void>((resolve, reject) => {
       ws.on('open', () => resolve());
       ws.on('error', reject);

@@ -14,7 +14,7 @@ async function openCreateDialog(page: Page) {
 async function createTask(page: Page, title: string, description = 'Test description'): Promise<string> {
   await openCreateDialog(page);
   await page.getByPlaceholder('What needs to be done?').fill(title);
-  await page.getByPlaceholder('Describe the task for the Copilot agent...').fill(description);
+  await page.getByPlaceholder('Describe the task for the selected agent...').fill(description);
   // Local path is required
   await fillLocalPath(page);
   await page.getByRole('button', { name: 'Create Task' }).click();
@@ -111,6 +111,49 @@ test.describe('Task CRUD', () => {
     await expect(page.getByRole('button', { name: 'Run agent' })).toBeVisible({ timeout: 3_000 });
     await expect(page.getByText('No agent activity yet')).toBeVisible();
   });
+
+  test('dragging task to In Progress starts the agent', async ({ page }) => {
+    const taskTitle = `Drag Start Task ${Date.now()}`;
+    const taskId = await createTask(page, taskTitle);
+    createdTaskIds.push(taskId);
+
+    let runRequests = 0;
+    await page.route(`**/api/tasks/${taskId}/run`, async (route) => {
+      runRequests += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: taskId,
+          title: taskTitle,
+          description: 'Test description',
+          priority: 'medium',
+          columnId: 'in-progress',
+          agentStatus: 'planning',
+          agentType: 'copilot',
+          createdAt: Date.now(),
+        }),
+      });
+    });
+
+    const taskCard = page.locator('[data-column="backlog"] .group').filter({
+      has: page.getByRole('heading', { name: taskTitle }),
+    });
+    const targetColumn = page.locator('[data-column="in-progress"]');
+    await taskCard.scrollIntoViewIfNeeded();
+
+    const sourceBox = await taskCard.boundingBox();
+    const targetBox = await targetColumn.boundingBox();
+    expect(sourceBox).not.toBeNull();
+    expect(targetBox).not.toBeNull();
+
+    await page.mouse.move(sourceBox!.x + sourceBox!.width / 2, sourceBox!.y + sourceBox!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(targetBox!.x + targetBox!.width / 2, targetBox!.y + targetBox!.height / 2, { steps: 20 });
+    await page.mouse.up();
+
+    await expect.poll(() => runRequests).toBe(1);
+  });
 });
 
 test.describe('Theme Toggle', () => {
@@ -162,7 +205,7 @@ test.describe('Task Edit', () => {
 
     await expect(page.getByRole('heading', { name: 'Edit Task' })).toBeVisible();
     await expect(page.getByPlaceholder('What needs to be done?')).toHaveValue(taskTitle);
-    await expect(page.getByPlaceholder('Describe the task for the Copilot agent...')).toHaveValue('Original description');
+    await expect(page.getByPlaceholder('Describe the task for the selected agent...')).toHaveValue('Original description');
 
     const newTitle = `Edited Task ${ts}`;
     await page.getByPlaceholder('What needs to be done?').fill(newTitle);

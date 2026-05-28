@@ -2,8 +2,8 @@ import { defineConfig } from '@playwright/test';
 
 // Use separate ports for E2E tests so they don't collide with
 // the dev server (3001/4175) running in the background.
-const TEST_SERVER_PORT = 3002;
-const TEST_CLIENT_PORT = 4176;
+const TEST_SERVER_PORT = Number(process.env.E2E_SERVER_PORT ?? 3002);
+const TEST_CLIENT_PORT = Number(process.env.E2E_CLIENT_PORT ?? 4176);
 
 export default defineConfig({
   testDir: './tests',

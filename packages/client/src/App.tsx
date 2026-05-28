@@ -50,6 +50,12 @@ function BoardPage({
   onBackToProjects: () => void;
 }) {
   const lockedRepoPath = project.repoPath;
+  const projectDefaults = {
+    defaultAgentType: project.defaultAgentType,
+    defaultPriority: project.defaultPriority,
+    defaultBaseBranch: project.defaultBaseBranch,
+    defaultUseWorktree: project.defaultUseWorktree,
+  };
   const { tasks, error, clearError, showArchived, setShowArchived, addTask, updateTask, moveTask, runTask, stopTask, deleteTask, archiveTask, unarchiveTask, configureAndRunTask, createPR, mergeLocal, cleanupWorktree } = useTasks(project.id);
   const { groups, createGroup, runGroup, stopGroup, deleteGroup, updateGroup, refreshGroup } = useTaskGroups(project.id);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -417,6 +423,7 @@ function BoardPage({
         onEditSubmit={updateTask}
         highlightRequired={highlightRequiredFields}
         lockedRepoPath={lockedRepoPath}
+        projectDefaults={projectDefaults}
       />
 
       <TaskGroupDialog
@@ -426,6 +433,7 @@ function BoardPage({
         editGroup={editingGroup}
         onEditSubmit={handleEditGroupSubmit}
         lockedRepoPath={lockedRepoPath}
+        projectDefaults={projectDefaults}
       />
 
       <AgentPanel task={selectedTask} onClose={handleClosePanel} onRun={handleRunWithConfig} onStop={stopTask} onCreatePR={createPR} onMergeLocal={mergeLocal} onCleanupWorktree={cleanupWorktree} onReconfigureRetry={handleReconfigureRetry} theme={theme} />
@@ -480,7 +488,17 @@ function readRoute(): RouteState {
 
 export function App() {
   const { theme, toggleTheme } = useTheme();
-  const { projects, loading, error, clearError, createProject } = useProjects();
+  const {
+    projects,
+    loading,
+    error,
+    clearError,
+    createProject,
+    updateProject,
+    deleteProject,
+    validateProjectPath,
+    selectProjectDirectory,
+  } = useProjects();
   const [route, setRoute] = useState<RouteState>(() => readRoute());
 
   useEffect(() => {
@@ -517,6 +535,10 @@ export function App() {
         error={error}
         onClearError={clearError}
         onCreateProject={createProject}
+        onUpdateProject={updateProject}
+        onDeleteProject={deleteProject}
+        onValidateProjectPath={validateProjectPath}
+        onSelectProjectDirectory={selectProjectDirectory}
         onOpenProject={openProject}
         theme={theme}
         toggleTheme={toggleTheme}

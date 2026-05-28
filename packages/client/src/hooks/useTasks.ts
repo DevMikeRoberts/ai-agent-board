@@ -55,6 +55,17 @@ export function useTasks(projectId = 'default') {
     }
   }, [projectId]);
 
+  const runTask = useCallback(async (id: string) => {
+    try {
+      const updated = await api.runTask(id);
+      setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
+      return updated;
+    } catch (err) {
+      setError(`Failed to start agent: ${(err as Error).message}`);
+      return undefined;
+    }
+  }, []);
+
   const moveTask = useCallback((taskId: string, targetColumn: ColumnId) => {
     setTasks((prev) => {
       const task = prev.find((t) => t.id === taskId);
@@ -75,25 +86,23 @@ export function useTasks(projectId = 'default') {
       });
     });
     // Sync to server (server also validates + resets)
-    api.updateTask(taskId, { columnId: targetColumn }).catch((err) => {
-      console.error('[moveTask] server rejected:', err);
-      setError(`Move failed: ${err.message}`);
-      // Revert optimistic update by re-fetching
-      api.getTasks(showArchived, projectId).then(setTasks).catch((fetchErr) => {
-        console.error('[moveTask] re-fetch also failed:', fetchErr);
-        setError(`Move failed and could not refresh: ${fetchErr.message}`);
+    api.updateTask(taskId, { columnId: targetColumn })
+      .then((updated) => {
+        setTasks((prev) => prev.map((t) => (t.id === taskId ? updated : t)));
+        if (targetColumn === 'in-progress' && updated.agentStatus === 'idle') {
+          void runTask(taskId);
+        }
+      })
+      .catch((err) => {
+        console.error('[moveTask] server rejected:', err);
+        setError(`Move failed: ${err.message}`);
+        // Revert optimistic update by re-fetching
+        api.getTasks(showArchived, projectId).then(setTasks).catch((fetchErr) => {
+          console.error('[moveTask] re-fetch also failed:', fetchErr);
+          setError(`Move failed and could not refresh: ${fetchErr.message}`);
+        });
       });
-    });
-  }, [showArchived, projectId]);
-
-  const runTask = useCallback(async (id: string) => {
-    try {
-      const updated = await api.runTask(id);
-      setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
-    } catch (err) {
-      setError(`Failed to start agent: ${(err as Error).message}`);
-    }
-  }, []);
+  }, [showArchived, projectId, runTask]);
 
   const configureAndRunTask = useCallback(async (
     id: string,

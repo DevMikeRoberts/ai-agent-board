@@ -6,6 +6,7 @@ const AGENT_LABELS: Record<string, string> = {
   claude: 'Claude',
   codex: 'Codex',
   opencode: 'OpenCode',
+  hermes: 'Hermes',
 };
 
 async function getPreferredAgent(request: any): Promise<{ name: string; label: string; hasAvailableAgent: boolean }> {
@@ -30,7 +31,7 @@ async function openCreateDialog(page: Page) {
 async function createTask(page: Page, title: string, description = 'Test description') {
   await openCreateDialog(page);
   await page.getByPlaceholder('What needs to be done?').fill(title);
-  await page.getByPlaceholder('Describe the task for the Copilot agent...').fill(description);
+  await page.getByPlaceholder('Describe the task for the selected agent...').fill(description);
   // Local path is required — fill with a valid path
   await fillLocalPath(page);
   await page.getByRole('button', { name: 'Create Task' }).click();
@@ -95,18 +96,19 @@ test.describe('Agent Selector in TaskDialog', () => {
     createdTaskIds = [];
   });
 
-  test('shows agent dropdown with 4 options (Copilot, Claude, Codex, OpenCode)', async ({ page }) => {
+  test('shows agent dropdown with 5 options (Copilot, Claude, Codex, OpenCode, Hermes)', async ({ page }) => {
     await openCreateDialog(page);
     const dialog = await openAgentDropdown(page);
 
-    // The dropdown menu should show all 4 agent options as buttons
+    // The dropdown menu should show all 5 agent options as buttons
     // Use role=button filter to avoid matching the trigger button text
     const dropdownOptions = dialog.locator('[class*="popover"] button');
-    await expect(dropdownOptions).toHaveCount(4);
+    await expect(dropdownOptions).toHaveCount(5);
     await expect(dropdownOptions.nth(0)).toContainText('Copilot');
     await expect(dropdownOptions.nth(1)).toContainText('Claude');
     await expect(dropdownOptions.nth(2)).toContainText('Codex');
     await expect(dropdownOptions.nth(3)).toContainText('OpenCode');
+    await expect(dropdownOptions.nth(4)).toContainText('Hermes');
   });
 
   test('clicking an available agent option selects it', async ({ page, request }) => {
@@ -116,8 +118,8 @@ test.describe('Agent Selector in TaskDialog', () => {
     const dropdownOptions = dialog.locator('[class*="popover"] button');
 
     if (!selected.hasAvailableAgent) {
-      await expect(dropdownOptions).toHaveCount(4);
-      await expect(dropdownOptions.filter({ hasText: 'Unavailable' })).toHaveCount(4);
+      await expect(dropdownOptions).toHaveCount(5);
+      await expect(dropdownOptions.filter({ hasText: 'Unavailable' })).toHaveCount(5);
       return;
     }
 
@@ -201,7 +203,7 @@ test.describe('Agent Type Badge on Task Cards', () => {
     // The agent badge (emoji + label) should NOT be present on backlog cards
     // TaskCard renders: agentBadgeMap[task.agentType].emoji + " " + agentBadgeMap[task.agentType].label
     // Only shown when task.columnId !== 'backlog'
-    const agentBadge = card.locator('span').filter({ hasText: /^.+\s(Copilot|Claude|Codex)$/ });
+    const agentBadge = card.locator('span').filter({ hasText: /^.+\s(Copilot|Claude|Codex|OpenCode|Hermes)$/ });
     await expect(agentBadge).toHaveCount(0);
   });
 });

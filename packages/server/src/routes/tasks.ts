@@ -34,8 +34,9 @@ export function createTaskRouter(repo: TaskRepository, agentManager: AgentManage
   router.post('/', asyncHandler(async (req: Request, res: Response) => {
     const project = await getProjectForRequest(projectRepo, req.body.projectId);
     if (!project) { res.status(400).json({ error: 'projectId is invalid' }); return; }
-    const body = enforceProjectRepoPath(req.body, project);
-    if (typeof body === 'string') { res.status(400).json({ error: body }); return; }
+    const enforced = enforceProjectRepoPath(req.body, project);
+    if (typeof enforced === 'string') { res.status(400).json({ error: enforced }); return; }
+    const body = applyProjectDefaults(enforced, project);
 
     const validationError = validateTaskFields(body);
     if (validationError) {
@@ -92,7 +93,8 @@ export function createTaskRouter(repo: TaskRepository, agentManager: AgentManage
         res.status(400).json({ error: `task[${i}]: projectId is invalid` });
         return;
       }
-      const body = enforceProjectRepoPath(taskDefs[i], project);
+      const enforced = enforceProjectRepoPath(taskDefs[i], project);
+      const body = typeof enforced === 'string' ? enforced : applyProjectDefaults(enforced, project);
       const err = typeof body === 'string' ? body : validateTaskFields(body);
       if (err) {
         res.status(400).json({ error: `task[${i}]: ${err}` });
@@ -339,4 +341,26 @@ function enforceProjectRepoPath(body: Record<string, any>, project: Project): Re
     return 'repoPath must match the selected project';
   }
   return { ...body, projectId: project.id, repoPath: project.repoPath };
+}
+
+/**
+ * Fill task fields left undefined by the request with the project's configured defaults.
+ * Each field remains overridable: an explicit value (including `useWorktree: false`) is
+ * preserved. Applied at create time only — editing a task never re-applies defaults.
+ */
+function applyProjectDefaults(body: Record<string, any>, project: Project): Record<string, any> {
+  const result = { ...body };
+  if (result.agentType === undefined && project.defaultAgentType !== undefined) {
+    result.agentType = project.defaultAgentType;
+  }
+  if (result.priority === undefined && project.defaultPriority !== undefined) {
+    result.priority = project.defaultPriority;
+  }
+  if (result.baseBranch === undefined && project.defaultBaseBranch !== undefined) {
+    result.baseBranch = project.defaultBaseBranch;
+  }
+  if (result.useWorktree === undefined && project.defaultUseWorktree !== undefined) {
+    result.useWorktree = project.defaultUseWorktree;
+  }
+  return result;
 }

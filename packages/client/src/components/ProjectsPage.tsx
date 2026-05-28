@@ -1,16 +1,21 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { FolderKanban, GitBranch, Plus, Star, X } from 'lucide-react';
-import type { Project } from '@/types';
+import { FolderKanban, GitBranch, Pencil, Plus, Star, Trash2, X } from 'lucide-react';
+import type { CreateProjectRequest, Project, ProjectPathValidation, UpdateProjectRequest } from '@/types';
 import { ThemeToggle } from './ThemeToggle';
 import { ProjectDialog } from './ProjectDialog';
+import { DeleteConfirmDialog } from './DeleteConfirmDialog';
 
 interface ProjectsPageProps {
   projects: Project[];
   loading: boolean;
   error: string | null;
   onClearError: () => void;
-  onCreateProject: (data: { name?: string; repoPath?: string }) => Promise<unknown>;
+  onCreateProject: (data: CreateProjectRequest) => Promise<unknown>;
+  onUpdateProject: (id: string, data: UpdateProjectRequest) => Promise<unknown>;
+  onDeleteProject: (id: string) => Promise<unknown>;
+  onValidateProjectPath: (repoPath: string) => Promise<ProjectPathValidation | undefined>;
+  onSelectProjectDirectory: (initialPath?: string) => Promise<string | null | undefined>;
   onOpenProject: (project: Project) => void;
   theme: 'dark' | 'light';
   toggleTheme: () => void;
@@ -29,11 +34,43 @@ export function ProjectsPage({
   error,
   onClearError,
   onCreateProject,
+  onUpdateProject,
+  onDeleteProject,
+  onValidateProjectPath,
+  onSelectProjectDirectory,
   onOpenProject,
   theme,
   toggleTheme,
 }: ProjectsPageProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [deletingProject, setDeletingProject] = useState<Project | null>(null);
+
+  function openCreateDialog() {
+    setEditingProject(null);
+    setDialogOpen(true);
+  }
+
+  function openEditDialog(project: Project) {
+    setEditingProject(project);
+    setDialogOpen(true);
+  }
+
+  function closeDialog() {
+    setDialogOpen(false);
+    setEditingProject(null);
+  }
+
+  async function handleDialogSubmit(data: CreateProjectRequest | UpdateProjectRequest) {
+    if (editingProject) return onUpdateProject(editingProject.id, data);
+    return onCreateProject(data as CreateProjectRequest);
+  }
+
+  async function handleConfirmDeleteProject() {
+    if (!deletingProject) return;
+    const result = await onDeleteProject(deletingProject.id);
+    if (result !== undefined) setDeletingProject(null);
+  }
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
@@ -47,7 +84,7 @@ export function ProjectsPage({
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setDialogOpen(true)}
+              onClick={openCreateDialog}
               className="flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
               aria-label="New Project"
             >
@@ -79,7 +116,7 @@ export function ProjectsPage({
               <h2 className="text-lg font-semibold">No projects yet</h2>
               <p className="mt-2 text-sm text-muted-foreground">Create a Project to start a scoped board.</p>
               <button
-                onClick={() => setDialogOpen(true)}
+                onClick={openCreateDialog}
                 className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
               >
                 New Project
@@ -103,12 +140,34 @@ export function ProjectsPage({
                       <p className="mt-2 text-xs text-muted-foreground">Manual local paths per task</p>
                     )}
                   </div>
-                  {project.isDefault && (
-                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-500">
-                      <Star className="h-3 w-3" />
-                      Default
-                    </span>
-                  )}
+                  <div className="flex shrink-0 items-center gap-1">
+                    {project.isDefault && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-500">
+                        <Star className="h-3 w-3" />
+                        Default
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => openEditDialog(project)}
+                      className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      aria-label={`Edit ${project.name}`}
+                      title="Edit project"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    {!project.isDefault && (
+                      <button
+                        type="button"
+                        onClick={() => setDeletingProject(project)}
+                        className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-400"
+                        aria-label={`Delete ${project.name}`}
+                        title="Delete project"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="mt-5 grid grid-cols-2 gap-2">
@@ -135,7 +194,28 @@ export function ProjectsPage({
         </div>
       </main>
 
-      <ProjectDialog open={dialogOpen} onClose={() => setDialogOpen(false)} onSubmit={onCreateProject} />
+      <ProjectDialog
+        open={dialogOpen}
+        project={editingProject}
+        onClose={closeDialog}
+        onSubmit={handleDialogSubmit}
+        onValidatePath={onValidateProjectPath}
+        onSelectDirectory={onSelectProjectDirectory}
+      />
+
+      <DeleteConfirmDialog
+        open={deletingProject !== null}
+        taskTitle={deletingProject?.name ?? ''}
+        title="Delete project?"
+        description={(
+          <p className="text-sm text-muted-foreground mb-5">
+            <span className="font-medium text-foreground">{deletingProject?.name}</span> will be permanently
+            deleted. Only empty non-default projects can be deleted.
+          </p>
+        )}
+        onCancel={() => setDeletingProject(null)}
+        onConfirm={handleConfirmDeleteProject}
+      />
 
       <AnimatePresence>
         {error && (

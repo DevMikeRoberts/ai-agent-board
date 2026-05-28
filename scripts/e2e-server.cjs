@@ -5,6 +5,15 @@ const path = require('node:path');
 const repoRoot = path.resolve(__dirname, '..');
 const isWindows = process.platform === 'win32';
 const dbPath = path.join(repoRoot, 'packages', 'e2e', 'test-results', 'agentboard-e2e.db');
+function portFromEnv(name, fallback) {
+  const value = process.env[name] || fallback;
+  if (!/^\d+$/.test(value)) {
+    throw new Error(`${name} must be a numeric port`);
+  }
+  return value;
+}
+const serverPort = portFromEnv('E2E_SERVER_PORT', '3002');
+const clientPort = portFromEnv('E2E_CLIENT_PORT', '4176');
 const allowedRepoRoots = [
   repoRoot,
   process.env.TEMP,
@@ -19,11 +28,11 @@ const child = spawn(isWindows ? 'npx tsx src/index.ts' : 'npx', isWindows ? [] :
   cwd: path.join(repoRoot, 'packages', 'server'),
   env: {
     ...process.env,
-    PORT: '3002',
+    PORT: serverPort,
     DATABASE_URL: '',
     DB_PATH: dbPath,
     API_KEY: '',
-    ALLOWED_ORIGINS: 'http://localhost:4176',
+    ALLOWED_ORIGINS: `http://localhost:${clientPort}`,
     ALLOWED_REPO_ROOTS: allowedRepoRoots,
   },
   shell: isWindows,

@@ -15,7 +15,7 @@
 
 # AI Agent Board
 
-A drag-and-drop Kanban board that delegates coding tasks to AI agents — GitHub Copilot, Claude Code, OpenAI Codex, or OpenCode. Drop a task into "In Progress," pick an agent, and it will plan, execute, and complete the work, streaming live progress back to the board.
+A drag-and-drop Kanban board that delegates coding tasks to AI agents — GitHub Copilot, Claude Code, OpenAI Codex, OpenCode, or Hermes. Drop a task into "In Progress," pick an agent, and it will plan, execute, and complete the work, streaming live progress back to the board.
 
 ![AI Agent Board in action](images/agent-board-in-action.gif)
 
@@ -36,7 +36,7 @@ The server uses a **provider pattern** (via [`@codewithdan/agent-sdk-core`](http
 - **`AgentSession`** — runs a task, emits events, supports abort
 - **`AgentManager`** — orchestrates sessions with timeouts, event caching, and graceful cleanup
 
-Each task can specify which agent to use. Available agents are auto-detected at startup by checking for installed CLIs. Four providers are supported: Copilot, Claude Code, Codex, and OpenCode. Events from all providers are normalized into a common `AgentEvent` format and streamed to the UI via WebSocket.
+Each task can specify which agent to use. Available agents are auto-detected at startup by checking for installed CLIs. Five providers are supported: Copilot, Claude Code, Codex, OpenCode, and Hermes. Events from all providers are normalized into a common `AgentEvent` format and streamed to the UI via WebSocket.
 
 ### Task Groups
 
@@ -53,7 +53,7 @@ Groups appear as a single card on the board showing aggregate progress. Click to
 ## Features
 
 - Kanban board with Backlog, In Progress, Review, Done columns
-- **Multi-agent support** — choose GitHub Copilot, Claude Code, OpenAI Codex, or OpenCode per task
+- **Multi-agent support** — choose GitHub Copilot, Claude Code, OpenAI Codex, OpenCode, or Hermes per task
 - Auto-detection of available agents at startup
 - Drag-and-drop task management with transition validation
 - Real-time agent activity streaming via WebSocket
@@ -85,6 +85,7 @@ Groups appear as a single card on the board showing aggregate progress. Click to
   - **Claude Code**: CLI installed and authenticated
   - **OpenAI Codex**: CLI installed and authenticated
   - **OpenCode**: CLI installed and authenticated
+  - **Hermes**: Hermes Agent installed and `hermes acp --check` succeeds
 
 Works on **Linux**, **macOS**, and **Windows**.
 
@@ -150,6 +151,9 @@ npm run hooks:install
 | `COPILOT_MODEL` | `claude-opus-4-20250514` | Model for Copilot SDK sessions |
 | `CLAUDE_MODEL` | `claude-opus-4-20250514` | Model for Claude Code sessions |
 | `CODEX_MODEL` | `gpt-5.2-codex` | Model for OpenAI Codex sessions |
+| `HERMES_COMMAND` | `hermes` | Hermes CLI command or absolute path used to start the ACP server |
+| `HERMES_MODEL` | `configured default` | Display/configured model label for Hermes sessions; Hermes ACP uses its own active config |
+| `HERMES_ACCEPT_HOOKS` | _(unset)_ | Set to `true` to auto-approve Hermes startup hook prompts in headless ACP sessions |
 | `COPILOT_DENIED_TOOLS` | _(unset)_ | Comma-separated tool names to deny in Copilot sessions |
 | `ALLOWED_REPO_ROOTS` | `$HOME`, temp, current workspace | Allowed repo root paths (comma-separated) |
 | `ALLOWED_ORIGINS` | `http://localhost:8081,http://localhost:4175,http://localhost:4176` | CORS origins |

@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
+import { existsSync } from 'fs';
 import path from 'path';
 import { API, cleanupTestPath, prepareTestRepo, waitForBoard } from './helpers';
 
@@ -10,6 +11,10 @@ type Project = {
   repoPath?: string;
   isDefault: boolean;
   taskCounts: Record<string, number>;
+  defaultAgentType?: string;
+  defaultPriority?: string;
+  defaultBaseBranch?: string;
+  defaultUseWorktree?: boolean;
 };
 
 type Task = {
@@ -18,6 +23,10 @@ type Task = {
   projectId: string;
   repoPath?: string;
   columnId: string;
+  agentType?: string;
+  priority?: string;
+  baseBranch?: string;
+  useWorktree?: boolean;
 };
 
 type TaskGroup = {
@@ -26,12 +35,21 @@ type TaskGroup = {
   projectId: string;
   repoPath?: string;
   columnId: string;
+  priority?: string;
+  baseBranch?: string;
   children?: Task[];
 };
 
 async function createProject(
   request: APIRequestContext,
-  data: { name?: string; repoPath?: string },
+  data: {
+    name?: string;
+    repoPath?: string;
+    defaultAgentType?: string;
+    defaultPriority?: string;
+    defaultBaseBranch?: string;
+    defaultUseWorktree?: boolean;
+  },
 ): Promise<Project> {
   const res = await request.post(`${API}/api/projects`, { data });
   expect(res.status()).toBe(201);
@@ -44,7 +62,16 @@ async function deleteProject(request: APIRequestContext, id: string): Promise<vo
 
 async function createTask(
   request: APIRequestContext,
-  data: { title: string; projectId?: string; repoPath?: string; columnId?: string },
+  data: {
+    title: string;
+    projectId?: string;
+    repoPath?: string;
+    columnId?: string;
+    agentType?: string;
+    priority?: string;
+    baseBranch?: string;
+    useWorktree?: boolean;
+  },
 ): Promise<Task> {
   const payload: Record<string, unknown> = {
     title: data.title,
@@ -53,6 +80,10 @@ async function createTask(
   };
   if (data.projectId !== undefined) payload.projectId = data.projectId;
   if (data.repoPath !== undefined) payload.repoPath = data.repoPath;
+  if (data.agentType !== undefined) payload.agentType = data.agentType;
+  if (data.priority !== undefined) payload.priority = data.priority;
+  if (data.baseBranch !== undefined) payload.baseBranch = data.baseBranch;
+  if (data.useWorktree !== undefined) payload.useWorktree = data.useWorktree;
 
   const res = await request.post(`${API}/api/tasks`, {
     data: payload,
@@ -408,6 +439,186 @@ test.describe('Projects API', () => {
       error: expect.stringMatching(/absolute|repoPath|Local Path/i),
     });
   });
+
+  test('validates project repo paths without creating missing directories', async ({ request }) => {
+    const repoPath = prepareTestRepo('projects-api-validate-path', { clean: true });
+    const validRes = await request.post(`${API}/api/projects/validate-path`, {
+      data: { repoPath },
+    });
+    expect(validRes.status()).toBe(200);
+    await expect(validRes.json()).resolves.toMatchObject({
+      repoPath,
+      valid: true,
+      exists: true,
+      isDirectory: true,
+      isGitRepo: true,
+    });
+
+    const missingPath = path.join(process.env.E2E_TEST_REPO_ROOT!, `missing-project-${Date.now()}`);
+    cleanupPaths.push(missingPath);
+    const missingRes = await request.post(`${API}/api/projects/validate-path`, {
+      data: { repoPath: missingPath },
+    });
+    expect(missingRes.status()).toBe(200);
+    await expect(missingRes.json()).resolves.toMatchObject({
+      valid: false,
+      exists: false,
+      error: expect.stringMatching(/does not exist/i),
+    });
+    expect(existsSync(missingPath)).toBe(false);
+  });
+
+  test('applies project task defaults and allows per-task overrides', async ({ request }) => {
+    const repoPath = prepareTestRepo('projects-api-defaults', { clean: true });
+    const project = await createProject(request, {
+      name: 'Defaults Project',
+      repoPath,
+      defaultAgentType: 'claude',
+      defaultPriority: 'high',
+      defaultBaseBranch: 'develop',
+      defaultUseWorktree: true,
+    });
+    createdProjectIds.push(project.id);
+    expect(project).toMatchObject({
+      defaultAgentType: 'claude',
+      defaultPriority: 'high',
+      defaultBaseBranch: 'develop',
+      defaultUseWorktree: true,
+    });
+
+    // Task created with no agent/priority/branch/worktree inherits the project defaults
+    const inherited = await createTask(request, {
+      title: 'Inherits Project Defaults',
+      projectId: project.id,
+    });
+    createdTaskIds.push(inherited.id);
+    expect(inherited).toMatchObject({
+      agentType: 'claude',
+      priority: 'high',
+      baseBranch: 'develop',
+      useWorktree: true,
+    });
+
+    // Explicit values override the defaults (including useWorktree: false)
+    const overridden = await createTask(request, {
+      title: 'Overrides Project Defaults',
+      projectId: project.id,
+      agentType: 'copilot',
+      priority: 'low',
+      baseBranch: 'main',
+      useWorktree: false,
+    });
+    createdTaskIds.push(overridden.id);
+    expect(overridden).toMatchObject({
+      agentType: 'copilot',
+      priority: 'low',
+      baseBranch: 'main',
+      useWorktree: false,
+    });
+  });
+
+  test('updates and clears project task defaults via PATCH', async ({ request }) => {
+    const repoPath = prepareTestRepo('projects-api-defaults-patch', { clean: true });
+    const project = await createProject(request, {
+      name: 'Defaults Patch Project',
+      repoPath,
+      defaultAgentType: 'codex',
+      defaultUseWorktree: false,
+    });
+    createdProjectIds.push(project.id);
+
+    const updateRes = await request.patch(`${API}/api/projects/${project.id}`, {
+      data: { defaultAgentType: 'opencode', defaultPriority: 'critical', defaultBaseBranch: 'release' },
+    });
+    expect(updateRes.status()).toBe(200);
+    await expect(updateRes.json()).resolves.toMatchObject({
+      defaultAgentType: 'opencode',
+      defaultPriority: 'critical',
+      defaultBaseBranch: 'release',
+      defaultUseWorktree: false,
+    });
+
+    const clearRes = await request.patch(`${API}/api/projects/${project.id}`, {
+      data: { defaultAgentType: null, defaultPriority: null, defaultBaseBranch: null, defaultUseWorktree: null },
+    });
+    expect(clearRes.status()).toBe(200);
+    const cleared = await clearRes.json() as Project;
+    expect(cleared.defaultAgentType).toBeUndefined();
+    expect(cleared.defaultPriority).toBeUndefined();
+    expect(cleared.defaultBaseBranch).toBeUndefined();
+    expect(cleared.defaultUseWorktree).toBeUndefined();
+  });
+
+  test('rejects invalid project task defaults', async ({ request }) => {
+    const repoPath = prepareTestRepo('projects-api-defaults-invalid', { clean: true });
+    const agentRes = await request.post(`${API}/api/projects`, {
+      data: { name: 'Bad Agent Project', repoPath, defaultAgentType: 'not-an-agent' },
+    });
+    expect(agentRes.status()).toBe(400);
+
+    const priorityRes = await request.post(`${API}/api/projects`, {
+      data: { name: 'Bad Priority Project', repoPath, defaultPriority: 'urgent' },
+    });
+    expect(priorityRes.status()).toBe(400);
+
+    const branchRes = await request.post(`${API}/api/projects`, {
+      data: { name: 'Bad Branch Project', repoPath, defaultBaseBranch: 'bad branch~name' },
+    });
+    expect(branchRes.status()).toBe(400);
+  });
+
+  test('applies project defaults to group children with per-child overrides', async ({ request }) => {
+    const repoPath = prepareTestRepo('projects-api-group-defaults', { clean: true });
+    const project = await createProject(request, {
+      name: 'Group Defaults Project',
+      repoPath,
+      defaultAgentType: 'claude',
+      defaultPriority: 'high',
+      defaultBaseBranch: 'develop',
+      defaultUseWorktree: false,
+    });
+    createdProjectIds.push(project.id);
+
+    // Group + children with no agent/priority/branch/worktree inherit project defaults
+    const inheritRes = await request.post(`${API}/api/groups`, {
+      data: {
+        title: 'Inherits Group Defaults',
+        projectId: project.id,
+        maxConcurrency: 1,
+        children: [
+          { title: 'Inheriting child one' },
+          { title: 'Inheriting child two' },
+        ],
+      },
+    });
+    expect(inheritRes.status()).toBe(201);
+    const inheritGroup = await inheritRes.json() as TaskGroup;
+    createdGroupIds.push(inheritGroup.id);
+    expect(inheritGroup).toMatchObject({ priority: 'high', baseBranch: 'develop' });
+    for (const child of inheritGroup.children ?? []) {
+      expect(child).toMatchObject({ agentType: 'claude', priority: 'high', useWorktree: false });
+    }
+
+    // Explicit values override the defaults
+    const overrideRes = await request.post(`${API}/api/groups`, {
+      data: {
+        title: 'Overrides Group Defaults',
+        projectId: project.id,
+        priority: 'low',
+        baseBranch: 'main',
+        maxConcurrency: 1,
+        children: [
+          { title: 'Override child', agentType: 'copilot', useWorktree: true },
+          { title: 'Override child two', agentType: 'copilot', useWorktree: true },
+        ],
+      },
+    });
+    expect(overrideRes.status()).toBe(201);
+    const overrideGroup = await overrideRes.json() as TaskGroup;
+    createdGroupIds.push(overrideGroup.id);
+    expect(overrideGroup).toMatchObject({ priority: 'low', baseBranch: 'main' });
+    expect(overrideGroup.children?.[0]).toMatchObject({ agentType: 'copilot', useWorktree: true });
+  });
 });
 
 test.describe('Projects page', () => {
@@ -443,6 +654,8 @@ test.describe('Projects page', () => {
     await page.getByLabel('Project Name').fill(projectName);
     await page.getByLabel('Local Path').fill(repoPath);
     await page.getByRole('button', { name: 'Create Project' }).click();
+    const projectCard = page.getByRole('article', { name: projectName });
+    await expect(projectCard).toBeVisible();
 
     const listRes = await request.get(`${API}/api/projects`);
     if (listRes.ok()) {
@@ -455,8 +668,6 @@ test.describe('Projects page', () => {
     }
     expect(createdProjectId).toBeTruthy();
 
-    const projectCard = page.getByRole('article', { name: projectName });
-    await expect(projectCard).toBeVisible();
     await expect(projectCard.getByText(repoPath)).toBeVisible();
     await expect(projectCard.getByText(/Backlog\s+0/i)).toBeVisible();
     await expect(projectCard.getByText(/In Progress\s+0/i)).toBeVisible();
@@ -491,6 +702,101 @@ test.describe('Projects page', () => {
     await expect(updatedCard.getByText(/Backlog\s+1/i)).toBeVisible();
   });
 
+  test('creates a project from the folder picker and validates selected paths', async ({ page, request }) => {
+    const repoPath = prepareTestRepo('projects-ui-folder-picker', { clean: true });
+    const projectName = `Picker Project ${Date.now()}`;
+    let createdProjectId: string | undefined;
+
+    await page.route('**/api/projects/select-directory', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ repoPath }),
+      });
+    });
+
+    await page.goto('/projects');
+    await page.getByRole('button', { name: 'New Project' }).click();
+    await expect(page.getByRole('heading', { name: 'Create Project' })).toBeVisible();
+    await expect(page.getByLabel('Local Path')).toHaveValue('');
+    await page.getByLabel('Project Name').fill(projectName);
+    await page.getByRole('button', { name: 'Browse…' }).click();
+    await expect(page.getByLabel('Local Path')).toHaveValue(repoPath);
+    await expect(page.getByText('Local Path is valid')).toBeVisible();
+    await page.getByRole('button', { name: 'Create Project' }).click();
+    const projectCard = page.getByRole('article', { name: projectName });
+    await expect(projectCard).toBeVisible();
+
+    const listRes = await request.get(`${API}/api/projects`);
+    if (listRes.ok()) {
+      const projects = await listRes.json() as Project[];
+      const created = projects.find((project) => project.name === projectName);
+      if (created) {
+        createdProjectId = created.id;
+        createdProjectIds.push(created.id);
+      }
+    }
+    expect(createdProjectId).toBeTruthy();
+    await expect(projectCard.getByText(repoPath)).toBeVisible();
+  });
+
+  test('validates manually typed project paths before creating', async ({ page }) => {
+    const projectName = `Invalid Path Project ${Date.now()}`;
+
+    await page.goto('/projects');
+    await page.getByRole('button', { name: 'New Project' }).click();
+    await page.getByLabel('Project Name').fill(projectName);
+    await page.getByLabel('Local Path').fill('relative-project-path');
+    await page.getByRole('button', { name: 'Create Project' }).click();
+
+    await expect(page.getByText('Local Path must be absolute')).toBeVisible();
+    await expect(page.getByText('Fix the Local Path before saving')).toBeVisible();
+    await expect(page.getByRole('article', { name: projectName })).toHaveCount(0);
+  });
+
+  test('edits and deletes project cards from the projects page', async ({ page, request }) => {
+    const originalRepoPath = prepareTestRepo('projects-ui-edit-original', { clean: true });
+    const replacementRepoPath = prepareTestRepo('projects-ui-edit-replacement', { clean: true });
+    const project = await createProject(request, {
+      name: `Editable Project ${Date.now()}`,
+      repoPath: originalRepoPath,
+    });
+    createdProjectIds.push(project.id);
+    const updatedName = `${project.name} Renamed`;
+
+    await page.goto('/projects');
+    const projectCard = page.getByRole('article', { name: project.name });
+    await expect(projectCard).toBeVisible();
+    await projectCard.getByRole('button', { name: `Edit ${project.name}` }).click();
+    await expect(page.getByRole('heading', { name: 'Edit Project' })).toBeVisible();
+    await expect(page.getByLabel('Local Path')).toHaveValue(originalRepoPath);
+    await page.getByLabel('Project Name').fill(updatedName);
+    await page.getByLabel('Local Path').fill(replacementRepoPath);
+    await page.getByRole('button', { name: 'Save Changes' }).click();
+
+    const updatedCard = page.getByRole('article', { name: updatedName });
+    await expect(updatedCard).toBeVisible();
+    await expect(updatedCard.getByText(replacementRepoPath)).toBeVisible();
+
+    await updatedCard.getByRole('button', { name: `Delete ${updatedName}` }).click();
+    const deleteDialog = page.getByRole('dialog', { name: 'Delete project?' });
+    await expect(deleteDialog).toBeVisible();
+    await deleteDialog.getByRole('button', { name: 'Delete', exact: true }).click();
+    await expect(page.getByRole('article', { name: updatedName })).toHaveCount(0);
+  });
+
+  test('does not offer deleting the seeded default project', async ({ page, request }) => {
+    const defaultRes = await request.get(`${API}/api/projects/default`);
+    expect(defaultRes.status()).toBe(200);
+    const defaultProject = await defaultRes.json() as Project;
+
+    await page.goto('/projects');
+    const defaultCard = page.getByRole('article', { name: defaultProject.name });
+    await expect(defaultCard).toBeVisible();
+    await expect(defaultCard.getByRole('button', { name: `Delete ${defaultProject.name}` })).toHaveCount(0);
+    await expect(defaultCard.getByRole('button', { name: `Edit ${defaultProject.name}` })).toBeVisible();
+  });
+
   test('opens the seeded default project card with editable manual Local Path', async ({ page, request }) => {
     const defaultRes = await request.get(`${API}/api/projects/default`);
     expect(defaultRes.status()).toBe(200);
@@ -507,5 +813,58 @@ test.describe('Projects page', () => {
     const localPath = page.getByLabel(/Local Path/i);
     await expect(localPath).toBeEditable();
     await expect(localPath).toHaveValue('');
+  });
+
+  test('prefills the task dialog agent from the project default', async ({ page, request }) => {
+    const repoPath = prepareTestRepo('projects-ui-default-agent', { clean: true });
+    const project = await createProject(request, {
+      name: `Default Agent Project ${Date.now()}`,
+      repoPath,
+      defaultAgentType: 'claude',
+    });
+    createdProjectIds.push(project.id);
+
+    await page.goto('/projects');
+    const projectCard = page.getByRole('article', { name: project.name });
+    await expect(projectCard).toBeVisible();
+    await projectCard.getByRole('button', { name: 'Open Project' }).click();
+    await waitForBoard(page);
+
+    await openNewTaskDialog(page);
+    // Agent selector should default to the project's configured agent, not Copilot
+    await expect(page.getByRole('dialog').getByRole('button', { name: /Claude/ })).toBeVisible();
+  });
+
+  test('persists project task defaults set through the project dialog', async ({ page, request }) => {
+    const repoPath = prepareTestRepo('projects-ui-defaults-dialog', { clean: true });
+    const projectName = `Defaults Dialog Project ${Date.now()}`;
+    let createdProjectId: string | undefined;
+
+    await page.goto('/projects');
+    await page.getByRole('button', { name: 'New Project' }).click();
+    await expect(page.getByRole('heading', { name: 'Create Project' })).toBeVisible();
+    await page.getByLabel('Project Name').fill(projectName);
+    await page.getByLabel('Local Path').fill(repoPath);
+    await page.getByLabel('Default Agent').selectOption('codex');
+    await page.getByLabel('Default Priority').selectOption('high');
+    await page.getByLabel('Default Base Branch').fill('develop');
+    await page.getByLabel('Default Worktree').selectOption('true');
+    await page.getByRole('button', { name: 'Create Project' }).click();
+    await expect(page.getByRole('article', { name: projectName })).toBeVisible();
+
+    const listRes = await request.get(`${API}/api/projects`);
+    expect(listRes.ok()).toBe(true);
+    const projects = await listRes.json() as Project[];
+    const created = projects.find((p) => p.name === projectName);
+    expect(created).toBeTruthy();
+    createdProjectId = created!.id;
+    createdProjectIds.push(createdProjectId);
+
+    expect(created).toMatchObject({
+      defaultAgentType: 'codex',
+      defaultPriority: 'high',
+      defaultBaseBranch: 'develop',
+      defaultUseWorktree: true,
+    });
   });
 });

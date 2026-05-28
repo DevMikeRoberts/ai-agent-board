@@ -28,6 +28,22 @@ function migrate(db: Database.Database): void {
   `).run(now, now);
   db.exec(`UPDATE projects SET is_default = CASE WHEN id = 'default' THEN 1 ELSE 0 END`);
 
+  // Add project-level task default columns if they don't exist yet
+  const projectCols = db.pragma('table_info(projects)') as { name: string }[];
+  const projectColNames = new Set(projectCols.map((c) => c.name));
+  if (!projectColNames.has('default_agent_type')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN default_agent_type TEXT`);
+  }
+  if (!projectColNames.has('default_priority')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN default_priority TEXT`);
+  }
+  if (!projectColNames.has('default_base_branch')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN default_base_branch TEXT`);
+  }
+  if (!projectColNames.has('default_use_worktree')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN default_use_worktree INTEGER`);
+  }
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS tasks (
       id            TEXT PRIMARY KEY,
@@ -333,6 +349,22 @@ export async function initPostgresDatabase(pool: Pool): Promise<void> {
     [now, now],
   );
   await pool.query(`UPDATE projects SET is_default = (id = 'default')`);
+
+  // Add project-level task default columns if they don't exist yet
+  const { rows: projectColRows } = await pool.query(`
+    SELECT column_name FROM information_schema.columns
+    WHERE table_name = 'projects' AND table_schema = current_schema()
+  `);
+  const projectColNames = new Set(projectColRows.map((r: { column_name: string }) => r.column_name));
+  const addProjectCol = async (name: string, def: string) => {
+    if (!projectColNames.has(name)) {
+      await pool.query(`ALTER TABLE projects ADD COLUMN ${name} ${def}`);
+    }
+  };
+  await addProjectCol('default_agent_type', 'TEXT');
+  await addProjectCol('default_priority', 'TEXT');
+  await addProjectCol('default_base_branch', 'TEXT');
+  await addProjectCol('default_use_worktree', 'BOOLEAN');
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS tasks (

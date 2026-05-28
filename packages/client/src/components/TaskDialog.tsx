@@ -24,12 +24,19 @@ interface TaskDialogProps {
   highlightRequired?: boolean;
   /** Project-level repo path that cannot be changed per task. */
   lockedRepoPath?: string;
+  /** Project-level task defaults used to prefill create mode (each overridable). */
+  projectDefaults?: {
+    defaultAgentType?: AgentType;
+    defaultPriority?: Priority;
+    defaultBaseBranch?: string;
+    defaultUseWorktree?: boolean;
+  };
 }
 
 const agents = AGENT_OPTIONS;
 const priorities = PRIORITY_OPTIONS;
 
-export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, highlightRequired, lockedRepoPath }: TaskDialogProps) {
+export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, highlightRequired, lockedRepoPath, projectDefaults }: TaskDialogProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<Priority>('medium');
@@ -50,6 +57,11 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
   const isEditMode = !!editTask;
   const hasLockedRepoPath = !!lockedRepoPath;
 
+  const defaultAgent = projectDefaults?.defaultAgentType ?? 'copilot';
+  const defaultPriority = projectDefaults?.defaultPriority ?? 'medium';
+  const defaultBaseBranch = projectDefaults?.defaultBaseBranch ?? 'main';
+  const defaultUseWorktree = projectDefaults?.defaultUseWorktree ?? false;
+
   // Pre-populate fields when editing
   useEffect(() => {
     if (editTask && open) {
@@ -67,6 +79,12 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
       if (highlightRequired && !editTask.repoPath) {
         setPathError('Local path is required to run the agent');
       }
+    } else if (open && !editTask) {
+      // Opening in create mode — prefill from project defaults (each overridable)
+      setPriority(defaultPriority);
+      setAgentType(defaultAgent);
+      setBaseBranch(defaultBaseBranch);
+      setUseWorktree(defaultUseWorktree);
     } else if (!open) {
       // Reset when dialog closes
       setTitle('');
@@ -85,7 +103,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
       setPendingImages([]);
       setExistingAttachments([]);
     }
-  }, [editTask, open, highlightRequired, lockedRepoPath]);
+  }, [editTask, open, highlightRequired, lockedRepoPath, defaultAgent, defaultPriority, defaultBaseBranch, defaultUseWorktree]);
 
   useEffect(() => {
     if (open && lockedRepoPath) {
@@ -105,7 +123,8 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
 
         const selectedInfo = result.find((agent) => agent.name === agentType);
         const firstAvailable = result.find((agent) => agent.available);
-        if (!editTask && selectedInfo && !selectedInfo.available && firstAvailable) {
+        // Don't auto-swap when the project configures a default agent — respect the choice.
+        if (!editTask && !projectDefaults?.defaultAgentType && selectedInfo && !selectedInfo.available && firstAvailable) {
           setAgentType(firstAvailable.name);
         }
       })
@@ -116,7 +135,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
     return () => {
       cancelled = true;
     };
-  }, [open, editTask, agentType]);
+  }, [open, editTask, agentType, projectDefaults?.defaultAgentType]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -184,13 +203,13 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
       // Success — reset and close
       setTitle('');
       setDescription('');
-      setPriority('medium');
-      setAgentType('copilot');
+      setPriority(defaultPriority);
+      setAgentType(defaultAgent);
       setAutoRun(false);
       setRepoPath('');
       setBranchName('');
-      setBaseBranch('main');
-      setUseWorktree(false);
+      setBaseBranch(defaultBaseBranch);
+      setUseWorktree(defaultUseWorktree);
       setPendingImages([]);
       setExistingAttachments([]);
       onClose();
@@ -281,7 +300,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe the task for the Copilot agent..."
+                  placeholder="Describe the task for the selected agent..."
                   rows={4}
                   className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 />

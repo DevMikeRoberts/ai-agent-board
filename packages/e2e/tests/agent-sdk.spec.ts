@@ -21,7 +21,7 @@ async function createTaskViaUI(page: Page, title: string, description: string) {
   await headerRow.locator('button').first().click();
   await expect(page.getByRole('heading', { name: 'Create Task' })).toBeVisible();
   await page.getByPlaceholder('What needs to be done?').fill(title);
-  await page.getByPlaceholder('Describe the task for the Copilot agent...').fill(description);
+  await page.getByPlaceholder('Describe the task for the selected agent...').fill(description);
   // Local path is required
   await fillLocalPath(page, testRepo);
   await page.getByRole('button', { name: 'Create Task' }).click();

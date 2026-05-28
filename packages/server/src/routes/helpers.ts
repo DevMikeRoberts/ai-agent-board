@@ -5,7 +5,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import type { Project, Task, TaskGroup } from '../types.js';
-import { isValidPriority, isValidColumnId, isValidAgentType, MAX_TITLE_LENGTH, MAX_DESCRIPTION_LENGTH } from '@ai-agent-board/shared/constants.js';
+import { isValidPriority, isValidColumnId, isValidAgentType, VALID_AGENT_TYPES, MAX_TITLE_LENGTH, MAX_DESCRIPTION_LENGTH } from '@ai-agent-board/shared/constants.js';
 import { errorMessage } from '../utils.js';
 import type { TaskRepository } from '../repositories/types.js';
 import { broadcast } from '../websocket.js';
@@ -177,6 +177,101 @@ export function isAllowedRepoPath(repoPath: string): string | null {
   return null;
 }
 
+export interface RepoPathValidation {
+  repoPath: string;
+  valid: boolean;
+  exists: boolean;
+  isDirectory: boolean;
+  isGitRepo: boolean;
+  error?: string;
+  warning?: string;
+}
+
+export function validateRepoPath(repoPath: string): RepoPathValidation {
+  const expanded = expandTilde(repoPath);
+  if (!path.isAbsolute(expanded)) {
+    return {
+      repoPath: expanded,
+      valid: false,
+      exists: false,
+      isDirectory: false,
+      isGitRepo: false,
+      error: 'repoPath must be an absolute path',
+    };
+  }
+
+  const resolved = realOrResolve(expanded);
+  const underAllowedRoot = ALLOWED_REPO_ROOTS.some((root) => isPathUnderRoot(resolved, realOrResolve(root)));
+  if (!underAllowedRoot) {
+    return {
+      repoPath: resolved,
+      valid: false,
+      exists: false,
+      isDirectory: false,
+      isGitRepo: false,
+      error: `repoPath must be under one of: ${ALLOWED_REPO_ROOTS.join(', ')}`,
+    };
+  }
+
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(resolved);
+  } catch {
+    return {
+      repoPath: resolved,
+      valid: false,
+      exists: false,
+      isDirectory: false,
+      isGitRepo: false,
+      error: `repoPath does not exist: ${resolved}`,
+    };
+  }
+
+  if (!stat.isDirectory()) {
+    return {
+      repoPath: resolved,
+      valid: false,
+      exists: true,
+      isDirectory: false,
+      isGitRepo: false,
+      error: `repoPath is not a directory: ${resolved}`,
+    };
+  }
+
+  try {
+    fs.accessSync(resolved, fs.constants.R_OK | fs.constants.W_OK);
+  } catch (err: unknown) {
+    return {
+      repoPath: resolved,
+      valid: false,
+      exists: true,
+      isDirectory: true,
+      isGitRepo: false,
+      error: `No read/write access to: ${resolved}: ${errorMessage(err)}`,
+    };
+  }
+
+  const isGitRepo = isGitWorkTree(resolved);
+  return {
+    repoPath: resolved,
+    valid: true,
+    exists: true,
+    isDirectory: true,
+    isGitRepo,
+    ...(isGitRepo ? {} : { warning: 'Path is not a git repository; it will be initialized when saved.' }),
+  };
+}
+
+function isGitWorkTree(repoPath: string): boolean {
+  try {
+    return execFileSync('git', ['rev-parse', '--is-inside-work-tree'], { cwd: repoPath, stdio: 'pipe' })
+      .toString()
+      .trim() === 'true';
+  } catch {
+    return false;
+  }
+}
+
 export function expandTilde(p: string): string {
   if (!p.startsWith('~')) return p;
   const rest = p.slice(p.startsWith('~/') || p.startsWith('~\\') ? 2 : 1);
@@ -287,7 +382,7 @@ export function validateTaskFields(body: Record<string, any>): string | null {
     return 'invalid columnId: must be one of backlog, in-progress, review, done';
   }
   if (agentType !== undefined && !isValidAgentType(agentType)) {
-    return 'invalid agentType: must be one of copilot, claude, codex, opencode';
+    return `invalid agentType: must be one of ${VALID_AGENT_TYPES.join(', ')}`;
   }
   if (repoPath !== undefined && typeof repoPath !== 'string') {
     return 'repoPath must be a string';

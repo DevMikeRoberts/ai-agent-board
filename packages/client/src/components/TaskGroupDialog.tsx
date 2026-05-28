@@ -34,17 +34,24 @@ interface TaskGroupDialogProps {
   editGroup?: TaskGroupWithChildren | null;
   onEditSubmit?: (id: string, updates: { title: string; description?: string; priority: Priority; maxConcurrency: number }) => Promise<unknown>;
   lockedRepoPath?: string;
+  /** Project-level task defaults used to prefill create mode (each overridable). */
+  projectDefaults?: {
+    defaultAgentType?: AgentType;
+    defaultPriority?: Priority;
+    defaultBaseBranch?: string;
+    defaultUseWorktree?: boolean;
+  };
 }
 
 const agents = AGENT_OPTIONS;
 const priorities = PRIORITY_OPTIONS;
 
 let nextKey = 0;
-function makeRow(): ChildRow {
-  return { key: `child-${nextKey++}`, title: '', description: '', agentType: 'copilot', useWorktree: true };
+function makeRow(agentType: AgentType = 'copilot', useWorktree = true): ChildRow {
+  return { key: `child-${nextKey++}`, title: '', description: '', agentType, useWorktree };
 }
 
-export function TaskGroupDialog({ open, onClose, onSubmit, editGroup, onEditSubmit, lockedRepoPath }: TaskGroupDialogProps) {
+export function TaskGroupDialog({ open, onClose, onSubmit, editGroup, onEditSubmit, lockedRepoPath, projectDefaults }: TaskGroupDialogProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<Priority>('medium');
@@ -59,6 +66,11 @@ export function TaskGroupDialog({ open, onClose, onSubmit, editGroup, onEditSubm
 
   const isEditMode = !!editGroup;
   const hasLockedRepoPath = !!lockedRepoPath;
+
+  const defaultAgent = projectDefaults?.defaultAgentType ?? 'copilot';
+  const defaultPriorityVal = projectDefaults?.defaultPriority ?? 'medium';
+  const defaultBaseBranchVal = projectDefaults?.defaultBaseBranch ?? 'main';
+  const defaultUseWorktreeVal = projectDefaults?.defaultUseWorktree ?? true;
 
   // Pre-populate in edit mode, reset when dialog closes
   useEffect(() => {
@@ -76,6 +88,14 @@ export function TaskGroupDialog({ open, onClose, onSubmit, editGroup, onEditSubm
         agentType: c.agentType || 'copilot',
         useWorktree: c.useWorktree ?? true,
       })));
+    } else if (open && !editGroup) {
+      // Opening in create mode — prefill from project defaults (each overridable)
+      setPriority(defaultPriorityVal);
+      setBaseBranch(defaultBaseBranchVal);
+      setChildren([
+        makeRow(defaultAgent, defaultUseWorktreeVal),
+        makeRow(defaultAgent, defaultUseWorktreeVal),
+      ]);
     } else if (!open) {
       setTitle('');
       setDescription('');
@@ -88,7 +108,7 @@ export function TaskGroupDialog({ open, onClose, onSubmit, editGroup, onEditSubm
       setSubmitting(false);
       setPathError('');
     }
-  }, [editGroup, open, lockedRepoPath]);
+  }, [editGroup, open, lockedRepoPath, defaultAgent, defaultPriorityVal, defaultBaseBranchVal, defaultUseWorktreeVal]);
 
   useEffect(() => {
     if (open && lockedRepoPath) {
@@ -160,7 +180,7 @@ export function TaskGroupDialog({ open, onClose, onSubmit, editGroup, onEditSubm
 
   function addChild() {
     if (children.length >= MAX_GROUP_CHILDREN) return;
-    setChildren((prev) => [...prev, makeRow()]);
+    setChildren((prev) => [...prev, isEditMode ? makeRow() : makeRow(defaultAgent, defaultUseWorktreeVal)]);
   }
 
   function removeChild(key: string) {

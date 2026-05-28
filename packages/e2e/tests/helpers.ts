@@ -5,7 +5,8 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import os from 'os';
 import path from 'path';
 
-export const API = 'http://localhost:3002';
+const TEST_SERVER_PORT = process.env.E2E_SERVER_PORT ?? '3002';
+export const API = `http://localhost:${TEST_SERVER_PORT}`;
 const DEFAULT_TEST_REPO_NAME = 'test-repo';
 
 type PrepareRepoOptions = {

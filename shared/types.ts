@@ -1,7 +1,7 @@
 export type Priority = 'low' | 'medium' | 'high' | 'critical';
 export type ColumnId = 'backlog' | 'in-progress' | 'review' | 'done';
 export type AgentStatus = 'idle' | 'planning' | 'executing' | 'complete' | 'failed';
-export type AgentType = 'copilot' | 'claude' | 'codex' | 'opencode';
+export type AgentType = 'copilot' | 'claude' | 'codex' | 'opencode' | 'hermes';
 
 export interface AgentInfo {
   name: AgentType;
@@ -66,16 +66,39 @@ export interface Project {
   createdAt: number;
   updatedAt: number;
   taskCounts?: ProjectTaskCounts;
+  /** Default task properties for this project. Each is overridable per task. */
+  defaultAgentType?: AgentType;
+  defaultPriority?: Priority;
+  defaultBaseBranch?: string;
+  defaultUseWorktree?: boolean;
 }
 
 export interface CreateProjectRequest {
   name?: string;
   repoPath?: string;
+  defaultAgentType?: AgentType;
+  defaultPriority?: Priority;
+  defaultBaseBranch?: string;
+  defaultUseWorktree?: boolean;
 }
 
 export interface UpdateProjectRequest {
   name?: string;
   repoPath?: string | null;
+  defaultAgentType?: AgentType | null;
+  defaultPriority?: Priority | null;
+  defaultBaseBranch?: string | null;
+  defaultUseWorktree?: boolean | null;
+}
+
+export interface ProjectPathValidation {
+  repoPath: string;
+  valid: boolean;
+  exists: boolean;
+  isDirectory: boolean;
+  isGitRepo: boolean;
+  error?: string;
+  warning?: string;
 }
 
 export type AgentEventType =
