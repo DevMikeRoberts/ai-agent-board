@@ -6,6 +6,7 @@ interface ProjectRow {
   id: string;
   name: string;
   repo_path: string | null;
+  repo_url: string | null;
   is_default: number;
   created_at: number;
   updated_at: number;
@@ -29,6 +30,7 @@ function rowToProject(row: ProjectRow, taskCounts?: ProjectTaskCounts): Project 
     id: row.id,
     name: row.name,
     repoPath: row.repo_path ?? undefined,
+    repoUrl: row.repo_url ?? undefined,
     isDefault: Boolean(row.is_default),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -61,6 +63,7 @@ export class SqliteProjectRepository implements ProjectRepository {
     id: string;
     name: string;
     repoPath?: string;
+    repoUrl?: string;
     defaultAgentType?: AgentType;
     defaultPriority?: Priority;
     defaultBaseBranch?: string;
@@ -70,14 +73,15 @@ export class SqliteProjectRepository implements ProjectRepository {
   }): Promise<Project> {
     return this.db.transaction(() => {
       this.db.prepare(`
-        INSERT INTO projects (id, name, repo_path, is_default, created_at, updated_at,
+        INSERT INTO projects (id, name, repo_path, repo_url, is_default, created_at, updated_at,
           default_agent_type, default_priority, default_base_branch, default_use_worktree)
-        VALUES (@id, @name, @repo_path, @is_default, @created_at, @updated_at,
+        VALUES (@id, @name, @repo_path, @repo_url, @is_default, @created_at, @updated_at,
           @default_agent_type, @default_priority, @default_base_branch, @default_use_worktree)
       `).run({
         id: input.id,
         name: input.name,
         repo_path: input.repoPath ?? null,
+        repo_url: input.repoUrl ?? null,
         is_default: 0,
         created_at: input.createdAt,
         updated_at: input.updatedAt,
@@ -94,6 +98,7 @@ export class SqliteProjectRepository implements ProjectRepository {
   async update(id: string, updates: {
     name?: string;
     repoPath?: string | null;
+    repoUrl?: string | null;
     defaultAgentType?: AgentType | null;
     defaultPriority?: Priority | null;
     defaultBaseBranch?: string | null;
@@ -107,6 +112,7 @@ export class SqliteProjectRepository implements ProjectRepository {
         id,
         name: updates.name ?? row.name,
         repo_path: updates.repoPath === undefined ? row.repo_path : updates.repoPath,
+        repo_url: updates.repoUrl === undefined ? row.repo_url : updates.repoUrl,
         is_default: row.is_default,
         updated_at: updates.updatedAt,
         default_agent_type: updates.defaultAgentType === undefined ? row.default_agent_type : updates.defaultAgentType,
@@ -118,7 +124,7 @@ export class SqliteProjectRepository implements ProjectRepository {
       };
       this.db.prepare(`
         UPDATE projects
-        SET name = @name, repo_path = @repo_path, is_default = @is_default, updated_at = @updated_at,
+        SET name = @name, repo_path = @repo_path, repo_url = @repo_url, is_default = @is_default, updated_at = @updated_at,
           default_agent_type = @default_agent_type, default_priority = @default_priority,
           default_base_branch = @default_base_branch, default_use_worktree = @default_use_worktree
         WHERE id = @id

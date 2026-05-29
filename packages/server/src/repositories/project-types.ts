@@ -8,6 +8,7 @@ export interface ProjectRepository {
     id: string;
     name: string;
     repoPath?: string;
+    repoUrl?: string;
     defaultAgentType?: AgentType;
     defaultPriority?: Priority;
     defaultBaseBranch?: string;
@@ -18,6 +19,7 @@ export interface ProjectRepository {
   update(id: string, updates: {
     name?: string;
     repoPath?: string | null;
+    repoUrl?: string | null;
     defaultAgentType?: AgentType | null;
     defaultPriority?: Priority | null;
     defaultBaseBranch?: string | null;

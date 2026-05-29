@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { CreateProjectRequest, UpdateProjectRequest, Project } from '@/types';
+import type { CreateProjectRequest, UpdateProjectRequest, Project, ProjectConfig } from '@/types';
 import { api, connectWS } from '@/lib/api';
 
 export function useProjects() {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [config, setConfig] = useState<ProjectConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,9 +20,18 @@ export function useProjects() {
     }
   }, []);
 
+  const refreshConfig = useCallback(async () => {
+    try {
+      setConfig(await api.getProjectConfig());
+    } catch (err) {
+      setError(`Failed to load config: ${(err as Error).message}`);
+    }
+  }, []);
+
   useEffect(() => {
     refreshProjects();
-  }, [refreshProjects]);
+    refreshConfig();
+  }, [refreshProjects, refreshConfig]);
 
   useEffect(() => {
     return connectWS((msg) => {
@@ -101,10 +111,23 @@ export function useProjects() {
     }
   }, []);
 
+  const updateConfig = useCallback(async (cloneRoot: string) => {
+    try {
+      setError(null);
+      const result = await api.updateProjectConfig(cloneRoot);
+      setConfig(result);
+      return result;
+    } catch (err) {
+      setError(`Failed to update config: ${(err as Error).message}`);
+      return undefined;
+    }
+  }, []);
+
   const clearError = useCallback(() => setError(null), []);
 
   return {
     projects,
+    config,
     loading,
     error,
     clearError,
@@ -114,5 +137,6 @@ export function useProjects() {
     deleteProject,
     validateProjectPath,
     selectProjectDirectory,
+    updateConfig,
   };
 }

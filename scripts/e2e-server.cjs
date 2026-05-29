@@ -5,6 +5,7 @@ const path = require('node:path');
 const repoRoot = path.resolve(__dirname, '..');
 const isWindows = process.platform === 'win32';
 const dbPath = path.join(repoRoot, 'packages', 'e2e', 'test-results', 'agentboard-e2e.db');
+const agentboardHome = path.join(repoRoot, 'packages', 'e2e', 'test-results', 'agentboard-home');
 function portFromEnv(name, fallback) {
   const value = process.env[name] || fallback;
   if (!/^\d+$/.test(value)) {
@@ -23,6 +24,8 @@ const allowedRepoRoots = [
 
 mkdirSync(path.dirname(dbPath), { recursive: true });
 rmSync(dbPath, { force: true });
+rmSync(agentboardHome, { recursive: true, force: true });
+mkdirSync(agentboardHome, { recursive: true });
 
 const child = spawn(isWindows ? 'npx tsx src/index.ts' : 'npx', isWindows ? [] : ['tsx', 'src/index.ts'], {
   cwd: path.join(repoRoot, 'packages', 'server'),
@@ -34,6 +37,7 @@ const child = spawn(isWindows ? 'npx tsx src/index.ts' : 'npx', isWindows ? [] :
     API_KEY: '',
     ALLOWED_ORIGINS: `http://localhost:${clientPort}`,
     ALLOWED_REPO_ROOTS: allowedRepoRoots,
+    AGENTBOARD_HOME: agentboardHome,
   },
   shell: isWindows,
   stdio: 'inherit',

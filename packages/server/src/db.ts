@@ -43,6 +43,9 @@ function migrate(db: Database.Database): void {
   if (!projectColNames.has('default_use_worktree')) {
     db.exec(`ALTER TABLE projects ADD COLUMN default_use_worktree INTEGER`);
   }
+  if (!projectColNames.has('repo_url')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN repo_url TEXT`);
+  }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS tasks (
@@ -365,6 +368,7 @@ export async function initPostgresDatabase(pool: Pool): Promise<void> {
   await addProjectCol('default_priority', 'TEXT');
   await addProjectCol('default_base_branch', 'TEXT');
   await addProjectCol('default_use_worktree', 'BOOLEAN');
+  await addProjectCol('repo_url', 'TEXT');
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS tasks (

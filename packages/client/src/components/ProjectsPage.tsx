@@ -1,19 +1,24 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { FolderKanban, GitBranch, Pencil, Plus, Star, Trash2, X } from 'lucide-react';
-import type { CreateProjectRequest, Project, ProjectPathValidation, UpdateProjectRequest } from '@/types';
+import { FolderKanban, GitBranch, Github, Pencil, Plus, Settings, Star, Trash2, X } from 'lucide-react';
+import type { CreateProjectRequest, Project, ProjectConfig, ProjectPathValidation, UpdateProjectRequest } from '@/types';
 import { ThemeToggle } from './ThemeToggle';
-import { ProjectDialog } from './ProjectDialog';
+import { ProjectDialog, type ProjectDialogInitialValues } from './ProjectDialog';
+import { ConfigDialog } from './ConfigDialog';
 import { DeleteConfirmDialog } from './DeleteConfirmDialog';
 
 interface ProjectsPageProps {
   projects: Project[];
+  config: ProjectConfig | null;
   loading: boolean;
   error: string | null;
+  initialCreate?: ProjectDialogInitialValues | null;
+  onConsumeInitialCreate?: () => void;
   onClearError: () => void;
   onCreateProject: (data: CreateProjectRequest) => Promise<unknown>;
   onUpdateProject: (id: string, data: UpdateProjectRequest) => Promise<unknown>;
   onDeleteProject: (id: string) => Promise<unknown>;
+  onUpdateConfig: (cloneRoot: string) => Promise<unknown>;
   onValidateProjectPath: (repoPath: string) => Promise<ProjectPathValidation | undefined>;
   onSelectProjectDirectory: (initialPath?: string) => Promise<string | null | undefined>;
   onOpenProject: (project: Project) => void;
@@ -30,12 +35,16 @@ const countLabels: Array<[keyof NonNullable<Project['taskCounts']>, string]> = [
 
 export function ProjectsPage({
   projects,
+  config,
   loading,
   error,
+  initialCreate,
+  onConsumeInitialCreate,
   onClearError,
   onCreateProject,
   onUpdateProject,
   onDeleteProject,
+  onUpdateConfig,
   onValidateProjectPath,
   onSelectProjectDirectory,
   onOpenProject,
@@ -45,20 +54,35 @@ export function ProjectsPage({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [deletingProject, setDeletingProject] = useState<Project | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
+  const [createInitialValues, setCreateInitialValues] = useState<ProjectDialogInitialValues | null>(null);
+
+  // Open the Create dialog prefilled when launched via a creation URI.
+  useEffect(() => {
+    if (initialCreate) {
+      setEditingProject(null);
+      setCreateInitialValues(initialCreate);
+      setDialogOpen(true);
+    }
+  }, [initialCreate]);
 
   function openCreateDialog() {
     setEditingProject(null);
+    setCreateInitialValues(null);
     setDialogOpen(true);
   }
 
   function openEditDialog(project: Project) {
     setEditingProject(project);
+    setCreateInitialValues(null);
     setDialogOpen(true);
   }
 
   function closeDialog() {
     setDialogOpen(false);
     setEditingProject(null);
+    setCreateInitialValues(null);
+    onConsumeInitialCreate?.();
   }
 
   async function handleDialogSubmit(data: CreateProjectRequest | UpdateProjectRequest) {
@@ -90,6 +114,14 @@ export function ProjectsPage({
             >
               <Plus className="h-3.5 w-3.5" />
               <span>New Project</span>
+            </button>
+            <button
+              onClick={() => setConfigOpen(true)}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-300 transition-colors hover:bg-zinc-700/50 hover:text-white"
+              aria-label="Settings"
+              title="Settings"
+            >
+              <Settings className="h-4 w-4" />
             </button>
             <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
           </div>
@@ -134,6 +166,12 @@ export function ProjectsPage({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h2 className="truncate text-lg font-semibold">{project.name}</h2>
+                    {project.repoUrl && (
+                      <p className="mt-2 flex items-center gap-1 break-all font-mono text-xs text-muted-foreground">
+                        <Github className="h-3 w-3 shrink-0" />
+                        {project.repoUrl}
+                      </p>
+                    )}
                     {project.repoPath ? (
                       <p className="mt-2 break-all font-mono text-xs text-muted-foreground">{project.repoPath}</p>
                     ) : (
@@ -197,10 +235,18 @@ export function ProjectsPage({
       <ProjectDialog
         open={dialogOpen}
         project={editingProject}
+        initialValues={createInitialValues}
         onClose={closeDialog}
         onSubmit={handleDialogSubmit}
         onValidatePath={onValidateProjectPath}
         onSelectDirectory={onSelectProjectDirectory}
+      />
+
+      <ConfigDialog
+        open={configOpen}
+        config={config}
+        onClose={() => setConfigOpen(false)}
+        onSubmit={onUpdateConfig}
       />
 
       <DeleteConfirmDialog

@@ -10,6 +10,7 @@ export type {
   TaskAttachment,
   Project,
   ProjectTaskCounts,
+  ProjectConfig,
   CreateProjectRequest,
   UpdateProjectRequest,
   AgentEvent,

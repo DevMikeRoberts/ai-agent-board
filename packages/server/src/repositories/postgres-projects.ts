@@ -6,6 +6,7 @@ interface ProjectRow {
   id: string;
   name: string;
   repo_path: string | null;
+  repo_url: string | null;
   is_default: boolean;
   created_at: string;
   updated_at: string;
@@ -29,6 +30,7 @@ function rowToProject(row: ProjectRow, taskCounts?: ProjectTaskCounts): Project 
     id: row.id,
     name: row.name,
     repoPath: row.repo_path ?? undefined,
+    repoUrl: row.repo_url ?? undefined,
     isDefault: row.is_default,
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
@@ -61,6 +63,7 @@ export class PostgresProjectRepository implements ProjectRepository {
     id: string;
     name: string;
     repoPath?: string;
+    repoUrl?: string;
     defaultAgentType?: AgentType;
     defaultPriority?: Priority;
     defaultBaseBranch?: string;
@@ -72,14 +75,15 @@ export class PostgresProjectRepository implements ProjectRepository {
     try {
       await client.query('BEGIN');
       const { rows } = await client.query<ProjectRow>(
-        `INSERT INTO projects (id, name, repo_path, is_default, created_at, updated_at,
+        `INSERT INTO projects (id, name, repo_path, repo_url, is_default, created_at, updated_at,
            default_agent_type, default_priority, default_base_branch, default_use_worktree)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          RETURNING *`,
         [
           input.id,
           input.name,
           input.repoPath ?? null,
+          input.repoUrl ?? null,
           false,
           input.createdAt,
           input.updatedAt,
@@ -102,6 +106,7 @@ export class PostgresProjectRepository implements ProjectRepository {
   async update(id: string, updates: {
     name?: string;
     repoPath?: string | null;
+    repoUrl?: string | null;
     defaultAgentType?: AgentType | null;
     defaultPriority?: Priority | null;
     defaultBaseBranch?: string | null;
@@ -119,13 +124,14 @@ export class PostgresProjectRepository implements ProjectRepository {
       const existing = rows[0];
       const { rows: updatedRows } = await client.query<ProjectRow>(
         `UPDATE projects
-         SET name = $1, repo_path = $2, is_default = $3, updated_at = $4,
-           default_agent_type = $5, default_priority = $6, default_base_branch = $7, default_use_worktree = $8
-         WHERE id = $9
+         SET name = $1, repo_path = $2, repo_url = $3, is_default = $4, updated_at = $5,
+           default_agent_type = $6, default_priority = $7, default_base_branch = $8, default_use_worktree = $9
+         WHERE id = $10
          RETURNING *`,
         [
           updates.name ?? existing.name,
           updates.repoPath === undefined ? existing.repo_path : updates.repoPath,
+          updates.repoUrl === undefined ? existing.repo_url : updates.repoUrl,
           existing.is_default,
           updates.updatedAt,
           updates.defaultAgentType === undefined ? existing.default_agent_type : updates.defaultAgentType,

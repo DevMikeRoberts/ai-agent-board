@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { spawnSync } from 'child_process';
+import crypto from 'crypto';
+import fs from 'fs';
 import path from 'path';
 import { v4 as uuid } from 'uuid';
 import type { AgentType, Priority } from '../types.js';
@@ -10,17 +12,105 @@ import type { AgentManager } from '../services/agent-manager.js';
 import { broadcast } from '../websocket.js';
 import { MAX_TITLE_LENGTH, isValidAgentType, isValidPriority } from '@ai-agent-board/shared/constants.js';
 import { errorMessage } from '../utils.js';
+import { getConfig, getCloneRoot, setCloneRoot } from '../config.js';
 import {
   asyncHandler,
   broadcastProjectDelete,
   broadcastProjectUpdate,
+  cloneRepo,
   expandTilde,
+  getGitRemoteOrigin,
   isAllowedRepoPath,
+  isGitWorkTree,
+  isUnderAllowedRoots,
   isValidGitRef,
   normalizeRepoPathForCompare,
+  normalizeRepoUrl,
   paramId,
+  parseGitRepoUrl,
   validateRepoPath,
+  type ParsedRepoUrl,
 } from './helpers.js';
+
+/** Error carrying an HTTP status, translated to a JSON response by the create handler. */
+class HttpError extends Error {
+  constructor(public readonly status: number, message: string) {
+    super(message);
+  }
+}
+
+// Serialize clone operations per clone-root to avoid concurrent races on the same
+// destination directory. Clones are infrequent, so a single chain per root is fine.
+const cloneChains = new Map<string, Promise<unknown>>();
+function withCloneLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const prev = cloneChains.get(key) ?? Promise.resolve();
+  const run = prev.catch(() => undefined).then(fn);
+  cloneChains.set(key, run.catch(() => undefined));
+  return run;
+}
+
+function cloneErrorMessage(err: unknown): string {
+  const e = err as { stderr?: Buffer | string; message?: string };
+  const stderr = e?.stderr ? e.stderr.toString().trim() : '';
+  return stderr || e?.message || 'unknown error';
+}
+
+/** Clone into a temp dir then atomically rename, cleaning up on any failure. */
+function cloneIntoTarget(url: string, target: string): void {
+  const tmp = `${target}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  try {
+    cloneRepo(url, tmp);
+  } catch (err: unknown) {
+    try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* best effort */ }
+    throw new HttpError(400, `git clone failed: ${cloneErrorMessage(err)}`);
+  }
+  try {
+    fs.renameSync(tmp, target);
+  } catch (err: unknown) {
+    try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* best effort */ }
+    throw new HttpError(500, `failed to finalize clone: ${errorMessage(err)}`);
+  }
+}
+
+/**
+ * Resolve a clone destination under the configured clone root and clone the repo
+ * there. Reuses an existing checkout only when its `origin` matches the requested
+ * URL; on a name collision with a different repo, falls back to a hash-suffixed
+ * directory. Returns the resulting absolute repo path.
+ */
+function resolveAndCloneRepo(parsed: ParsedRepoUrl): string {
+  const cloneRoot = getCloneRoot();
+  fs.mkdirSync(cloneRoot, { recursive: true });
+  const normalizedUrl = normalizeRepoUrl(parsed.url);
+  const shortHash = crypto.createHash('sha1').update(normalizedUrl).digest('hex').slice(0, 8);
+  const candidates = [parsed.name, `${parsed.name}-${shortHash}`];
+
+  for (const candidateName of candidates) {
+    const target = path.join(cloneRoot, candidateName);
+    const boundaryErr = isUnderAllowedRoots(target);
+    if (boundaryErr) throw new HttpError(400, boundaryErr);
+
+    if (fs.existsSync(target)) {
+      if (isGitWorkTree(target)) {
+        const origin = getGitRemoteOrigin(target);
+        if (origin && normalizeRepoUrl(origin) === normalizedUrl) {
+          return fs.realpathSync(target);
+        }
+        continue; // different repo occupies this name
+      }
+      if (fs.readdirSync(target).length > 0) continue; // non-git, non-empty
+      fs.rmdirSync(target); // empty dir — let git create it fresh
+    }
+
+    cloneIntoTarget(parsed.url, target);
+    return fs.realpathSync(target);
+  }
+
+  throw new HttpError(
+    409,
+    `clone destination "${path.join(cloneRoot, parsed.name)}" is already in use by a different repository`,
+  );
+}
 
 interface ParsedProjectDefaults {
   defaultAgentType?: AgentType | null;
@@ -127,6 +217,29 @@ export function createProjectsRouter(
     }
   }));
 
+  // GET /api/projects/config — current Agent Board config (e.g. clone root).
+  // Declared before '/:id' so it is not captured by the id route.
+  router.get('/config', asyncHandler(async (_req: Request, res: Response) => {
+    res.json(getConfig());
+  }));
+
+  // PATCH /api/projects/config — update the clone root.
+  router.patch('/config', asyncHandler(async (req: Request, res: Response) => {
+    const { cloneRoot } = req.body;
+    if (typeof cloneRoot !== 'string' || !cloneRoot.trim()) {
+      res.status(400).json({ error: 'cloneRoot must be a non-empty string' }); return;
+    }
+    const expanded = expandTilde(cloneRoot.trim());
+    if (!path.isAbsolute(expanded)) {
+      res.status(400).json({ error: 'cloneRoot must be an absolute path' }); return;
+    }
+    try {
+      res.json(setCloneRoot(expanded));
+    } catch (err: unknown) {
+      res.status(400).json({ error: errorMessage(err) });
+    }
+  }));
+
   router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
     const id = paramId(req);
     const project = id === 'default' ? await projectRepo.getDefault() : await projectRepo.getById(id);
@@ -135,14 +248,21 @@ export function createProjectsRouter(
   }));
 
   router.post('/', asyncHandler(async (req: Request, res: Response) => {
-    const { name, repoPath } = req.body;
+    const { name, repoPath, repoUrl } = req.body;
     const projectName = typeof name === 'string' ? name.trim() : undefined;
+    const hasRepoUrl = typeof repoUrl === 'string' && repoUrl.trim().length > 0;
 
     if (req.body.isDefault !== undefined) {
       res.status(400).json({ error: 'isDefault is immutable' }); return;
     }
-    if (!projectName && repoPath === undefined) {
-      res.status(400).json({ error: 'name or repoPath is required' }); return;
+    if (repoUrl !== undefined && typeof repoUrl !== 'string') {
+      res.status(400).json({ error: 'repoUrl must be a string' }); return;
+    }
+    if (hasRepoUrl && typeof repoPath === 'string' && repoPath.trim()) {
+      res.status(400).json({ error: 'provide either repoUrl or repoPath, not both' }); return;
+    }
+    if (!projectName && repoPath === undefined && !hasRepoUrl) {
+      res.status(400).json({ error: 'name, repoPath, or repoUrl is required' }); return;
     }
     if (projectName !== undefined && !projectName) {
       res.status(400).json({ error: 'name must be a non-empty string' }); return;
@@ -155,7 +275,20 @@ export function createProjectsRouter(
     }
 
     let expandedRepoPath: string | undefined;
-    if (typeof repoPath === 'string') {
+    let storedRepoUrl: string | undefined;
+
+    if (hasRepoUrl) {
+      const parsed = parseGitRepoUrl(repoUrl.trim());
+      if (typeof parsed === 'string') { res.status(400).json({ error: parsed }); return; }
+      try {
+        // Clone is the first step for a URL-backed project (serialized per clone root).
+        expandedRepoPath = await withCloneLock(getCloneRoot(), async () => resolveAndCloneRepo(parsed));
+        storedRepoUrl = parsed.url;
+      } catch (err: unknown) {
+        if (err instanceof HttpError) { res.status(err.status).json({ error: err.message }); return; }
+        res.status(500).json({ error: errorMessage(err) }); return;
+      }
+    } else if (typeof repoPath === 'string') {
       expandedRepoPath = expandTilde(repoPath);
       if (!path.isAbsolute(expandedRepoPath)) {
         res.status(400).json({ error: 'repoPath must be an absolute path' }); return;
@@ -172,6 +305,7 @@ export function createProjectsRouter(
       id: uuid(),
       name: projectName || path.basename(path.resolve(expandedRepoPath as string)),
       repoPath: expandedRepoPath,
+      repoUrl: storedRepoUrl,
       defaultAgentType: defaults.defaultAgentType ?? undefined,
       defaultPriority: defaults.defaultPriority ?? undefined,
       defaultBaseBranch: defaults.defaultBaseBranch ?? undefined,
@@ -194,6 +328,7 @@ export function createProjectsRouter(
     const updates: {
       name?: string;
       repoPath?: string | null;
+      repoUrl?: string | null;
       defaultAgentType?: AgentType | null;
       defaultPriority?: Priority | null;
       defaultBaseBranch?: string | null;
@@ -238,6 +373,25 @@ export function createProjectsRouter(
           res.status(409).json({ error: 'repoPath cannot be cleared after tasks or groups exist' }); return;
         }
         updates.repoPath = null;
+      }
+    }
+
+    // repoUrl is stored as metadata (the source URL); editing it does not re-clone.
+    if (req.body.repoUrl !== undefined) {
+      if (req.body.repoUrl !== null && typeof req.body.repoUrl !== 'string') {
+        res.status(400).json({ error: 'repoUrl must be a string or null' }); return;
+      }
+      if (req.body.repoUrl === null) {
+        updates.repoUrl = null;
+      } else {
+        const trimmed = req.body.repoUrl.trim();
+        if (!trimmed) {
+          updates.repoUrl = null;
+        } else {
+          const parsed = parseGitRepoUrl(trimmed);
+          if (typeof parsed === 'string') { res.status(400).json({ error: parsed }); return; }
+          updates.repoUrl = parsed.url;
+        }
       }
     }
 

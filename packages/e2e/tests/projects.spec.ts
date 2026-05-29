@@ -9,6 +9,7 @@ type Project = {
   id: string;
   name: string;
   repoPath?: string;
+  repoUrl?: string;
   isDefault: boolean;
   taskCounts: Record<string, number>;
   defaultAgentType?: string;
@@ -902,5 +903,147 @@ test.describe('Projects page', () => {
       defaultBaseBranch: 'develop',
       defaultUseWorktree: true,
     });
+  });
+});
+
+test.describe('Projects config + repo-URL cloning', () => {
+  const createdProjectIds: string[] = [];
+  let originalCloneRoot: string | undefined;
+
+  test.afterAll(async ({ request }) => {
+    // Restore the original clone root so other suites are unaffected.
+    if (originalCloneRoot) {
+      await request.patch(`${API}/api/projects/config`, { data: { cloneRoot: originalCloneRoot } }).catch(() => {});
+    }
+  });
+
+  test.afterEach(async ({ request }) => {
+    for (const id of createdProjectIds) {
+      await deleteProject(request, id);
+    }
+    createdProjectIds.length = 0;
+  });
+
+  test('GET /api/projects/config returns a clone root', async ({ request }) => {
+    const res = await request.get(`${API}/api/projects/config`);
+    expect(res.status()).toBe(200);
+    const config = await res.json() as { cloneRoot: string };
+    expect(typeof config.cloneRoot).toBe('string');
+    expect(config.cloneRoot.length).toBeGreaterThan(0);
+    originalCloneRoot ??= config.cloneRoot;
+  });
+
+  test('PATCH /api/projects/config updates the clone root and rejects relative paths', async ({ request }) => {
+    const current = await request.get(`${API}/api/projects/config`);
+    const { cloneRoot } = await current.json() as { cloneRoot: string };
+    originalCloneRoot ??= cloneRoot;
+
+    const relativeRes = await request.patch(`${API}/api/projects/config`, { data: { cloneRoot: 'relative/clone/root' } });
+    expect(relativeRes.status()).toBe(400);
+
+    const emptyRes = await request.patch(`${API}/api/projects/config`, { data: { cloneRoot: '   ' } });
+    expect(emptyRes.status()).toBe(400);
+
+    // Set to a fresh absolute directory under test-results, then restore.
+    const newRoot = path.resolve(process.cwd(), 'test-results', `clone-root-${Date.now()}`);
+    const updateRes = await request.patch(`${API}/api/projects/config`, { data: { cloneRoot: newRoot } });
+    expect(updateRes.status()).toBe(200);
+    const updated = await updateRes.json() as { cloneRoot: string };
+    expect(existsSync(updated.cloneRoot)).toBe(true);
+
+    const restoreRes = await request.patch(`${API}/api/projects/config`, { data: { cloneRoot } });
+    expect(restoreRes.status()).toBe(200);
+    cleanupTestPath(newRoot);
+  });
+
+  test('POST /api/projects clones a repo from a URL and persists repoUrl', async ({ request }) => {
+    const sourceRepo = prepareTestRepo('projects-clone-source', { clean: true });
+    const configRes = await request.get(`${API}/api/projects/config`);
+    const { cloneRoot } = await configRes.json() as { cloneRoot: string };
+    originalCloneRoot ??= cloneRoot;
+
+    const res = await request.post(`${API}/api/projects`, {
+      data: { name: 'Cloned Repo Project', repoUrl: sourceRepo },
+    });
+    expect(res.status()).toBe(201);
+    const project = await res.json() as Project;
+    createdProjectIds.push(project.id);
+
+    expect(project.repoUrl).toBe(sourceRepo);
+    expect(project.repoPath).toBeTruthy();
+    // The clone lands inside the configured clone root and is a real checkout.
+    expect(existsSync(path.join(project.repoPath!, 'README.md'))).toBe(true);
+    expect(existsSync(path.join(project.repoPath!, '.git'))).toBe(true);
+  });
+
+  test('POST /api/projects rejects providing both repoUrl and repoPath', async ({ request }) => {
+    const sourceRepo = prepareTestRepo('projects-clone-conflict', { clean: true });
+    const res = await request.post(`${API}/api/projects`, {
+      data: { name: 'Conflict Project', repoUrl: sourceRepo, repoPath: sourceRepo },
+    });
+    expect(res.status()).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({ error: expect.stringMatching(/either.*repoUrl.*repoPath|both/i) });
+  });
+
+  test('POST /api/projects reuses an existing clone of the same origin URL', async ({ request }) => {
+    const sourceRepo = prepareTestRepo('projects-clone-reuse', { clean: true });
+
+    const firstRes = await request.post(`${API}/api/projects`, {
+      data: { name: 'Reuse Project A', repoUrl: sourceRepo },
+    });
+    expect(firstRes.status()).toBe(201);
+    const first = await firstRes.json() as Project;
+    createdProjectIds.push(first.id);
+
+    const secondRes = await request.post(`${API}/api/projects`, {
+      data: { name: 'Reuse Project B', repoUrl: sourceRepo },
+    });
+    expect(secondRes.status()).toBe(201);
+    const second = await secondRes.json() as Project;
+    createdProjectIds.push(second.id);
+
+    // A matching-origin checkout is reused rather than re-cloned to a new dir.
+    expect(second.repoPath).toBe(first.repoPath);
+  });
+});
+
+test.describe('Projects creation via URI', () => {
+  const createdProjectIds: string[] = [];
+
+  test.afterEach(async ({ request }) => {
+    for (const id of createdProjectIds) {
+      await deleteProject(request, id);
+    }
+    createdProjectIds.length = 0;
+  });
+
+  test('prefills the create dialog from query params without auto-submitting', async ({ page }) => {
+    const projectName = `URI Prefill ${Date.now()}`;
+    const repoUrl = 'https://github.com/owner/sample-repo.git';
+    await page.goto(`/projects/new?source=repo&name=${encodeURIComponent(projectName)}&repoUrl=${encodeURIComponent(repoUrl)}`);
+
+    await expect(page.getByRole('heading', { name: 'Create Project' })).toBeVisible();
+    await expect(page.getByLabel('Project Name')).toHaveValue(projectName);
+    await expect(page.getByLabel('Repository URL')).toHaveValue(repoUrl);
+    // No project should have been created yet (prefill only).
+    await expect(page.getByRole('article', { name: projectName })).toHaveCount(0);
+  });
+
+  test('auto-creates a project when autostart=1', async ({ page, request }) => {
+    const sourceRepo = prepareTestRepo('projects-uri-autostart', { clean: true });
+    const projectName = `URI Autostart ${Date.now()}`;
+    await page.goto(
+      `/projects/new?source=repo&name=${encodeURIComponent(projectName)}&repoUrl=${encodeURIComponent(sourceRepo)}&autostart=1`,
+    );
+
+    const projectCard = page.getByRole('article', { name: projectName });
+    await expect(projectCard).toBeVisible({ timeout: 15_000 });
+
+    const listRes = await request.get(`${API}/api/projects`);
+    const projects = await listRes.json() as Project[];
+    const created = projects.find((p) => p.name === projectName);
+    expect(created).toBeTruthy();
+    createdProjectIds.push(created!.id);
+    expect(created!.repoUrl).toBe(sourceRepo);
   });
 });

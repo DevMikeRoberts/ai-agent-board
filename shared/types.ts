@@ -62,6 +62,8 @@ export interface Project {
   id: string;
   name: string;
   repoPath?: string;
+  /** Source GitHub/git URL the project's local repo was cloned from, if any. */
+  repoUrl?: string;
   isDefault: boolean;
   createdAt: number;
   updatedAt: number;
@@ -76,6 +78,8 @@ export interface Project {
 export interface CreateProjectRequest {
   name?: string;
   repoPath?: string;
+  /** When provided, the server clones this git URL into the configured clone root and uses it as repoPath. */
+  repoUrl?: string;
   defaultAgentType?: AgentType;
   defaultPriority?: Priority;
   defaultBaseBranch?: string;
@@ -85,10 +89,17 @@ export interface CreateProjectRequest {
 export interface UpdateProjectRequest {
   name?: string;
   repoPath?: string | null;
+  repoUrl?: string | null;
   defaultAgentType?: AgentType | null;
   defaultPriority?: Priority | null;
   defaultBaseBranch?: string | null;
   defaultUseWorktree?: boolean | null;
+}
+
+/** Server-side Agent Board configuration (persisted to the config file). */
+export interface ProjectConfig {
+  /** Absolute path under which repos cloned from a URL are placed. */
+  cloneRoot: string;
 }
 
 export interface ProjectPathValidation {

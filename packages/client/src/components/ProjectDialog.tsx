@@ -1,14 +1,28 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { FolderOpen, X } from 'lucide-react';
+import { FolderOpen, Github, HardDrive, X } from 'lucide-react';
 import { isAbsoluteRepoPath, getRepoPathHelpText, getRepoPathPlaceholder } from '@/lib/utils';
 import { AGENT_OPTIONS } from '@/lib/agent-config';
 import { PRIORITY_OPTIONS } from '@/lib/priority-config';
 import type { AgentType, CreateProjectRequest, Priority, Project, ProjectPathValidation, UpdateProjectRequest } from '@/types';
 
+export interface ProjectDialogInitialValues {
+  source?: 'local' | 'repo';
+  name?: string;
+  repoUrl?: string;
+  repoPath?: string;
+  defaultAgentType?: string;
+  defaultPriority?: string;
+  defaultBaseBranch?: string;
+  defaultUseWorktree?: 'inherit' | 'true' | 'false';
+  /** When true, submit the prefilled form automatically once the dialog opens. */
+  autoSubmit?: boolean;
+}
+
 interface ProjectDialogProps {
   open: boolean;
   project?: Project | null;
+  initialValues?: ProjectDialogInitialValues | null;
   onClose: () => void;
   onSubmit: (data: CreateProjectRequest | UpdateProjectRequest) => Promise<unknown>;
   onValidatePath: (repoPath: string) => Promise<ProjectPathValidation | undefined>;
@@ -27,17 +41,26 @@ function leafNameFromPath(value: string): string {
   return normalized.split(/[\\/]/).filter(Boolean).pop() ?? '';
 }
 
+/** Derive a project/repo name from a git URL (last path segment, minus .git). */
+function leafNameFromUrl(value: string): string {
+  const cleaned = value.trim().split(/[?#]/)[0].replace(/[\\/]+$/, '').replace(/\.git$/i, '');
+  return cleaned.split(/[\\/:]/).filter(Boolean).pop() ?? '';
+}
+
 export function ProjectDialog({
   open,
   project,
+  initialValues,
   onClose,
   onSubmit,
   onValidatePath,
   onSelectDirectory,
 }: ProjectDialogProps) {
   const mode = project ? 'edit' : 'create';
+  const [sourceType, setSourceType] = useState<'local' | 'repo'>('local');
   const [name, setName] = useState('');
   const [repoPath, setRepoPath] = useState('');
+  const [repoUrl, setRepoUrl] = useState('');
   const [defaultAgentType, setDefaultAgentType] = useState('');
   const [defaultPriority, setDefaultPriority] = useState('');
   const [defaultBaseBranch, setDefaultBaseBranch] = useState('');
@@ -47,23 +70,30 @@ export function ProjectDialog({
   const [pathStatus, setPathStatus] = useState<PathStatus>({ kind: 'idle' });
   const [submitting, setSubmitting] = useState(false);
   const [selectingDirectory, setSelectingDirectory] = useState(false);
+  const [autoSubmitPending, setAutoSubmitPending] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    setName(project?.name ?? '');
-    setRepoPath(project?.repoPath ?? '');
-    setDefaultAgentType(project?.defaultAgentType ?? '');
-    setDefaultPriority(project?.defaultPriority ?? '');
-    setDefaultBaseBranch(project?.defaultBaseBranch ?? '');
+    setSourceType(initialValues?.source ?? (project?.repoUrl ? 'repo' : 'local'));
+    setName(project?.name ?? initialValues?.name ?? '');
+    setRepoPath(project?.repoPath ?? initialValues?.repoPath ?? '');
+    setRepoUrl(project?.repoUrl ?? initialValues?.repoUrl ?? '');
+    setDefaultAgentType(project?.defaultAgentType ?? initialValues?.defaultAgentType ?? '');
+    setDefaultPriority(project?.defaultPriority ?? initialValues?.defaultPriority ?? '');
+    setDefaultBaseBranch(project?.defaultBaseBranch ?? initialValues?.defaultBaseBranch ?? '');
     setDefaultUseWorktree(
-      project?.defaultUseWorktree === undefined ? 'inherit' : project.defaultUseWorktree ? 'true' : 'false',
+      project?.defaultUseWorktree === undefined
+        ? initialValues?.defaultUseWorktree ?? 'inherit'
+        : project.defaultUseWorktree ? 'true' : 'false',
     );
-    setNameTouched(Boolean(project));
+    setNameTouched(Boolean(project) || Boolean(initialValues?.name));
     setError('');
     setPathStatus({ kind: 'idle' });
     setSubmitting(false);
     setSelectingDirectory(false);
-  }, [open, project]);
+    // Defer auto-submit to a later render so the prefilled state above is applied first.
+    setAutoSubmitPending(!project && Boolean(initialValues?.autoSubmit));
+  }, [open, project, initialValues]);
 
   async function validatePath(value: string): Promise<boolean> {
     const trimmedPath = value.trim();
@@ -92,24 +122,36 @@ export function ProjectDialog({
     return true;
   }
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function handleSubmit(e?: FormEvent) {
+    e?.preventDefault();
     if (submitting) return;
 
     const trimmedName = name.trim();
     const trimmedPath = repoPath.trim();
-    if (mode === 'create' && !trimmedName && !trimmedPath) {
-      setError('Project Name or Local Path is required');
-      return;
-    }
-    if (mode === 'edit' && !trimmedName) {
+    const trimmedUrl = repoUrl.trim();
+    const usingRepo = mode === 'create' && sourceType === 'repo';
+
+    if (usingRepo) {
+      if (!trimmedUrl) {
+        setError('Repository URL is required');
+        return;
+      }
+    } else if (mode === 'create') {
+      if (!trimmedName && !trimmedPath) {
+        setError('Project Name or Local Path is required');
+        return;
+      }
+    } else if (!trimmedName) {
       setError('Project Name is required');
       return;
     }
-    const pathValid = await validatePath(trimmedPath);
-    if (!pathValid) {
-      setError('Fix the Local Path before saving');
-      return;
+
+    if (!usingRepo) {
+      const pathValid = await validatePath(trimmedPath);
+      if (!pathValid) {
+        setError('Fix the Local Path before saving');
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -130,11 +172,30 @@ export function ProjectDialog({
             defaultBaseBranch: trimmedBaseBranch || undefined,
             defaultUseWorktree: worktreeValue,
           };
-      const result = await onSubmit({
-        name: trimmedName || undefined,
-        repoPath: trimmedPath || (mode === 'edit' ? null : undefined),
-        ...defaults,
-      });
+
+      let payload: CreateProjectRequest | UpdateProjectRequest;
+      if (mode === 'edit') {
+        payload = {
+          name: trimmedName || undefined,
+          repoPath: trimmedPath || null,
+          repoUrl: trimmedUrl || null,
+          ...defaults,
+        };
+      } else if (usingRepo) {
+        payload = {
+          name: trimmedName || undefined,
+          repoUrl: trimmedUrl,
+          ...defaults,
+        };
+      } else {
+        payload = {
+          name: trimmedName || undefined,
+          repoPath: trimmedPath || undefined,
+          ...defaults,
+        };
+      }
+
+      const result = await onSubmit(payload);
       if (result === undefined) return;
       onClose();
     } finally {
@@ -142,11 +203,27 @@ export function ProjectDialog({
     }
   }
 
+  // Auto-submit prefilled forms launched via a creation URI (?autostart=1).
+  // Runs only after the prefill effect has applied initialValues to state, so
+  // handleSubmit's closure sees the populated name/repoUrl/repoPath/source.
+  useEffect(() => {
+    if (!open || !autoSubmitPending || submitting) return;
+    setAutoSubmitPending(false);
+    void handleSubmit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, autoSubmitPending, submitting]);
+
   function handlePathChange(value: string) {
     setRepoPath(value);
     setError('');
     setPathStatus({ kind: 'idle' });
     if (mode === 'create' && !nameTouched) setName(leafNameFromPath(value));
+  }
+
+  function handleUrlChange(value: string) {
+    setRepoUrl(value);
+    setError('');
+    if (mode === 'create' && !nameTouched) setName(leafNameFromUrl(value));
   }
 
   async function handleSelectDirectory() {
@@ -165,6 +242,9 @@ export function ProjectDialog({
   }
 
   if (!open) return null;
+
+  const showLocalFields = mode === 'edit' || sourceType === 'local';
+  const showRepoField = mode === 'edit' || sourceType === 'repo';
 
   return (
     <AnimatePresence>
@@ -197,6 +277,44 @@ export function ProjectDialog({
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {mode === 'create' && (
+                <div>
+                  <span className="mb-1.5 block text-xs font-medium text-muted-foreground">Project Source</span>
+                  <div role="radiogroup" aria-label="Project Source" className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={sourceType === 'local'}
+                      onClick={() => { setSourceType('local'); setError(''); }}
+                      className={[
+                        'flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors',
+                        sourceType === 'local'
+                          ? 'border-primary bg-primary/10 text-foreground'
+                          : 'border-border text-muted-foreground hover:bg-accent',
+                      ].join(' ')}
+                    >
+                      <HardDrive className="h-4 w-4" />
+                      Local Path
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={sourceType === 'repo'}
+                      onClick={() => { setSourceType('repo'); setError(''); }}
+                      className={[
+                        'flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors',
+                        sourceType === 'repo'
+                          ? 'border-primary bg-primary/10 text-foreground'
+                          : 'border-border text-muted-foreground hover:bg-accent',
+                      ].join(' ')}
+                    >
+                      <Github className="h-4 w-4" />
+                      GitHub URL
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label htmlFor="project-name" className="mb-1.5 block text-xs font-medium text-muted-foreground">
                   Project Name
@@ -209,50 +327,72 @@ export function ProjectDialog({
                     setNameTouched(true);
                     setError('');
                   }}
-                  placeholder={mode === 'create' ? 'Defaults to the folder name' : 'Project name'}
+                  placeholder={mode === 'create' ? 'Defaults to the folder/repo name' : 'Project name'}
                   autoFocus
                   className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
 
-              <div>
-                <label htmlFor="project-repo-path" className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                  Local Path
-                </label>
-                <div className="flex gap-2">
+              {showRepoField && (
+                <div>
+                  <label htmlFor="project-repo-url" className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                    Repository URL
+                  </label>
                   <input
-                    id="project-repo-path"
-                    value={repoPath}
-                    onChange={(e) => handlePathChange(e.target.value)}
-                    onBlur={() => { void validatePath(repoPath); }}
-                    placeholder={getRepoPathPlaceholder()}
-                    className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    id="project-repo-url"
+                    value={repoUrl}
+                    onChange={(e) => handleUrlChange(e.target.value)}
+                    placeholder="https://github.com/owner/repo.git"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                   />
-                  <button
-                    type="button"
-                    onClick={handleSelectDirectory}
-                    disabled={selectingDirectory}
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <FolderOpen className="h-4 w-4" />
-                    {selectingDirectory ? 'Browsing…' : 'Browse…'}
-                  </button>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground/60">{getRepoPathHelpText()}</p>
-                {pathStatus.kind !== 'idle' && (
-                  <p
-                    className={[
-                      'mt-1 text-xs',
-                      pathStatus.kind === 'validating' ? 'text-muted-foreground' : '',
-                      pathStatus.kind === 'valid' ? 'text-green-500' : '',
-                      pathStatus.kind === 'warning' ? 'text-amber-500' : '',
-                      pathStatus.kind === 'invalid' ? 'text-red-400' : '',
-                    ].join(' ')}
-                  >
-                    {pathStatus.kind === 'validating' ? 'Validating Local Path…' : pathStatus.message}
+                  <p className="mt-1 text-xs text-muted-foreground/60">
+                    {mode === 'create'
+                      ? 'The repo is cloned into your configured clone root on create.'
+                      : 'Source URL the repo was cloned from (metadata only).'}
                   </p>
-                )}
-              </div>
+                </div>
+              )}
+
+              {showLocalFields && (
+                <div>
+                  <label htmlFor="project-repo-path" className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                    Local Path
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      id="project-repo-path"
+                      value={repoPath}
+                      onChange={(e) => handlePathChange(e.target.value)}
+                      onBlur={() => { void validatePath(repoPath); }}
+                      placeholder={getRepoPathPlaceholder()}
+                      className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSelectDirectory}
+                      disabled={selectingDirectory}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <FolderOpen className="h-4 w-4" />
+                      {selectingDirectory ? 'Browsing…' : 'Browse…'}
+                    </button>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground/60">{getRepoPathHelpText()}</p>
+                  {pathStatus.kind !== 'idle' && (
+                    <p
+                      className={[
+                        'mt-1 text-xs',
+                        pathStatus.kind === 'validating' ? 'text-muted-foreground' : '',
+                        pathStatus.kind === 'valid' ? 'text-green-500' : '',
+                        pathStatus.kind === 'warning' ? 'text-amber-500' : '',
+                        pathStatus.kind === 'invalid' ? 'text-red-400' : '',
+                      ].join(' ')}
+                    >
+                      {pathStatus.kind === 'validating' ? 'Validating Local Path…' : pathStatus.message}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {error && (
                 <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-400">
@@ -346,7 +486,7 @@ export function ProjectDialog({
                   className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {submitting
-                    ? (mode === 'edit' ? 'Saving…' : 'Creating…')
+                    ? (mode === 'edit' ? 'Saving…' : (sourceType === 'repo' ? 'Cloning…' : 'Creating…'))
                     : (mode === 'edit' ? 'Save Changes' : 'Create Project')}
                 </button>
               </div>
