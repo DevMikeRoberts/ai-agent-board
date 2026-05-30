@@ -119,7 +119,13 @@ test.describe('Agent Selector in TaskDialog', () => {
 
     if (!selected.hasAvailableAgent) {
       await expect(dropdownOptions).toHaveCount(5);
-      await expect(dropdownOptions.filter({ hasText: 'Unavailable' })).toHaveCount(5);
+      // When no provider is available every option is disabled. The trailing
+      // status text is the provider's reason (e.g. "... not found" or a
+      // test-environment reason) and falls back to "Unavailable" only when the
+      // reason is empty, so assert the disabled state rather than the label.
+      for (let i = 0; i < 5; i++) {
+        await expect(dropdownOptions.nth(i)).toBeDisabled();
+      }
       return;
     }
 

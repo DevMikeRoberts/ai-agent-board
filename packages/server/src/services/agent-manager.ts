@@ -137,6 +137,29 @@ export class AgentManager {
       `[agent-manager] detected agents: ${this.availableAgents.map(a => `${a.displayName}=${a.available ? 'yes' : 'no'}`).join(', ')}`
     );
 
+    // In test/CI environments there are no real agent credentials, and some
+    // provider SDKs spawn a background session on start() that rejects (e.g.
+    // Copilot without GitHub auth) as a detached unhandled rejection — which
+    // would crash the server. When startup is disabled we skip booting real SDK
+    // clients. Because no provider is started, no agent can actually run, so we
+    // also report every detected agent as unavailable. This keeps the agents
+    // listed in the UI (as "Unavailable") while ensuring real-execution E2E
+    // specs skip instead of attempting sessions that would hang or fail — a CLI
+    // shim on PATH (e.g. node_modules/.bin/copilot) otherwise makes detection
+    // report an agent that cannot be used here as "available".
+    const skipAgentStartup =
+      process.env.AGENTBOARD_DISABLE_AGENT_STARTUP === '1' ||
+      process.env.AGENTBOARD_DISABLE_AGENT_STARTUP === 'true';
+    if (skipAgentStartup) {
+      console.log('[agent-manager] AGENTBOARD_DISABLE_AGENT_STARTUP set — skipping provider start()');
+      this.availableAgents = this.availableAgents.map(a => ({
+        ...a,
+        available: false,
+        reason: 'Agent startup disabled (test environment)',
+      }));
+      return;
+    }
+
     // Start available providers
     for (const info of available) {
       const provider = this.providers.get(info.name);

@@ -1,5 +1,29 @@
-# Shell scripts must use LF so they run under POSIX sh in CI/Linux.
+# Enforce LF line endings for every text file in the repo so checkouts are
+# identical on macOS, Linux (CI), and Windows. `text=auto` lets Git detect text
+# vs. binary; `eol=lf` normalizes all detected text files to LF in the index and
+# working tree. This prevents CRLF from leaking in from Windows clients (which
+# previously broke POSIX shell scripts in CI).
+* text=auto eol=lf
+
+# Shell scripts must stay LF so they run under POSIX sh in CI/Linux.
 *.sh text eol=lf
+
+# Binary assets — never normalize or diff as text.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.zip binary
+*.gz binary
+*.mp4 binary
+*.mov binary
 
 # Squad: union merge for append-only team state files
 .squad/decisions.md merge=union

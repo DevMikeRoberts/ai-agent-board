@@ -38,6 +38,9 @@ const child = spawn(isWindows ? 'npx tsx src/index.ts' : 'npx', isWindows ? [] :
     ALLOWED_ORIGINS: `http://localhost:${clientPort}`,
     ALLOWED_REPO_ROOTS: allowedRepoRoots,
     AGENTBOARD_HOME: agentboardHome,
+    // E2E never runs real agents; skip booting agent SDK clients so an
+    // unauthenticated environment can't crash the server on startup.
+    AGENTBOARD_DISABLE_AGENT_STARTUP: '1',
   },
   shell: isWindows,
   stdio: 'inherit',
