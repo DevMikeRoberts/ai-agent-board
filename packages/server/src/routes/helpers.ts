@@ -4,7 +4,7 @@ import { execFileSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import type { Task, TaskGroup } from '../types.js';
+import type { Project, Task, TaskGroup } from '../types.js';
 import { isValidPriority, isValidColumnId, isValidAgentType, MAX_TITLE_LENGTH, MAX_DESCRIPTION_LENGTH } from '@ai-agent-board/shared/constants.js';
 import { errorMessage } from '../utils.js';
 import type { TaskRepository } from '../repositories/types.js';
@@ -38,11 +38,68 @@ export function isValidGitRef(ref: string): boolean {
 
 // ─── Repo-path validation ───────────────────────────────────────────
 
-// Default whitelist when ALLOWED_REPO_ROOTS is unset: home dir + tmp.
-// Prevents agents from accessing /etc, /proc, etc. in local dev.
+// Default whitelist when ALLOWED_REPO_ROOTS is unset: home dir + tmp + this workspace.
+// Prevents agents from accessing /etc, /proc, etc. while still allowing local dev repos.
 const ALLOWED_REPO_ROOTS: string[] = process.env.ALLOWED_REPO_ROOTS
-  ? process.env.ALLOWED_REPO_ROOTS.split(',').map((p) => p.trim()).filter(Boolean)
-  : [os.homedir(), os.tmpdir()];
+  ? process.env.ALLOWED_REPO_ROOTS.split(',').map((p) => expandTilde(p.trim())).filter(Boolean)
+  : getDefaultAllowedRepoRoots();
+
+function getDefaultAllowedRepoRoots(): string[] {
+  const roots = [
+    os.homedir(),
+    os.tmpdir(),
+    process.cwd(),
+  ];
+
+  if (process.env.PROJECTS_DIR) {
+    roots.push(expandTilde(process.env.PROJECTS_DIR));
+  }
+
+  const workspaceRoot = findWorkspaceRoot(process.cwd());
+  if (workspaceRoot) {
+    roots.push(workspaceRoot);
+  }
+
+  return dedupePaths(roots);
+}
+
+function findWorkspaceRoot(start: string): string | null {
+  let current = path.resolve(start);
+
+  for (let depth = 0; depth < 5; depth += 1) {
+    const parent = path.dirname(current);
+    if (
+      path.basename(current) === 'server'
+      && path.basename(parent) === 'packages'
+      && fs.existsSync(path.join(path.dirname(parent), 'package.json'))
+    ) {
+      return path.dirname(parent);
+    }
+    if (fs.existsSync(path.join(current, 'package.json'))) {
+      return current;
+    }
+    if (parent === current) return null;
+    current = parent;
+  }
+
+  return null;
+}
+
+function dedupePaths(paths: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const candidate of paths) {
+    const resolved = realOrResolve(candidate);
+    const key = normalizeForBoundaryCheck(resolved);
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(resolved);
+    }
+  }
+
+  return result;
+}
 
 /** Canonicalize a path, falling back to path.resolve if it doesn't exist yet. */
 function realOrResolve(p: string): string {
@@ -53,12 +110,32 @@ function realOrResolve(p: string): string {
   }
 }
 
+function normalizeForBoundaryCheck(p: string): string {
+  const normalized = path.normalize(p);
+  const root = path.parse(normalized).root;
+  const withoutTrailingSeparators = normalized.length > root.length
+    ? normalized.replace(/[\\/]+$/, '')
+    : normalized;
+  return process.platform === 'win32' ? withoutTrailingSeparators.toLowerCase() : withoutTrailingSeparators;
+}
+
+function isPathUnderRoot(candidate: string, root: string): boolean {
+  const normalizedCandidate = normalizeForBoundaryCheck(candidate);
+  const normalizedRoot = normalizeForBoundaryCheck(root);
+  const rootPath = normalizeForBoundaryCheck(path.parse(root).root);
+
+  if (normalizedRoot === rootPath) {
+    return normalizedCandidate.startsWith(normalizedRoot);
+  }
+  return normalizedCandidate === normalizedRoot || normalizedCandidate.startsWith(normalizedRoot + path.sep);
+}
+
 export function isAllowedRepoPath(repoPath: string): string | null {
   const resolved = realOrResolve(repoPath);
 
   const underAllowedRoot = ALLOWED_REPO_ROOTS.some((root) => {
     const realRoot = realOrResolve(root);
-    return resolved === realRoot || resolved.startsWith(realRoot + path.sep);
+    return isPathUnderRoot(resolved, realRoot);
   });
   if (!underAllowedRoot) {
     return `repoPath must be under one of: ${ALLOWED_REPO_ROOTS.join(', ')}`;
@@ -106,6 +183,10 @@ export function expandTilde(p: string): string {
   return path.join(os.homedir(), rest);
 }
 
+export function normalizeRepoPathForCompare(repoPath: string): string {
+  return normalizeForBoundaryCheck(realOrResolve(expandTilde(repoPath)));
+}
+
 // ─── Broadcast helpers ──────────────────────────────────────────────
 
 export function broadcastTaskUpdate(task: Task): void {
@@ -114,6 +195,53 @@ export function broadcastTaskUpdate(task: Task): void {
 
 export function broadcastGroupUpdate(group: TaskGroup): void {
   broadcast({ type: 'group_updated', payload: group });
+}
+
+export function broadcastProjectUpdate(project: Project): void {
+  broadcast({ type: 'project_updated', payload: project });
+}
+
+export function broadcastProjectDelete(id: string): void {
+  broadcast({ type: 'project_deleted', payload: { id } });
+}
+
+export async function failTaskWithEvent(
+  repo: TaskRepository,
+  task: Task,
+  content: string,
+): Promise<Task | undefined> {
+  const event = {
+    id: uuid(),
+    taskId: task.id,
+    type: 'error' as const,
+    content,
+    timestamp: Date.now(),
+    metadata: {
+      agentType: task.agentType,
+      duration: 0,
+      error: content,
+    },
+  };
+
+  await repo.insertEvent(event);
+  broadcast({ type: 'agent_event', payload: event });
+  broadcast({
+    type: 'agent_complete',
+    payload: {
+      taskId: task.id,
+      status: 'failed',
+      agentType: task.agentType,
+      duration: 0,
+      eventCount: 1,
+    },
+  });
+
+  const failed = await repo.update(task.id, {
+    agentStatus: 'failed',
+    completedAt: event.timestamp,
+  });
+  if (failed) broadcastTaskUpdate(failed);
+  return failed;
 }
 
 // ─── Rate limiter ───────────────────────────────────────────────────
@@ -196,9 +324,10 @@ export function validateTaskFields(body: Record<string, any>): string | null {
 // ─── Task builder ───────────────────────────────────────────────────
 
 export function buildTask(body: Record<string, any>): Task {
-  const { title, description, priority, columnId, agentType, repoPath, branchName, baseBranch, useWorktree } = body;
+  const { title, description, priority, columnId, agentType, repoPath, branchName, baseBranch, useWorktree, projectId } = body;
   return {
     id: uuid(),
+    projectId: typeof projectId === 'string' && projectId ? projectId : 'default',
     title,
     description: description || '',
     priority: priority || 'medium',

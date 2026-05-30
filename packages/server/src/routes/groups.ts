@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
+import path from 'path';
 import { v4 as uuid } from 'uuid';
-import type { TaskGroup, Task } from '../types.js';
+import type { Project, TaskGroup, Task } from '../types.js';
 import {
   isValidPriority,
   isValidAgentType,
@@ -13,6 +14,7 @@ import {
 } from '@ai-agent-board/shared/constants.js';
 import type { TaskGroupRepository } from '../repositories/group-types.js';
 import type { TaskRepository } from '../repositories/types.js';
+import type { ProjectRepository } from '../repositories/project-types.js';
 import type { AgentManager } from '../services/agent-manager.js';
 import {
   asyncHandler,
@@ -25,19 +27,23 @@ import {
   makeStatusCallback,
   makeWorktreeCallback,
   isRateLimited,
+  normalizeRepoPathForCompare,
 } from './helpers.js';
 
 export function createGroupsRouter(
   groupRepo: TaskGroupRepository,
   taskRepo: TaskRepository,
   agentManager: AgentManager,
+  projectRepo: ProjectRepository,
 ): Router {
   const router = Router();
 
   // GET /api/groups — list all groups
   router.get('/', asyncHandler(async (_req: Request, res: Response) => {
     const includeArchived = _req.query.archived === 'true';
-    const groups = await groupRepo.getAll(includeArchived);
+    const project = await getProjectForRequest(projectRepo, _req.query.projectId);
+    if (!project) { res.status(404).json({ error: 'project not found' }); return; }
+    const groups = await groupRepo.getAll(includeArchived, project.id);
     // Attach child task summaries
     const result = await Promise.all(
       groups.map(async (g) => {
@@ -59,7 +65,11 @@ export function createGroupsRouter(
 
   // POST /api/groups — create group with children
   router.post('/', asyncHandler(async (req: Request, res: Response) => {
-    const { title, description, priority, repoPath, baseBranch, maxConcurrency, children, autoRun } = req.body;
+    const project = await getProjectForRequest(projectRepo, req.body.projectId);
+    if (!project) { res.status(400).json({ error: 'projectId is invalid' }); return; }
+    const body = enforceProjectRepoPath(req.body, project);
+    if (typeof body === 'string') { res.status(400).json({ error: body }); return; }
+    const { title, description, priority, repoPath, baseBranch, maxConcurrency, children, autoRun } = body;
 
     // Validate group fields
     if (!title || typeof title !== 'string' || !title.trim()) {
@@ -81,6 +91,9 @@ export function createGroupsRouter(
     // Validate repo path
     if (repoPath !== undefined && typeof repoPath === 'string') {
       const expanded = expandTilde(repoPath);
+      if (!path.isAbsolute(expanded)) {
+        res.status(400).json({ error: 'repoPath must be an absolute path' }); return;
+      }
       const repoErr = isAllowedRepoPath(expanded);
       if (repoErr) { res.status(400).json({ error: repoErr }); return; }
     }
@@ -125,6 +138,7 @@ export function createGroupsRouter(
 
     const group: TaskGroup = {
       id: groupId,
+      projectId: project.id,
       title: title.trim(),
       description: description?.trim() || undefined,
       priority: priority || 'medium',
@@ -137,6 +151,7 @@ export function createGroupsRouter(
 
     const childDefs = children.map((child: any, i: number) => ({
       id: uuid(),
+      projectId: project.id,
       title: child.title.trim(),
       description: child.description?.trim() || '',
       priority: child.priority || group.priority,
@@ -173,6 +188,12 @@ export function createGroupsRouter(
     const id = paramId(req);
     const group = await groupRepo.getById(id);
     if (!group) { res.status(404).json({ error: 'group not found' }); return; }
+    const groupProjectId = group.projectId ?? 'default';
+    if (req.body.projectId !== undefined && req.body.projectId !== groupProjectId) {
+      res.status(400).json({ error: 'projectId is immutable' }); return;
+    }
+    const groupProject = await projectRepo.getById(groupProjectId);
+    if (!groupProject) { res.status(400).json({ error: 'group project not found' }); return; }
 
     const updates: Partial<TaskGroup> = {};
     if (req.body.title !== undefined) {
@@ -196,6 +217,21 @@ export function createGroupsRouter(
     if (req.body.priority !== undefined) {
       if (!isValidPriority(req.body.priority)) { res.status(400).json({ error: 'invalid priority' }); return; }
       updates.priority = req.body.priority;
+    }
+    if (req.body.repoPath !== undefined) {
+      if (typeof req.body.repoPath !== 'string') {
+        res.status(400).json({ error: 'repoPath must be a string' }); return;
+      }
+      if (groupProject.repoPath && normalizeRepoPathForCompare(req.body.repoPath) !== normalizeRepoPathForCompare(groupProject.repoPath)) {
+        res.status(400).json({ error: 'repoPath is locked by the group project' }); return;
+      }
+      const expandedRepoPath = expandTilde(req.body.repoPath);
+      if (!path.isAbsolute(expandedRepoPath)) {
+        res.status(400).json({ error: 'repoPath must be an absolute path' }); return;
+      }
+      const repoErr = isAllowedRepoPath(expandedRepoPath);
+      if (repoErr) { res.status(400).json({ error: repoErr }); return; }
+      if (!groupProject.repoPath) updates.repoPath = expandedRepoPath;
     }
     if (req.body.maxConcurrency !== undefined) {
       const children = await groupRepo.getChildTasks(id);
@@ -423,4 +459,20 @@ async function startGroupExecution(
     (task: Task) => makeWorktreeCallback(taskRepo, task.id),
     onChildComplete,
   );
+}
+
+async function getProjectForRequest(projectRepo: ProjectRepository, value: unknown): Promise<Project | undefined> {
+  if (typeof value === 'string' && value) return projectRepo.getById(value);
+  return projectRepo.getDefault();
+}
+
+function enforceProjectRepoPath(body: Record<string, any>, project: Project): Record<string, any> | string {
+  if (!project.repoPath) return { ...body, projectId: project.id };
+  if (
+    body.repoPath !== undefined
+    && (typeof body.repoPath !== 'string' || normalizeRepoPathForCompare(body.repoPath) !== normalizeRepoPathForCompare(project.repoPath))
+  ) {
+    return 'repoPath must match the selected project';
+  }
+  return { ...body, projectId: project.id, repoPath: project.repoPath };
 }

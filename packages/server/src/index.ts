@@ -12,12 +12,14 @@ import { createGitRouter } from './routes/git.js';
 import { createTemplateRouter } from './routes/templates.js';
 import { createGroupsRouter } from './routes/groups.js';
 import { createAttachmentsRouter } from './routes/attachments.js';
+import { createProjectsRouter } from './routes/projects.js';
 import type { AttachmentStore } from './repositories/attachment-types.js';
 import { AgentManager } from './services/agent-manager.js';
 import { authMiddleware } from './middleware/auth.js';
 import type { TaskRepository } from './repositories/types.js';
 import type { TemplateRepository } from './repositories/template-types.js';
 import type { TaskGroupRepository } from './repositories/group-types.js';
+import type { ProjectRepository } from './repositories/project-types.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '8080', 10);
@@ -35,6 +37,7 @@ const DATABASE_URL = process.env.DATABASE_URL;
 let taskRepo: TaskRepository;
 let templateRepo: TemplateRepository;
 let groupRepo: TaskGroupRepository;
+let projectRepo: ProjectRepository;
 let attachmentStore: AttachmentStore;
 let cleanupDb: () => void;
 
@@ -48,6 +51,8 @@ const agentManager = new AgentManager();
     const pool = new Pool({ connectionString: DATABASE_URL });
     await initPostgresDatabase(pool);
     taskRepo = new PostgresTaskRepository(pool);
+    const { PostgresProjectRepository } = await import('./repositories/postgres-projects.js');
+    projectRepo = new PostgresProjectRepository(pool);
     const { PostgresTemplateRepository } = await import('./repositories/postgres-templates.js');
     templateRepo = new PostgresTemplateRepository(pool);
     const { PostgresTaskGroupRepository } = await import('./repositories/postgres-groups.js');
@@ -60,6 +65,8 @@ const agentManager = new AgentManager();
     // SQLite fallback
     const db = initDatabase();
     taskRepo = new SqliteTaskRepository(db);
+    const { SqliteProjectRepository } = await import('./repositories/sqlite-projects.js');
+    projectRepo = new SqliteProjectRepository(db);
     const { SqliteTemplateRepository } = await import('./repositories/sqlite-templates.js');
     templateRepo = new SqliteTemplateRepository(db);
     const { SqliteTaskGroupRepository } = await import('./repositories/sqlite-groups.js');
@@ -73,11 +80,12 @@ const agentManager = new AgentManager();
   agentManager.initEventPersistence(taskRepo);
   agentManager.initAttachmentStore(attachmentStore);
 
-  app.use('/api/tasks', createTaskRouter(taskRepo, agentManager));
-  app.use('/api/tasks', createAgentRouter(taskRepo, agentManager, groupRepo));
+  app.use('/api/projects', createProjectsRouter(projectRepo));
+  app.use('/api/tasks', createTaskRouter(taskRepo, agentManager, projectRepo));
+  app.use('/api/tasks', createAgentRouter(taskRepo, agentManager, groupRepo, projectRepo));
   app.use('/api/tasks', createGitRouter(taskRepo, agentManager));
   app.use('/api/templates', createTemplateRouter(templateRepo));
-  app.use('/api/groups', createGroupsRouter(groupRepo, taskRepo, agentManager));
+  app.use('/api/groups', createGroupsRouter(groupRepo, taskRepo, agentManager, projectRepo));
   app.use('/api', createAttachmentsRouter(taskRepo, attachmentStore));
 
   // GET /api/agents — list available agents

@@ -31,6 +31,7 @@ export interface Task {
   groupId?: string;
   groupOrder?: number;
   attachments?: TaskAttachment[];
+  projectId: string;
 }
 
 export interface TaskGroup {
@@ -46,6 +47,35 @@ export interface TaskGroup {
   startedAt?: number;
   completedAt?: number;
   archived?: boolean;
+  projectId: string;
+}
+
+export interface ProjectTaskCounts {
+  backlog: number;
+  'in-progress': number;
+  review: number;
+  done: number;
+  total: number;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  repoPath?: string;
+  isDefault: boolean;
+  createdAt: number;
+  updatedAt: number;
+  taskCounts?: ProjectTaskCounts;
+}
+
+export interface CreateProjectRequest {
+  name?: string;
+  repoPath?: string;
+}
+
+export interface UpdateProjectRequest {
+  name?: string;
+  repoPath?: string | null;
 }
 
 export type AgentEventType =
@@ -129,4 +159,6 @@ export type WSMessage =
   | { type: 'task_deleted'; payload: { id: string } }
   | { type: 'agent_complete'; payload: AgentCompletePayload }
   | { type: 'agent_follow_up'; payload: AgentFollowUpPayload }
-  | { type: 'group_updated'; payload: TaskGroup };
+  | { type: 'group_updated'; payload: TaskGroup }
+  | { type: 'project_updated'; payload: Project }
+  | { type: 'project_deleted'; payload: { id: string } };

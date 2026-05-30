@@ -4,22 +4,25 @@ import { api, connectWS } from '@/lib/api';
 import type { TaskGroupWithChildren, CreateGroupChild } from '@/lib/api';
 import type { Priority } from '@/types';
 
-export function useTaskGroups() {
+const getProjectId = (value: { projectId?: string }) => value.projectId ?? 'default';
+
+export function useTaskGroups(projectId = 'default') {
   const [groups, setGroups] = useState<TaskGroupWithChildren[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   // Fetch groups on mount
   useEffect(() => {
-    api.getGroups().then(setGroups).catch((err) => {
+    api.getGroups(false, projectId).then(setGroups).catch((err) => {
       setError(`Failed to load groups: ${err.message}`);
     });
-  }, []);
+  }, [projectId]);
 
   // WebSocket: live group updates
   useEffect(() => {
     return connectWS(
       (msg) => {
         if (msg.type === 'group_updated') {
+          if (getProjectId(msg.payload) !== projectId) return;
           setGroups((prev) => {
             const exists = prev.some((g) => g.id === msg.payload.id);
             if (exists) {
@@ -27,6 +30,7 @@ export function useTaskGroups() {
             }
             // New group — fetch full details (with children)
             api.getGroup(msg.payload.id).then((full) => {
+              if (getProjectId(full) !== projectId) return;
               setGroups((p) => {
                 const alreadyExists = p.some((g) => g.id === full.id);
                 return alreadyExists ? p.map((g) => (g.id === full.id ? full : g)) : [...p, full];
@@ -38,6 +42,7 @@ export function useTaskGroups() {
         // Update child task within its parent group
         if (msg.type === 'task_updated' && msg.payload.groupId) {
           const child = msg.payload;
+          if (getProjectId(child) !== projectId) return;
           setGroups((prev) =>
             prev.map((g) => {
               if (g.id !== child.groupId) return g;
@@ -49,9 +54,9 @@ export function useTaskGroups() {
           );
         }
       },
-      () => { api.getGroups().then(setGroups).catch(console.error); },
+      () => { api.getGroups(false, projectId).then(setGroups).catch(console.error); },
     );
-  }, []);
+  }, [projectId]);
 
   // Refetch a single group's children (for status updates)
   const refreshGroup = useCallback(async (groupId: string) => {
@@ -72,10 +77,11 @@ export function useTaskGroups() {
     maxConcurrency: number;
     children: CreateGroupChild[];
     autoRun?: boolean;
+    projectId?: string;
   }) => {
     try {
       setError(null);
-      const result = await api.createGroup(data);
+      const result = await api.createGroup({ ...data, projectId: data.projectId ?? projectId });
       setGroups((prev) => {
         const exists = prev.some((g) => g.id === result.id);
         return exists ? prev.map((g) => (g.id === result.id ? result : g)) : [...prev, result];
@@ -86,7 +92,7 @@ export function useTaskGroups() {
       setError(msg);
       return undefined;
     }
-  }, []);
+  }, [projectId]);
 
   const runGroup = useCallback(async (id: string) => {
     try {

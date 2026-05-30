@@ -5,7 +5,7 @@ import type { AgentType, Priority } from '@/types';
 import { MAX_GROUP_CHILDREN, MIN_GROUP_CHILDREN } from '@/types';
 import { AGENT_OPTIONS } from '@/lib/agent-config';
 import { PRIORITY_OPTIONS } from '@/lib/priority-config';
-import { cn } from '@/lib/utils';
+import { cn, getRepoPathHelpText, getRepoPathPlaceholder, isAbsoluteRepoPath } from '@/lib/utils';
 import { getRecentRepoPaths, addRepoPath } from '@/lib/repo-history';
 import ParallelismSlider from './ParallelismSlider';
 import type { CreateGroupChild, TaskGroupWithChildren } from '@/lib/api';
@@ -33,6 +33,7 @@ interface TaskGroupDialogProps {
   }) => Promise<unknown>;
   editGroup?: TaskGroupWithChildren | null;
   onEditSubmit?: (id: string, updates: { title: string; description?: string; priority: Priority; maxConcurrency: number }) => Promise<unknown>;
+  lockedRepoPath?: string;
 }
 
 const agents = AGENT_OPTIONS;
@@ -43,7 +44,7 @@ function makeRow(): ChildRow {
   return { key: `child-${nextKey++}`, title: '', description: '', agentType: 'copilot', useWorktree: true };
 }
 
-export function TaskGroupDialog({ open, onClose, onSubmit, editGroup, onEditSubmit }: TaskGroupDialogProps) {
+export function TaskGroupDialog({ open, onClose, onSubmit, editGroup, onEditSubmit, lockedRepoPath }: TaskGroupDialogProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<Priority>('medium');
@@ -57,6 +58,7 @@ export function TaskGroupDialog({ open, onClose, onSubmit, editGroup, onEditSubm
   const [pathError, setPathError] = useState('');
 
   const isEditMode = !!editGroup;
+  const hasLockedRepoPath = !!lockedRepoPath;
 
   // Pre-populate in edit mode, reset when dialog closes
   useEffect(() => {
@@ -64,7 +66,7 @@ export function TaskGroupDialog({ open, onClose, onSubmit, editGroup, onEditSubm
       setTitle(editGroup.title);
       setDescription(editGroup.description || '');
       setPriority(editGroup.priority);
-      setRepoPath(editGroup.repoPath || '');
+      setRepoPath(lockedRepoPath || editGroup.repoPath || '');
       setBaseBranch(editGroup.baseBranch || 'main');
       setMaxConcurrency(editGroup.maxConcurrency);
       setChildren(editGroup.children.map((c) => ({
@@ -86,7 +88,14 @@ export function TaskGroupDialog({ open, onClose, onSubmit, editGroup, onEditSubm
       setSubmitting(false);
       setPathError('');
     }
-  }, [editGroup, open]);
+  }, [editGroup, open, lockedRepoPath]);
+
+  useEffect(() => {
+    if (open && lockedRepoPath) {
+      setRepoPath(lockedRepoPath);
+      setPathError('');
+    }
+  }, [open, lockedRepoPath]);
 
   // Keep concurrency in range when children change
   useEffect(() => {
@@ -94,15 +103,17 @@ export function TaskGroupDialog({ open, onClose, onSubmit, editGroup, onEditSubm
   }, [children.length, maxConcurrency]);
 
   const hasWorktreeWarning = children.length >= 2 && children.some((c) => !c.useWorktree);
+  const repoPathPlaceholder = getRepoPathPlaceholder();
+  const repoPathHelpText = getRepoPathHelpText();
 
   async function handleSubmit() {
     if (!title.trim() || submitting) return;
 
     // Client-side path validation
-    const trimmedPath = repoPath.trim();
+    const trimmedPath = (lockedRepoPath || repoPath).trim();
     if (trimmedPath) {
-      if (!trimmedPath.startsWith('/') && !trimmedPath.startsWith('~')) {
-        setPathError('Path must be absolute (start with / or ~)');
+      if (!isAbsoluteRepoPath(trimmedPath)) {
+        setPathError('Path must be absolute (use /, ~, D:\\, or \\\\server\\share)');
         return;
       }
     }
@@ -124,7 +135,7 @@ export function TaskGroupDialog({ open, onClose, onSubmit, editGroup, onEditSubm
 
       if (children.some((c) => !c.title.trim())) return;
 
-      if (trimmedPath) addRepoPath(trimmedPath);
+      if (trimmedPath && !hasLockedRepoPath) addRepoPath(trimmedPath);
       const result = await onSubmit({
         title: title.trim(),
         description: description.trim() || undefined,
@@ -245,23 +256,39 @@ export function TaskGroupDialog({ open, onClose, onSubmit, editGroup, onEditSubm
 
                 {/* Local path */}
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-muted-foreground">Local Path</label>
+                  <label htmlFor="group-repo-path" className="mb-1 block text-sm font-medium text-muted-foreground">Local Path</label>
                   <input
+                    id="group-repo-path"
                     type="text"
                     value={repoPath}
-                    onChange={(e) => { setRepoPath(e.target.value); setPathError(''); }}
-                    placeholder="/host-projects/my-app"
-                    list="recent-group-repo-paths"
+                    onChange={(e) => {
+                      if (hasLockedRepoPath) return;
+                      setRepoPath(e.target.value);
+                      setPathError('');
+                    }}
+                    placeholder={repoPathPlaceholder}
+                    list={hasLockedRepoPath ? undefined : 'recent-group-repo-paths'}
+                    readOnly={hasLockedRepoPath}
+                    aria-readonly={hasLockedRepoPath}
                     className={`w-full rounded-lg border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground/50 focus:outline-none ${
-                      pathError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-primary'
+                      hasLockedRepoPath
+                        ? 'border-border text-muted-foreground'
+                        : pathError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-primary'
                     }`}
                   />
                   {pathError && (
                     <p className="mt-1 text-xs text-red-500">{pathError}</p>
                   )}
-                  <datalist id="recent-group-repo-paths">
-                    {getRecentRepoPaths().map((p) => <option key={p} value={p} />)}
-                  </datalist>
+                  {!pathError && (
+                    <p className="mt-1 text-xs text-muted-foreground/60">
+                      {hasLockedRepoPath ? 'Locked to this Project local path.' : repoPathHelpText}
+                    </p>
+                  )}
+                  {!hasLockedRepoPath && (
+                    <datalist id="recent-group-repo-paths">
+                      {getRecentRepoPaths().map((p) => <option key={p} value={p} />)}
+                    </datalist>
+                  )}
                 </div>
 
                 {/* Base branch */}

@@ -1,0 +1,157 @@
+import { useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { FolderKanban, GitBranch, Plus, Star, X } from 'lucide-react';
+import type { Project } from '@/types';
+import { ThemeToggle } from './ThemeToggle';
+import { ProjectDialog } from './ProjectDialog';
+
+interface ProjectsPageProps {
+  projects: Project[];
+  loading: boolean;
+  error: string | null;
+  onClearError: () => void;
+  onCreateProject: (data: { name?: string; repoPath?: string }) => Promise<unknown>;
+  onOpenProject: (project: Project) => void;
+  theme: 'dark' | 'light';
+  toggleTheme: () => void;
+}
+
+const countLabels: Array<[keyof NonNullable<Project['taskCounts']>, string]> = [
+  ['backlog', 'Backlog'],
+  ['in-progress', 'In Progress'],
+  ['review', 'Review'],
+  ['done', 'Done'],
+];
+
+export function ProjectsPage({
+  projects,
+  loading,
+  error,
+  onClearError,
+  onCreateProject,
+  onOpenProject,
+  theme,
+  toggleTheme,
+}: ProjectsPageProps) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  return (
+    <div className="flex h-screen flex-col overflow-hidden bg-background">
+      <header className="sticky top-0 z-40 border-b border-zinc-700/30 bg-zinc-900 shadow-md">
+        <div className="flex h-14 items-center justify-between px-4 md:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500">
+              <FolderKanban className="h-4 w-4 text-white" />
+            </div>
+            <h1 className="truncate text-base font-semibold tracking-tight text-white md:text-lg">Projects</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setDialogOpen(true)}
+              className="flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              aria-label="New Project"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>New Project</span>
+            </button>
+            <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
+          </div>
+        </div>
+      </header>
+
+      <main className="flex-1 overflow-y-auto p-4 md:p-6">
+        <div className="mx-auto max-w-6xl space-y-5">
+          <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+            <p className="max-w-3xl text-sm text-muted-foreground">
+              Pick a Project to open a scoped board. Repo-backed Projects lock task Local Path to the Project path,
+              while Default/no-repo Projects keep manual path entry available.
+            </p>
+          </div>
+
+          {loading && (
+            <div className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">
+              Loading projects…
+            </div>
+          )}
+
+          {!loading && projects.length === 0 && (
+            <div className="rounded-xl border border-dashed border-border bg-card p-8 text-center">
+              <h2 className="text-lg font-semibold">No projects yet</h2>
+              <p className="mt-2 text-sm text-muted-foreground">Create a Project to start a scoped board.</p>
+              <button
+                onClick={() => setDialogOpen(true)}
+                className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                New Project
+              </button>
+            </div>
+          )}
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {projects.map((project) => (
+              <article
+                key={project.id}
+                aria-label={project.name}
+                className="flex min-h-64 flex-col rounded-xl border border-border bg-card p-5 shadow-sm transition-colors hover:border-primary/50"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="truncate text-lg font-semibold">{project.name}</h2>
+                    {project.repoPath ? (
+                      <p className="mt-2 break-all font-mono text-xs text-muted-foreground">{project.repoPath}</p>
+                    ) : (
+                      <p className="mt-2 text-xs text-muted-foreground">Manual local paths per task</p>
+                    )}
+                  </div>
+                  {project.isDefault && (
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-500">
+                      <Star className="h-3 w-3" />
+                      Default
+                    </span>
+                  )}
+                </div>
+
+                <div className="mt-5 grid grid-cols-2 gap-2">
+                  {countLabels.map(([key, label]) => (
+                    <div key={key} className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-xs text-muted-foreground">{label} {project.taskCounts?.[key] ?? 0}</span>
+                        <span className="text-xl font-semibold" aria-hidden="true">{project.taskCounts?.[key] ?? 0}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => onOpenProject(project)}
+                  className="mt-auto flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                >
+                  <GitBranch className="h-4 w-4" />
+                  Open Project
+                </button>
+              </article>
+            ))}
+          </div>
+        </div>
+      </main>
+
+      <ProjectDialog open={dialogOpen} onClose={() => setDialogOpen(false)} onSubmit={onCreateProject} />
+
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-4 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-400 shadow-lg backdrop-blur-sm"
+          >
+            <span>{error}</span>
+            <button onClick={onClearError} className="ml-1 shrink-0 text-red-400 hover:text-red-300" aria-label="Dismiss error">
+              <X className="h-4 w-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}

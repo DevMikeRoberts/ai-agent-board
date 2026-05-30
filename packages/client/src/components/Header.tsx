@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Kanban, Search, Archive, ArrowUpDown, Filter, Plus, X, Menu } from 'lucide-react';
+import { ArrowLeft, Kanban, Search, Archive, ArrowUpDown, Filter, Plus, X, Menu } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 import { FilterChips, type StatusFilter } from './FilterChips';
 import { useConnectionStatus } from '@/hooks/useConnectionStatus';
@@ -26,6 +26,8 @@ interface HeaderProps {
   onClearFilters: () => void;
   onNewTask: () => void;
   onNewGroup: () => void;
+  title?: string;
+  onBackToProjects?: () => void;
 }
 
 const SORT_OPTIONS: { value: SortBy; label: string }[] = [
@@ -35,7 +37,7 @@ const SORT_OPTIONS: { value: SortBy; label: string }[] = [
   { value: 'status', label: 'Status' },
 ];
 
-export function Header({ theme, toggleTheme, searchQuery, onSearchChange, showArchived, onToggleArchived, sortBy, sortDir, onSortByChange, onSortDirChange, activeAgentTypes, activeStatuses, onToggleAgentType, onToggleStatus, onClearFilters, onNewTask, onNewGroup }: HeaderProps) {
+export function Header({ theme, toggleTheme, searchQuery, onSearchChange, showArchived, onToggleArchived, sortBy, sortDir, onSortByChange, onSortDirChange, activeAgentTypes, activeStatuses, onToggleAgentType, onToggleStatus, onClearFilters, onNewTask, onNewGroup, title = 'AI Agent Board', onBackToProjects }: HeaderProps) {
   const [showFilters, setShowFilters] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const mobileMenuSearchRef = useRef<HTMLInputElement>(null);
@@ -53,11 +55,21 @@ export function Header({ theme, toggleTheme, searchQuery, onSearchChange, showAr
       <div className="flex h-14 items-center justify-between px-3 md:px-6">
         {/* Logo + title */}
         <div className="flex min-w-0 items-center gap-2 md:gap-3">
+          {onBackToProjects && (
+            <button
+              onClick={onBackToProjects}
+              className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800 px-2 text-xs font-medium text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-white"
+              aria-label="Back to Projects"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Projects</span>
+            </button>
+          )}
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500">
             <Kanban className="h-4 w-4 text-white" />
           </div>
           <h1 className="truncate text-base font-semibold tracking-tight text-white md:text-lg">
-            AI Agent Board
+            {title}
           </h1>
           <span className="hidden items-center gap-1 text-[10px] md:flex">
             {wsStatus === 'connected' && (

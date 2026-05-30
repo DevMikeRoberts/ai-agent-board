@@ -21,6 +21,7 @@ interface TaskRow {
   worktree_path: string | null;
   agent_type: string;
   archived: boolean;
+  project_id: string;
   group_id: string | null;
   group_order: number | null;
 }
@@ -49,6 +50,7 @@ function rowToTask(row: TaskRow): Task {
 
   return {
     id: row.id,
+    projectId: row.project_id,
     title: row.title,
     description: row.description,
     priority: row.priority as Priority,
@@ -76,11 +78,11 @@ export class PostgresTaskRepository implements TaskRepository {
     this.pool = pool;
   }
 
-  async getAll(includeArchived = false): Promise<Task[]> {
+  async getAll(includeArchived = false, projectId = 'default'): Promise<Task[]> {
     const query = includeArchived
-      ? 'SELECT * FROM tasks WHERE group_id IS NULL ORDER BY created_at ASC'
-      : 'SELECT * FROM tasks WHERE archived = FALSE AND group_id IS NULL ORDER BY created_at ASC';
-    const { rows } = await this.pool.query<TaskRow>(query);
+      ? 'SELECT * FROM tasks WHERE project_id = $1 AND group_id IS NULL ORDER BY created_at ASC'
+      : 'SELECT * FROM tasks WHERE project_id = $1 AND archived = FALSE AND group_id IS NULL ORDER BY created_at ASC';
+    const { rows } = await this.pool.query<TaskRow>(query, [projectId]);
     return rows.map(rowToTask);
   }
 
@@ -94,12 +96,13 @@ export class PostgresTaskRepository implements TaskRepository {
 
   async create(task: Task): Promise<Task> {
     await this.pool.query(
-      `INSERT INTO tasks (id, title, description, priority, column_id, agent_status, agent_type,
+      `INSERT INTO tasks (id, project_id, title, description, priority, column_id, agent_status, agent_type,
         created_at, started_at, completed_at, repo_path, branch_name, base_branch, use_worktree, worktree_path, archived,
         group_id, group_order)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
       [
         task.id,
+        task.projectId,
         task.title,
         task.description,
         task.priority,
@@ -235,9 +238,10 @@ export class PostgresTaskRepository implements TaskRepository {
     await this.pool.query('DELETE FROM events WHERE task_id = $1', [taskId]);
   }
 
-  async getArchivedTasks(): Promise<Task[]> {
+  async getArchivedTasks(projectId = 'default'): Promise<Task[]> {
     const { rows } = await this.pool.query<TaskRow>(
-      'SELECT * FROM tasks WHERE archived = TRUE ORDER BY created_at DESC'
+      'SELECT * FROM tasks WHERE project_id = $1 AND archived = TRUE ORDER BY created_at DESC',
+      [projectId],
     );
     return rows.map(rowToTask);
   }

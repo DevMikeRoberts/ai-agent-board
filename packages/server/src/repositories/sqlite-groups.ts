@@ -5,6 +5,7 @@ import type { TaskGroupRepository } from './group-types.js';
 
 interface GroupRow {
   id: string;
+  project_id: string;
   title: string;
   description: string;
   priority: Priority;
@@ -20,6 +21,7 @@ interface GroupRow {
 
 interface TaskRow {
   id: string;
+  project_id: string;
   title: string;
   description: string;
   priority: Priority;
@@ -42,6 +44,7 @@ interface TaskRow {
 function rowToGroup(row: GroupRow): TaskGroup {
   return {
     id: row.id,
+    projectId: row.project_id,
     title: row.title,
     description: row.description || undefined,
     priority: row.priority,
@@ -59,6 +62,7 @@ function rowToGroup(row: GroupRow): TaskGroup {
 function rowToTask(row: TaskRow): Task {
   return {
     id: row.id,
+    projectId: row.project_id,
     title: row.title,
     description: row.description,
     priority: row.priority,
@@ -95,20 +99,20 @@ export class SqliteTaskGroupRepository implements TaskGroupRepository {
   constructor(db: Database.Database) {
     this.db = db;
     this.stmts = {
-      getAll: db.prepare('SELECT * FROM task_groups WHERE archived = 0 ORDER BY created_at ASC'),
-      getAllIncludingArchived: db.prepare('SELECT * FROM task_groups ORDER BY created_at ASC'),
+      getAll: db.prepare('SELECT * FROM task_groups WHERE project_id = ? AND archived = 0 ORDER BY created_at ASC'),
+      getAllIncludingArchived: db.prepare('SELECT * FROM task_groups WHERE project_id = ? ORDER BY created_at ASC'),
       getById: db.prepare('SELECT * FROM task_groups WHERE id = ?'),
       insertGroup: db.prepare(`
-        INSERT INTO task_groups (id, title, description, priority, column_id, repo_path, base_branch,
+        INSERT INTO task_groups (id, project_id, title, description, priority, column_id, repo_path, base_branch,
           max_concurrency, created_at, started_at, completed_at, archived)
-        VALUES (@id, @title, @description, @priority, @column_id, @repo_path, @base_branch,
+        VALUES (@id, @project_id, @title, @description, @priority, @column_id, @repo_path, @base_branch,
           @max_concurrency, @created_at, @started_at, @completed_at, @archived)
       `),
       insertChild: db.prepare(`
-        INSERT INTO tasks (id, title, description, priority, column_id, agent_status, agent_type,
+        INSERT INTO tasks (id, project_id, title, description, priority, column_id, agent_status, agent_type,
           created_at, repo_path, base_branch, use_worktree, branch_name, archived, group_id, group_order,
           started_at, completed_at, worktree_path)
-        VALUES (@id, @title, @description, @priority, @column_id, @agent_status, @agent_type,
+        VALUES (@id, @project_id, @title, @description, @priority, @column_id, @agent_status, @agent_type,
           @created_at, @repo_path, @base_branch, @use_worktree, @branch_name, 0, @group_id, @group_order,
           NULL, NULL, NULL)
       `),
@@ -125,9 +129,9 @@ export class SqliteTaskGroupRepository implements TaskGroupRepository {
     };
   }
 
-  async getAll(includeArchived = false): Promise<TaskGroup[]> {
+  async getAll(includeArchived = false, projectId = 'default'): Promise<TaskGroup[]> {
     const stmt = includeArchived ? this.stmts.getAllIncludingArchived : this.stmts.getAll;
-    return (stmt.all() as GroupRow[]).map(rowToGroup);
+    return (stmt.all(projectId) as GroupRow[]).map(rowToGroup);
   }
 
   async getById(id: string): Promise<TaskGroup | undefined> {
@@ -142,6 +146,7 @@ export class SqliteTaskGroupRepository implements TaskGroupRepository {
     return this.db.transaction(() => {
       this.stmts.insertGroup.run({
         id: group.id,
+        project_id: group.projectId,
         title: group.title,
         description: group.description ?? '',
         priority: group.priority,
@@ -161,6 +166,7 @@ export class SqliteTaskGroupRepository implements TaskGroupRepository {
         const taskId = child.id || uuid();
         const task: Task = {
           id: taskId,
+          projectId: group.projectId,
           title: child.title,
           description: child.description,
           priority: child.priority ?? group.priority,
@@ -178,6 +184,7 @@ export class SqliteTaskGroupRepository implements TaskGroupRepository {
 
         this.stmts.insertChild.run({
           id: task.id,
+          project_id: task.projectId,
           title: task.title,
           description: task.description,
           priority: task.priority,
