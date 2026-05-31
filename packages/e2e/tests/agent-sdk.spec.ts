@@ -21,7 +21,7 @@ async function createTaskViaUI(page: Page, title: string, description: string) {
   await headerRow.locator('button').first().click();
   await expect(page.getByRole('heading', { name: 'Create Task' })).toBeVisible();
   await page.getByPlaceholder('What needs to be done?').fill(title);
-  await page.getByPlaceholder('Describe the task for the Copilot agent...').fill(description);
+  await page.getByPlaceholder('Describe the task for the selected agent...').fill(description);
   // Local path is required
   await fillLocalPath(page, testRepo);
   await page.getByRole('button', { name: 'Create Task' }).click();
@@ -143,8 +143,10 @@ test.describe('Copilot SDK Agent', () => {
     const wtDiff = git(['diff', 'HEAD', '--', 'README.md'], finalTask.worktreePath);
     expect(wtDiff.length).toBeGreaterThan(0);
 
-    // 7. Open agent panel in UI and verify events rendered
+    // 7. Open agent panel in UI and verify events rendered.
+    // Review/done tasks default to the Summary tab, so switch to Events first.
     await page.getByRole('heading', { name: title }).click();
+    await page.getByRole('button', { name: 'Events', exact: true }).click();
     await expect(page.getByText(/worktree created|task_complete/i).first())
       .toBeVisible({ timeout: 5_000 });
 

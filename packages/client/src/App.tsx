@@ -22,6 +22,7 @@ import { AgentPanel } from '@/components/AgentPanel';
 import type { TaskGroupWithChildren } from '@/lib/api';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { ProjectsPage } from '@/components/ProjectsPage';
+import type { ProjectDialogInitialValues } from '@/components/ProjectDialog';
 
 const STATUS_WEIGHT: Record<string, number> = { executing: 0, planning: 1, failed: 2, idle: 3, complete: 4 };
 
@@ -50,6 +51,12 @@ function BoardPage({
   onBackToProjects: () => void;
 }) {
   const lockedRepoPath = project.repoPath;
+  const projectDefaults = {
+    defaultAgentType: project.defaultAgentType,
+    defaultPriority: project.defaultPriority,
+    defaultBaseBranch: project.defaultBaseBranch,
+    defaultUseWorktree: project.defaultUseWorktree,
+  };
   const { tasks, error, clearError, showArchived, setShowArchived, addTask, updateTask, moveTask, runTask, stopTask, deleteTask, archiveTask, unarchiveTask, configureAndRunTask, createPR, mergeLocal, cleanupWorktree } = useTasks(project.id);
   const { groups, createGroup, runGroup, stopGroup, deleteGroup, updateGroup, refreshGroup } = useTaskGroups(project.id);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -417,6 +424,7 @@ function BoardPage({
         onEditSubmit={updateTask}
         highlightRequired={highlightRequiredFields}
         lockedRepoPath={lockedRepoPath}
+        projectDefaults={projectDefaults}
       />
 
       <TaskGroupDialog
@@ -426,6 +434,7 @@ function BoardPage({
         editGroup={editingGroup}
         onEditSubmit={handleEditGroupSubmit}
         lockedRepoPath={lockedRepoPath}
+        projectDefaults={projectDefaults}
       />
 
       <AgentPanel task={selectedTask} onClose={handleClosePanel} onRun={handleRunWithConfig} onStop={stopTask} onCreatePR={createPR} onMergeLocal={mergeLocal} onCleanupWorktree={cleanupWorktree} onReconfigureRetry={handleReconfigureRetry} theme={theme} />
@@ -467,11 +476,44 @@ function BoardPage({
 }
 
 type RouteState =
-  | { view: 'projects' }
+  | { view: 'projects'; initialCreate?: ProjectDialogInitialValues }
   | { view: 'board'; projectId?: string };
+
+function parseCreateQuery(search: string): ProjectDialogInitialValues {
+  const params = new URLSearchParams(search);
+  const repoUrl = params.get('repoUrl') ?? undefined;
+  const repoPath = params.get('repoPath') ?? undefined;
+  const sourceParam = params.get('source');
+  const source: 'local' | 'repo' =
+    sourceParam === 'repo' || sourceParam === 'local'
+      ? sourceParam
+      : repoUrl
+        ? 'repo'
+        : 'local';
+  const useWorktreeParam = params.get('defaultUseWorktree');
+  const defaultUseWorktree =
+    useWorktreeParam === 'true' || useWorktreeParam === 'false' || useWorktreeParam === 'inherit'
+      ? (useWorktreeParam as 'true' | 'false' | 'inherit')
+      : undefined;
+
+  return {
+    source,
+    name: params.get('name') ?? undefined,
+    repoUrl,
+    repoPath,
+    defaultAgentType: params.get('defaultAgentType') ?? undefined,
+    defaultPriority: params.get('defaultPriority') ?? undefined,
+    defaultBaseBranch: params.get('defaultBaseBranch') ?? undefined,
+    defaultUseWorktree,
+    autoSubmit: params.get('autostart') === '1',
+  };
+}
 
 function readRoute(): RouteState {
   const path = window.location.pathname.replace(/\/+$/, '') || '/';
+  if (path === '/projects/new') {
+    return { view: 'projects', initialCreate: parseCreateQuery(window.location.search) };
+  }
   if (path === '/projects') return { view: 'projects' };
   const match = path.match(/^\/projects\/([^/]+)$/);
   if (match) return { view: 'board', projectId: decodeURIComponent(match[1]) };
@@ -480,7 +522,19 @@ function readRoute(): RouteState {
 
 export function App() {
   const { theme, toggleTheme } = useTheme();
-  const { projects, loading, error, clearError, createProject } = useProjects();
+  const {
+    projects,
+    config,
+    loading,
+    error,
+    clearError,
+    createProject,
+    updateProject,
+    deleteProject,
+    updateConfig,
+    validateProjectPath,
+    selectProjectDirectory,
+  } = useProjects();
   const [route, setRoute] = useState<RouteState>(() => readRoute());
 
   useEffect(() => {
@@ -513,10 +567,20 @@ export function App() {
     return (
       <ProjectsPage
         projects={projects}
+        config={config}
         loading={loading}
         error={error}
+        initialCreate={route.view === 'projects' ? route.initialCreate ?? null : null}
+        onConsumeInitialCreate={() => {
+          if (route.view === 'projects' && route.initialCreate) navigate('/projects');
+        }}
         onClearError={clearError}
         onCreateProject={createProject}
+        onUpdateProject={updateProject}
+        onDeleteProject={deleteProject}
+        onUpdateConfig={updateConfig}
+        onValidateProjectPath={validateProjectPath}
+        onSelectProjectDirectory={selectProjectDirectory}
         onOpenProject={openProject}
         theme={theme}
         toggleTheme={toggleTheme}

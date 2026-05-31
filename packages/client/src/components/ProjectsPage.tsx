@@ -1,16 +1,26 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { FolderKanban, GitBranch, Plus, Star, X } from 'lucide-react';
-import type { Project } from '@/types';
+import { FolderKanban, GitBranch, Github, Pencil, Plus, Settings, Star, Trash2, X } from 'lucide-react';
+import type { CreateProjectRequest, Project, ProjectConfig, ProjectPathValidation, UpdateProjectRequest } from '@/types';
 import { ThemeToggle } from './ThemeToggle';
-import { ProjectDialog } from './ProjectDialog';
+import { ProjectDialog, type ProjectDialogInitialValues } from './ProjectDialog';
+import { ConfigDialog } from './ConfigDialog';
+import { DeleteConfirmDialog } from './DeleteConfirmDialog';
 
 interface ProjectsPageProps {
   projects: Project[];
+  config: ProjectConfig | null;
   loading: boolean;
   error: string | null;
+  initialCreate?: ProjectDialogInitialValues | null;
+  onConsumeInitialCreate?: () => void;
   onClearError: () => void;
-  onCreateProject: (data: { name?: string; repoPath?: string }) => Promise<unknown>;
+  onCreateProject: (data: CreateProjectRequest) => Promise<unknown>;
+  onUpdateProject: (id: string, data: UpdateProjectRequest) => Promise<unknown>;
+  onDeleteProject: (id: string) => Promise<unknown>;
+  onUpdateConfig: (cloneRoot: string) => Promise<unknown>;
+  onValidateProjectPath: (repoPath: string) => Promise<ProjectPathValidation | undefined>;
+  onSelectProjectDirectory: (initialPath?: string) => Promise<string | null | undefined>;
   onOpenProject: (project: Project) => void;
   theme: 'dark' | 'light';
   toggleTheme: () => void;
@@ -25,15 +35,66 @@ const countLabels: Array<[keyof NonNullable<Project['taskCounts']>, string]> = [
 
 export function ProjectsPage({
   projects,
+  config,
   loading,
   error,
+  initialCreate,
+  onConsumeInitialCreate,
   onClearError,
   onCreateProject,
+  onUpdateProject,
+  onDeleteProject,
+  onUpdateConfig,
+  onValidateProjectPath,
+  onSelectProjectDirectory,
   onOpenProject,
   theme,
   toggleTheme,
 }: ProjectsPageProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [deletingProject, setDeletingProject] = useState<Project | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
+  const [createInitialValues, setCreateInitialValues] = useState<ProjectDialogInitialValues | null>(null);
+
+  // Open the Create dialog prefilled when launched via a creation URI.
+  useEffect(() => {
+    if (initialCreate) {
+      setEditingProject(null);
+      setCreateInitialValues(initialCreate);
+      setDialogOpen(true);
+    }
+  }, [initialCreate]);
+
+  function openCreateDialog() {
+    setEditingProject(null);
+    setCreateInitialValues(null);
+    setDialogOpen(true);
+  }
+
+  function openEditDialog(project: Project) {
+    setEditingProject(project);
+    setCreateInitialValues(null);
+    setDialogOpen(true);
+  }
+
+  function closeDialog() {
+    setDialogOpen(false);
+    setEditingProject(null);
+    setCreateInitialValues(null);
+    onConsumeInitialCreate?.();
+  }
+
+  async function handleDialogSubmit(data: CreateProjectRequest | UpdateProjectRequest) {
+    if (editingProject) return onUpdateProject(editingProject.id, data);
+    return onCreateProject(data as CreateProjectRequest);
+  }
+
+  async function handleConfirmDeleteProject() {
+    if (!deletingProject) return;
+    const result = await onDeleteProject(deletingProject.id);
+    if (result !== undefined) setDeletingProject(null);
+  }
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
@@ -47,12 +108,20 @@ export function ProjectsPage({
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setDialogOpen(true)}
+              onClick={openCreateDialog}
               className="flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
               aria-label="New Project"
             >
               <Plus className="h-3.5 w-3.5" />
               <span>New Project</span>
+            </button>
+            <button
+              onClick={() => setConfigOpen(true)}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-300 transition-colors hover:bg-zinc-700/50 hover:text-white"
+              aria-label="Settings"
+              title="Settings"
+            >
+              <Settings className="h-4 w-4" />
             </button>
             <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
           </div>
@@ -79,7 +148,7 @@ export function ProjectsPage({
               <h2 className="text-lg font-semibold">No projects yet</h2>
               <p className="mt-2 text-sm text-muted-foreground">Create a Project to start a scoped board.</p>
               <button
-                onClick={() => setDialogOpen(true)}
+                onClick={openCreateDialog}
                 className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
               >
                 New Project
@@ -97,18 +166,46 @@ export function ProjectsPage({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h2 className="truncate text-lg font-semibold">{project.name}</h2>
+                    {project.repoUrl && (
+                      <p className="mt-2 flex items-center gap-1 break-all font-mono text-xs text-muted-foreground">
+                        <Github className="h-3 w-3 shrink-0" />
+                        {project.repoUrl}
+                      </p>
+                    )}
                     {project.repoPath ? (
                       <p className="mt-2 break-all font-mono text-xs text-muted-foreground">{project.repoPath}</p>
                     ) : (
                       <p className="mt-2 text-xs text-muted-foreground">Manual local paths per task</p>
                     )}
                   </div>
-                  {project.isDefault && (
-                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-500">
-                      <Star className="h-3 w-3" />
-                      Default
-                    </span>
-                  )}
+                  <div className="flex shrink-0 items-center gap-1">
+                    {project.isDefault && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs text-amber-500">
+                        <Star className="h-3 w-3" />
+                        Default
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => openEditDialog(project)}
+                      className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      aria-label={`Edit ${project.name}`}
+                      title="Edit project"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    {!project.isDefault && (
+                      <button
+                        type="button"
+                        onClick={() => setDeletingProject(project)}
+                        className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-400"
+                        aria-label={`Delete ${project.name}`}
+                        title="Delete project"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="mt-5 grid grid-cols-2 gap-2">
@@ -135,7 +232,36 @@ export function ProjectsPage({
         </div>
       </main>
 
-      <ProjectDialog open={dialogOpen} onClose={() => setDialogOpen(false)} onSubmit={onCreateProject} />
+      <ProjectDialog
+        open={dialogOpen}
+        project={editingProject}
+        initialValues={createInitialValues}
+        onClose={closeDialog}
+        onSubmit={handleDialogSubmit}
+        onValidatePath={onValidateProjectPath}
+        onSelectDirectory={onSelectProjectDirectory}
+      />
+
+      <ConfigDialog
+        open={configOpen}
+        config={config}
+        onClose={() => setConfigOpen(false)}
+        onSubmit={onUpdateConfig}
+      />
+
+      <DeleteConfirmDialog
+        open={deletingProject !== null}
+        taskTitle={deletingProject?.name ?? ''}
+        title="Delete project?"
+        description={(
+          <p className="text-sm text-muted-foreground mb-5">
+            <span className="font-medium text-foreground">{deletingProject?.name}</span> will be permanently
+            deleted, along with all of its tasks and groups. This cannot be undone.
+          </p>
+        )}
+        onCancel={() => setDeletingProject(null)}
+        onConfirm={handleConfirmDeleteProject}
+      />
 
       <AnimatePresence>
         {error && (

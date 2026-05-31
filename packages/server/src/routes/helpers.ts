@@ -5,8 +5,9 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import type { Project, Task, TaskGroup } from '../types.js';
-import { isValidPriority, isValidColumnId, isValidAgentType, MAX_TITLE_LENGTH, MAX_DESCRIPTION_LENGTH } from '@ai-agent-board/shared/constants.js';
+import { isValidPriority, isValidColumnId, isValidAgentType, VALID_AGENT_TYPES, MAX_TITLE_LENGTH, MAX_DESCRIPTION_LENGTH } from '@ai-agent-board/shared/constants.js';
 import { errorMessage } from '../utils.js';
+import { getCloneRoot } from '../config.js';
 import type { TaskRepository } from '../repositories/types.js';
 import { broadcast } from '../websocket.js';
 import type { AgentManager } from '../services/agent-manager.js';
@@ -40,9 +41,22 @@ export function isValidGitRef(ref: string): boolean {
 
 // Default whitelist when ALLOWED_REPO_ROOTS is unset: home dir + tmp + this workspace.
 // Prevents agents from accessing /etc, /proc, etc. while still allowing local dev repos.
-const ALLOWED_REPO_ROOTS: string[] = process.env.ALLOWED_REPO_ROOTS
+const CONFIGURED_REPO_ROOTS: string[] = process.env.ALLOWED_REPO_ROOTS
   ? process.env.ALLOWED_REPO_ROOTS.split(',').map((p) => expandTilde(p.trim())).filter(Boolean)
   : getDefaultAllowedRepoRoots();
+
+/**
+ * Resolve the effective set of allowed repo roots. The configured clone root is
+ * always included so that repos cloned from a URL pass validation even when
+ * ALLOWED_REPO_ROOTS is explicitly set (e.g. in CI/e2e environments).
+ */
+function getAllowedRepoRoots(): string[] {
+  try {
+    return dedupePaths([...CONFIGURED_REPO_ROOTS, getCloneRoot()]);
+  } catch {
+    return CONFIGURED_REPO_ROOTS;
+  }
+}
 
 function getDefaultAllowedRepoRoots(): string[] {
   const roots = [
@@ -132,13 +146,14 @@ function isPathUnderRoot(candidate: string, root: string): boolean {
 
 export function isAllowedRepoPath(repoPath: string): string | null {
   const resolved = realOrResolve(repoPath);
+  const roots = getAllowedRepoRoots();
 
-  const underAllowedRoot = ALLOWED_REPO_ROOTS.some((root) => {
+  const underAllowedRoot = roots.some((root) => {
     const realRoot = realOrResolve(root);
     return isPathUnderRoot(resolved, realRoot);
   });
   if (!underAllowedRoot) {
-    return `repoPath must be under one of: ${ALLOWED_REPO_ROOTS.join(', ')}`;
+    return `repoPath must be under one of: ${roots.join(', ')}`;
   }
 
   // Create directory if it doesn't exist; verify it's a directory if it does
@@ -175,6 +190,188 @@ export function isAllowedRepoPath(repoPath: string): string | null {
   }
 
   return null;
+}
+
+/**
+ * Pure boundary check: returns null if `targetPath` resolves under an allowed
+ * repo root, otherwise an error message. Unlike isAllowedRepoPath it has NO side
+ * effects (no mkdir, no git init), making it safe to call on a prospective git
+ * clone target before the directory exists.
+ */
+export function isUnderAllowedRoots(targetPath: string): string | null {
+  const resolved = realOrResolve(targetPath);
+  const roots = getAllowedRepoRoots();
+  const ok = roots.some((root) => isPathUnderRoot(resolved, realOrResolve(root)));
+  return ok ? null : `path must be under one of: ${roots.join(', ')}`;
+}
+
+export interface RepoPathValidation {
+  repoPath: string;
+  valid: boolean;
+  exists: boolean;
+  isDirectory: boolean;
+  isGitRepo: boolean;
+  error?: string;
+  warning?: string;
+}
+
+export function validateRepoPath(repoPath: string): RepoPathValidation {
+  const expanded = expandTilde(repoPath);
+  if (!path.isAbsolute(expanded)) {
+    return {
+      repoPath: expanded,
+      valid: false,
+      exists: false,
+      isDirectory: false,
+      isGitRepo: false,
+      error: 'repoPath must be an absolute path',
+    };
+  }
+
+  const resolved = realOrResolve(expanded);
+  const roots = getAllowedRepoRoots();
+  const underAllowedRoot = roots.some((root) => isPathUnderRoot(resolved, realOrResolve(root)));
+  if (!underAllowedRoot) {
+    return {
+      repoPath: resolved,
+      valid: false,
+      exists: false,
+      isDirectory: false,
+      isGitRepo: false,
+      error: `repoPath must be under one of: ${roots.join(', ')}`,
+    };
+  }
+
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(resolved);
+  } catch {
+    return {
+      repoPath: resolved,
+      valid: false,
+      exists: false,
+      isDirectory: false,
+      isGitRepo: false,
+      error: `repoPath does not exist: ${resolved}`,
+    };
+  }
+
+  if (!stat.isDirectory()) {
+    return {
+      repoPath: resolved,
+      valid: false,
+      exists: true,
+      isDirectory: false,
+      isGitRepo: false,
+      error: `repoPath is not a directory: ${resolved}`,
+    };
+  }
+
+  try {
+    fs.accessSync(resolved, fs.constants.R_OK | fs.constants.W_OK);
+  } catch (err: unknown) {
+    return {
+      repoPath: resolved,
+      valid: false,
+      exists: true,
+      isDirectory: true,
+      isGitRepo: false,
+      error: `No read/write access to: ${resolved}: ${errorMessage(err)}`,
+    };
+  }
+
+  const isGitRepo = isGitWorkTree(resolved);
+  return {
+    repoPath: resolved,
+    valid: true,
+    exists: true,
+    isDirectory: true,
+    isGitRepo,
+    ...(isGitRepo ? {} : { warning: 'Path is not a git repository; it will be initialized when saved.' }),
+  };
+}
+
+export function isGitWorkTree(repoPath: string): boolean {
+  try {
+    return execFileSync('git', ['rev-parse', '--is-inside-work-tree'], { cwd: repoPath, stdio: 'pipe' })
+      .toString()
+      .trim() === 'true';
+  } catch {
+    return false;
+  }
+}
+
+// ─── Git URL parsing + cloning ──────────────────────────────────────
+
+export interface ParsedRepoUrl {
+  url: string;
+  /** Filesystem-safe directory name derived from the repo URL. */
+  name: string;
+}
+
+const CONTROL_CHARS_RE = /[\u0000-\u001F\u007F]/;
+
+function deriveRepoName(url: string): string | null {
+  let s = url.trim().split(/[?#]/)[0];
+  s = s.replace(/[\\/]+$/, '').replace(/\.git$/i, '');
+  const segment = s.split(/[\\/:]/).filter(Boolean).pop() ?? '';
+  const safe = segment.trim().replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+  if (!safe || safe === '.' || safe === '..') return null;
+  return safe;
+}
+
+/**
+ * Validate and parse a git repo URL. Accepts http(s)/ssh/git/file URLs, scp-like
+ * refs (git@host:owner/repo.git) and absolute local paths (used for offline/dev
+ * mirrors). Returns the parsed URL + a safe directory name, or an error string.
+ */
+export function parseGitRepoUrl(input: string): ParsedRepoUrl | string {
+  const url = input.trim();
+  if (!url) return 'repoUrl must be a non-empty string';
+  if (url.length > 2048) return 'repoUrl is too long';
+  if (CONTROL_CHARS_RE.test(url)) return 'repoUrl contains invalid control characters';
+  if (url.startsWith('-')) return 'repoUrl must not start with "-"';
+
+  const isUrlScheme = /^(https?|ssh|git|file):\/\//i.test(url);
+  const isScpLike = !url.includes('://') && /^[^@/\\]+@[^:/\\]+:.+/.test(url);
+  const isLocalAbs = path.isAbsolute(url);
+  if (!isUrlScheme && !isScpLike && !isLocalAbs) {
+    return 'repoUrl must be an http(s)/ssh/git/file URL, an scp-like ref, or an absolute local path';
+  }
+
+  const name = deriveRepoName(url);
+  if (!name) return 'could not derive a repository name from repoUrl';
+  return { url, name };
+}
+
+/** Normalize a git URL for equality comparison (case/slash/.git/trailing-slash insensitive). */
+export function normalizeRepoUrl(url: string): string {
+  return url.trim().replace(/\\/g, '/').replace(/\/+$/, '').replace(/\.git$/i, '').toLowerCase();
+}
+
+/** Return the `origin` remote URL of a repo, or null if none/not a repo. */
+export function getGitRemoteOrigin(repoPath: string): string | null {
+  try {
+    const out = execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: repoPath, stdio: 'pipe' })
+      .toString()
+      .trim();
+    return out || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Clone `repoUrl` into `targetPath`. Uses execFileSync (no shell) and disables
+ * interactive credential prompts so private repos without ambient credentials
+ * fail fast instead of hanging.
+ */
+export function cloneRepo(repoUrl: string, targetPath: string, timeoutMs = 120_000): void {
+  execFileSync('git', ['clone', '--', repoUrl, targetPath], {
+    stdio: 'pipe',
+    timeout: timeoutMs,
+    env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+  });
 }
 
 export function expandTilde(p: string): string {
@@ -287,7 +484,7 @@ export function validateTaskFields(body: Record<string, any>): string | null {
     return 'invalid columnId: must be one of backlog, in-progress, review, done';
   }
   if (agentType !== undefined && !isValidAgentType(agentType)) {
-    return 'invalid agentType: must be one of copilot, claude, codex, opencode';
+    return `invalid agentType: must be one of ${VALID_AGENT_TYPES.join(', ')}`;
   }
   if (repoPath !== undefined && typeof repoPath !== 'string') {
     return 'repoPath must be a string';

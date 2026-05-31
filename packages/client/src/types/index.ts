@@ -7,6 +7,8 @@ export type {
   AgentInfo,
   Project,
   ProjectTaskCounts,
+  ProjectConfig,
+  ProjectPathValidation,
   CreateProjectRequest,
   UpdateProjectRequest,
   Task,

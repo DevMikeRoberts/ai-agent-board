@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 
@@ -7,10 +7,22 @@ interface DeleteConfirmDialogProps {
   taskTitle: string;
   onCancel: () => void;
   onConfirm: () => void;
+  title?: string;
+  description?: ReactNode;
+  confirmLabel?: string;
 }
 
-export function DeleteConfirmDialog({ open, taskTitle, onCancel, onConfirm }: DeleteConfirmDialogProps) {
+export function DeleteConfirmDialog({
+  open,
+  taskTitle,
+  onCancel,
+  onConfirm,
+  title = 'Delete task?',
+  description,
+  confirmLabel = 'Delete',
+}: DeleteConfirmDialogProps) {
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const titleId = useId();
 
   useEffect(() => {
     if (open) cancelRef.current?.focus();
@@ -33,6 +45,7 @@ export function DeleteConfirmDialog({ open, taskTitle, onCancel, onConfirm }: De
           <motion.div
             role="dialog"
             aria-modal="true"
+            aria-labelledby={titleId}
             onKeyDown={(e) => { if (e.key === 'Escape') onCancel(); }}
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -42,7 +55,7 @@ export function DeleteConfirmDialog({ open, taskTitle, onCancel, onConfirm }: De
           >
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold">Delete task?</h2>
+              <h2 id={titleId} className="text-base font-semibold">{title}</h2>
               <button
                 onClick={onCancel}
                 className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
@@ -51,10 +64,12 @@ export function DeleteConfirmDialog({ open, taskTitle, onCancel, onConfirm }: De
               </button>
             </div>
 
-            <p className="text-sm text-muted-foreground mb-5">
-              <span className="font-medium text-foreground">{taskTitle}</span> will be permanently
-              deleted. This action cannot be undone.
-            </p>
+            {description ?? (
+              <p className="text-sm text-muted-foreground mb-5">
+                <span className="font-medium text-foreground">{taskTitle}</span> will be permanently
+                deleted. This action cannot be undone.
+              </p>
+            )}
 
             {/* Actions */}
             <div className="flex justify-end gap-2">
@@ -69,7 +84,7 @@ export function DeleteConfirmDialog({ open, taskTitle, onCancel, onConfirm }: De
                 onClick={onConfirm}
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors"
               >
-                Delete
+                {confirmLabel}
               </button>
             </div>
           </motion.div>

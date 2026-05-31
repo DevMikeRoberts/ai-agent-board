@@ -1,7 +1,7 @@
 export type Priority = 'low' | 'medium' | 'high' | 'critical';
 export type ColumnId = 'backlog' | 'in-progress' | 'review' | 'done';
 export type AgentStatus = 'idle' | 'planning' | 'executing' | 'complete' | 'failed';
-export type AgentType = 'copilot' | 'claude' | 'codex' | 'opencode';
+export type AgentType = 'copilot' | 'claude' | 'codex' | 'opencode' | 'hermes';
 
 export interface AgentInfo {
   name: AgentType;
@@ -32,6 +32,7 @@ export interface Task {
   groupOrder?: number;
   attachments?: TaskAttachment[];
   projectId: string;
+  summary?: string | null;
 }
 
 export interface TaskGroup {
@@ -62,20 +63,54 @@ export interface Project {
   id: string;
   name: string;
   repoPath?: string;
+  /** Source GitHub/git URL the project's local repo was cloned from, if any. */
+  repoUrl?: string;
   isDefault: boolean;
   createdAt: number;
   updatedAt: number;
   taskCounts?: ProjectTaskCounts;
+  /** Default task properties for this project. Each is overridable per task. */
+  defaultAgentType?: AgentType;
+  defaultPriority?: Priority;
+  defaultBaseBranch?: string;
+  defaultUseWorktree?: boolean;
 }
 
 export interface CreateProjectRequest {
   name?: string;
   repoPath?: string;
+  /** When provided, the server clones this git URL into the configured clone root and uses it as repoPath. */
+  repoUrl?: string;
+  defaultAgentType?: AgentType;
+  defaultPriority?: Priority;
+  defaultBaseBranch?: string;
+  defaultUseWorktree?: boolean;
 }
 
 export interface UpdateProjectRequest {
   name?: string;
   repoPath?: string | null;
+  repoUrl?: string | null;
+  defaultAgentType?: AgentType | null;
+  defaultPriority?: Priority | null;
+  defaultBaseBranch?: string | null;
+  defaultUseWorktree?: boolean | null;
+}
+
+/** Server-side Agent Board configuration (persisted to the config file). */
+export interface ProjectConfig {
+  /** Absolute path under which repos cloned from a URL are placed. */
+  cloneRoot: string;
+}
+
+export interface ProjectPathValidation {
+  repoPath: string;
+  valid: boolean;
+  exists: boolean;
+  isDirectory: boolean;
+  isGitRepo: boolean;
+  error?: string;
+  warning?: string;
 }
 
 export type AgentEventType =

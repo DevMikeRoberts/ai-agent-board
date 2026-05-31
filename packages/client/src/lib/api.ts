@@ -11,6 +11,8 @@ import type {
   Project,
   CreateProjectRequest,
   UpdateProjectRequest,
+  ProjectPathValidation,
+  ProjectConfig,
 } from '@/types';
 
 export interface TaskGroupWithChildren extends TaskGroup {
@@ -75,6 +77,21 @@ export const api = {
 
   updateProject: (id: string, data: UpdateProjectRequest) =>
     request<Project>(`/projects/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  deleteProject: (id: string) =>
+    request<void>(`/projects/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  validateProjectPath: (repoPath: string) =>
+    request<ProjectPathValidation>('/projects/validate-path', { method: 'POST', body: JSON.stringify({ repoPath }) }),
+
+  selectProjectDirectory: (initialPath?: string) =>
+    request<{ repoPath: string | null }>('/projects/select-directory', { method: 'POST', body: JSON.stringify({ initialPath }) }),
+
+  getProjectConfig: () =>
+    request<ProjectConfig>('/projects/config'),
+
+  updateProjectConfig: (cloneRoot: string) =>
+    request<ProjectConfig>('/projects/config', { method: 'PATCH', body: JSON.stringify({ cloneRoot }) }),
 
   // --- Task CRUD ---
   getTasks: (includeArchived = false, projectId?: string) =>

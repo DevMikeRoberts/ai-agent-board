@@ -5,6 +5,16 @@ const path = require('node:path');
 const repoRoot = path.resolve(__dirname, '..');
 const isWindows = process.platform === 'win32';
 const dbPath = path.join(repoRoot, 'packages', 'e2e', 'test-results', 'agentboard-e2e.db');
+const agentboardHome = path.join(repoRoot, 'packages', 'e2e', 'test-results', 'agentboard-home');
+function portFromEnv(name, fallback) {
+  const value = process.env[name] || fallback;
+  if (!/^\d+$/.test(value)) {
+    throw new Error(`${name} must be a numeric port`);
+  }
+  return value;
+}
+const serverPort = portFromEnv('E2E_SERVER_PORT', '3002');
+const clientPort = portFromEnv('E2E_CLIENT_PORT', '4176');
 const allowedRepoRoots = [
   repoRoot,
   process.env.TEMP,
@@ -14,17 +24,23 @@ const allowedRepoRoots = [
 
 mkdirSync(path.dirname(dbPath), { recursive: true });
 rmSync(dbPath, { force: true });
+rmSync(agentboardHome, { recursive: true, force: true });
+mkdirSync(agentboardHome, { recursive: true });
 
 const child = spawn(isWindows ? 'npx tsx src/index.ts' : 'npx', isWindows ? [] : ['tsx', 'src/index.ts'], {
   cwd: path.join(repoRoot, 'packages', 'server'),
   env: {
     ...process.env,
-    PORT: '3002',
+    PORT: serverPort,
     DATABASE_URL: '',
     DB_PATH: dbPath,
     API_KEY: '',
-    ALLOWED_ORIGINS: 'http://localhost:4176',
+    ALLOWED_ORIGINS: `http://localhost:${clientPort}`,
     ALLOWED_REPO_ROOTS: allowedRepoRoots,
+    AGENTBOARD_HOME: agentboardHome,
+    // E2E never runs real agents; skip booting agent SDK clients so an
+    // unauthenticated environment can't crash the server on startup.
+    AGENTBOARD_DISABLE_AGENT_STARTUP: '1',
   },
   shell: isWindows,
   stdio: 'inherit',

@@ -1,14 +1,19 @@
 import { Pool } from 'pg';
-import type { ColumnId, Project, ProjectTaskCounts } from '../types.js';
+import type { AgentType, ColumnId, Priority, Project, ProjectTaskCounts } from '../types.js';
 import type { ProjectRepository } from './project-types.js';
 
 interface ProjectRow {
   id: string;
   name: string;
   repo_path: string | null;
+  repo_url: string | null;
   is_default: boolean;
   created_at: string;
   updated_at: string;
+  default_agent_type: string | null;
+  default_priority: string | null;
+  default_base_branch: string | null;
+  default_use_worktree: boolean | null;
 }
 
 interface CountRow {
@@ -25,9 +30,14 @@ function rowToProject(row: ProjectRow, taskCounts?: ProjectTaskCounts): Project 
     id: row.id,
     name: row.name,
     repoPath: row.repo_path ?? undefined,
+    repoUrl: row.repo_url ?? undefined,
     isDefault: row.is_default,
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
+    defaultAgentType: (row.default_agent_type ?? undefined) as AgentType | undefined,
+    defaultPriority: (row.default_priority ?? undefined) as Priority | undefined,
+    defaultBaseBranch: row.default_base_branch ?? undefined,
+    defaultUseWorktree: row.default_use_worktree === null ? undefined : row.default_use_worktree,
     ...(taskCounts ? { taskCounts } : {}),
   };
 }
@@ -53,6 +63,11 @@ export class PostgresProjectRepository implements ProjectRepository {
     id: string;
     name: string;
     repoPath?: string;
+    repoUrl?: string;
+    defaultAgentType?: AgentType;
+    defaultPriority?: Priority;
+    defaultBaseBranch?: string;
+    defaultUseWorktree?: boolean;
     createdAt: number;
     updatedAt: number;
   }): Promise<Project> {
@@ -60,10 +75,23 @@ export class PostgresProjectRepository implements ProjectRepository {
     try {
       await client.query('BEGIN');
       const { rows } = await client.query<ProjectRow>(
-        `INSERT INTO projects (id, name, repo_path, is_default, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO projects (id, name, repo_path, repo_url, is_default, created_at, updated_at,
+           default_agent_type, default_priority, default_base_branch, default_use_worktree)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          RETURNING *`,
-        [input.id, input.name, input.repoPath ?? null, false, input.createdAt, input.updatedAt],
+        [
+          input.id,
+          input.name,
+          input.repoPath ?? null,
+          input.repoUrl ?? null,
+          false,
+          input.createdAt,
+          input.updatedAt,
+          input.defaultAgentType ?? null,
+          input.defaultPriority ?? null,
+          input.defaultBaseBranch ?? null,
+          input.defaultUseWorktree ?? null,
+        ],
       );
       await client.query('COMMIT');
       return rowToProject(rows[0], await this.getCounts(input.id));
@@ -78,6 +106,11 @@ export class PostgresProjectRepository implements ProjectRepository {
   async update(id: string, updates: {
     name?: string;
     repoPath?: string | null;
+    repoUrl?: string | null;
+    defaultAgentType?: AgentType | null;
+    defaultPriority?: Priority | null;
+    defaultBaseBranch?: string | null;
+    defaultUseWorktree?: boolean | null;
     updatedAt: number;
   }): Promise<Project | undefined> {
     const client = await this.pool.connect();
@@ -91,14 +124,20 @@ export class PostgresProjectRepository implements ProjectRepository {
       const existing = rows[0];
       const { rows: updatedRows } = await client.query<ProjectRow>(
         `UPDATE projects
-         SET name = $1, repo_path = $2, is_default = $3, updated_at = $4
-         WHERE id = $5
+         SET name = $1, repo_path = $2, repo_url = $3, is_default = $4, updated_at = $5,
+           default_agent_type = $6, default_priority = $7, default_base_branch = $8, default_use_worktree = $9
+         WHERE id = $10
          RETURNING *`,
         [
           updates.name ?? existing.name,
           updates.repoPath === undefined ? existing.repo_path : updates.repoPath,
+          updates.repoUrl === undefined ? existing.repo_url : updates.repoUrl,
           existing.is_default,
           updates.updatedAt,
+          updates.defaultAgentType === undefined ? existing.default_agent_type : updates.defaultAgentType,
+          updates.defaultPriority === undefined ? existing.default_priority : updates.defaultPriority,
+          updates.defaultBaseBranch === undefined ? existing.default_base_branch : updates.defaultBaseBranch,
+          updates.defaultUseWorktree === undefined ? existing.default_use_worktree : updates.defaultUseWorktree,
           id,
         ],
       );
@@ -129,12 +168,10 @@ export class PostgresProjectRepository implements ProjectRepository {
         await client.query('ROLLBACK');
         return false;
       }
-      const [{ count: taskCount }] = (await client.query<{ count: string }>('SELECT COUNT(*) AS count FROM tasks WHERE project_id = $1', [id])).rows;
-      const [{ count: groupCount }] = (await client.query<{ count: string }>('SELECT COUNT(*) AS count FROM task_groups WHERE project_id = $1', [id])).rows;
-      if (Number(taskCount) > 0 || Number(groupCount) > 0) {
-        await client.query('ROLLBACK');
-        return false;
-      }
+      // Cascade: delete tasks (their events cascade via FK, and group children share
+      // project_id so they are removed too), then groups, then the project itself.
+      await client.query('DELETE FROM tasks WHERE project_id = $1', [id]);
+      await client.query('DELETE FROM task_groups WHERE project_id = $1', [id]);
       const result = await client.query('DELETE FROM projects WHERE id = $1', [id]);
       if (rows[0].is_default) {
         await client.query('UPDATE projects SET is_default = TRUE WHERE id = $1', ['default']);

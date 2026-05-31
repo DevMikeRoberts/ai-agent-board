@@ -4,6 +4,7 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { createWSS } from './websocket.js';
 import { initDatabase, initPostgresDatabase, isPostgresUrl } from './db.js';
+import { loadConfig } from './config.js';
 import { SqliteTaskRepository } from './repositories/sqlite.js';
 import { PostgresTaskRepository } from './repositories/postgres.js';
 import { createTaskRouter } from './routes/tasks.js';
@@ -45,6 +46,10 @@ let cleanupDb: () => void;
 const agentManager = new AgentManager();
 
 (async () => {
+  // Load (and create on first run) the Agent Board config + clone root directory.
+  const config = loadConfig();
+  console.log(`[server] clone root: ${config.cloneRoot}`);
+
   if (isPostgresUrl(DATABASE_URL)) {
     // PostgreSQL backend
     const { Pool } = await import('pg');
@@ -80,7 +85,7 @@ const agentManager = new AgentManager();
   agentManager.initEventPersistence(taskRepo);
   agentManager.initAttachmentStore(attachmentStore);
 
-  app.use('/api/projects', createProjectsRouter(projectRepo));
+  app.use('/api/projects', createProjectsRouter(projectRepo, taskRepo, groupRepo, agentManager));
   app.use('/api/tasks', createTaskRouter(taskRepo, agentManager, projectRepo));
   app.use('/api/tasks', createAgentRouter(taskRepo, agentManager, groupRepo, projectRepo));
   app.use('/api/tasks', createGitRouter(taskRepo, agentManager));

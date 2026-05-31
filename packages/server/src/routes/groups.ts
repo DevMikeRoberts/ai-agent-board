@@ -136,33 +136,42 @@ export function createGroupsRouter(
     const groupId = uuid();
     const expandedRepo = typeof repoPath === 'string' ? expandTilde(repoPath) : undefined;
 
+    // Project defaults fill fields the request left undefined (each overridable per group/child).
+    const effectivePriority = priority !== undefined ? priority : (project.defaultPriority ?? 'medium');
+    const effectiveBaseBranch = baseBranch !== undefined ? (baseBranch || undefined) : project.defaultBaseBranch;
+
     const group: TaskGroup = {
       id: groupId,
       projectId: project.id,
       title: title.trim(),
       description: description?.trim() || undefined,
-      priority: priority || 'medium',
+      priority: effectivePriority,
       columnId: autoRun ? 'in-progress' : 'backlog',
       repoPath: expandedRepo,
-      baseBranch: baseBranch || undefined,
+      baseBranch: effectiveBaseBranch,
       maxConcurrency: concurrency,
       createdAt: now,
     };
 
-    const childDefs = children.map((child: any, i: number) => ({
-      id: uuid(),
-      projectId: project.id,
-      title: child.title.trim(),
-      description: child.description?.trim() || '',
-      priority: child.priority || group.priority,
-      agentType: child.agentType || 'copilot',
-      useWorktree: child.useWorktree ?? true,
-      branchName: child.useWorktree !== false
-        ? `group/${groupId.slice(0, 8)}/${i}-${slugify(child.title)}`
-        : undefined,
-      groupId,
-      groupOrder: i,
-    }));
+    const childDefs = children.map((child: any, i: number) => {
+      const useWorktree = child.useWorktree !== undefined
+        ? child.useWorktree
+        : (project.defaultUseWorktree ?? true);
+      return {
+        id: uuid(),
+        projectId: project.id,
+        title: child.title.trim(),
+        description: child.description?.trim() || '',
+        priority: child.priority || group.priority,
+        agentType: child.agentType !== undefined ? child.agentType : (project.defaultAgentType ?? 'copilot'),
+        useWorktree,
+        branchName: useWorktree !== false
+          ? `group/${groupId.slice(0, 8)}/${i}-${slugify(child.title)}`
+          : undefined,
+        groupId,
+        groupOrder: i,
+      };
+    });
 
     try {
       const result = await groupRepo.create(group, childDefs);

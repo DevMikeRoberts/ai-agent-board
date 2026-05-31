@@ -28,6 +28,25 @@ function migrate(db: Database.Database): void {
   `).run(now, now);
   db.exec(`UPDATE projects SET is_default = CASE WHEN id = 'default' THEN 1 ELSE 0 END`);
 
+  // Add project-level task default columns if they don't exist yet
+  const projectCols = db.pragma('table_info(projects)') as { name: string }[];
+  const projectColNames = new Set(projectCols.map((c) => c.name));
+  if (!projectColNames.has('default_agent_type')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN default_agent_type TEXT`);
+  }
+  if (!projectColNames.has('default_priority')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN default_priority TEXT`);
+  }
+  if (!projectColNames.has('default_base_branch')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN default_base_branch TEXT`);
+  }
+  if (!projectColNames.has('default_use_worktree')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN default_use_worktree INTEGER`);
+  }
+  if (!projectColNames.has('repo_url')) {
+    db.exec(`ALTER TABLE projects ADD COLUMN repo_url TEXT`);
+  }
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS tasks (
       id            TEXT PRIMARY KEY,
@@ -38,7 +57,8 @@ function migrate(db: Database.Database): void {
       agent_status  TEXT NOT NULL DEFAULT 'idle',
       created_at    INTEGER NOT NULL,
       started_at    INTEGER,
-      completed_at  INTEGER
+      completed_at  INTEGER,
+      summary       TEXT
     )
   `);
 
@@ -117,6 +137,9 @@ function migrate(db: Database.Database): void {
   }
   if (!colNames.has('group_order')) {
     db.exec(`ALTER TABLE tasks ADD COLUMN group_order INTEGER`);
+  }
+  if (!colNames.has('summary')) {
+    db.exec(`ALTER TABLE tasks ADD COLUMN summary TEXT`);
   }
 
   // Task groups table
@@ -266,6 +289,7 @@ function ensureSqliteProjectForeignKeys(db: Database.Database): void {
         project_id    TEXT NOT NULL DEFAULT 'default',
         group_id      TEXT,
         group_order   INTEGER,
+        summary       TEXT,
         FOREIGN KEY (project_id) REFERENCES projects(id),
         FOREIGN KEY (group_id) REFERENCES task_groups(id) ON DELETE CASCADE
       );
@@ -273,12 +297,12 @@ function ensureSqliteProjectForeignKeys(db: Database.Database): void {
       INSERT INTO tasks_new (
         id, title, description, priority, column_id, agent_status, created_at,
         started_at, completed_at, repo_path, branch_name, base_branch, use_worktree,
-        worktree_path, agent_type, archived, project_id, group_id, group_order
+        worktree_path, agent_type, archived, project_id, group_id, group_order, summary
       )
       SELECT
         id, title, description, priority, column_id, agent_status, created_at,
         started_at, completed_at, repo_path, branch_name, base_branch, use_worktree,
-        worktree_path, agent_type, archived, project_id, group_id, group_order
+        worktree_path, agent_type, archived, project_id, group_id, group_order, summary
       FROM tasks;
 
       DROP TABLE tasks;
@@ -334,6 +358,23 @@ export async function initPostgresDatabase(pool: Pool): Promise<void> {
   );
   await pool.query(`UPDATE projects SET is_default = (id = 'default')`);
 
+  // Add project-level task default columns if they don't exist yet
+  const { rows: projectColRows } = await pool.query(`
+    SELECT column_name FROM information_schema.columns
+    WHERE table_name = 'projects' AND table_schema = current_schema()
+  `);
+  const projectColNames = new Set(projectColRows.map((r: { column_name: string }) => r.column_name));
+  const addProjectCol = async (name: string, def: string) => {
+    if (!projectColNames.has(name)) {
+      await pool.query(`ALTER TABLE projects ADD COLUMN ${name} ${def}`);
+    }
+  };
+  await addProjectCol('default_agent_type', 'TEXT');
+  await addProjectCol('default_priority', 'TEXT');
+  await addProjectCol('default_base_branch', 'TEXT');
+  await addProjectCol('default_use_worktree', 'BOOLEAN');
+  await addProjectCol('repo_url', 'TEXT');
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS tasks (
       id            TEXT PRIMARY KEY,
@@ -376,6 +417,7 @@ export async function initPostgresDatabase(pool: Pool): Promise<void> {
   await addCol('project_id', "TEXT NOT NULL DEFAULT 'default'");
   await addCol('group_id', 'TEXT');
   await addCol('group_order', 'INTEGER');
+  await addCol('summary', 'TEXT');
 
   // Task groups table
   await pool.query(`

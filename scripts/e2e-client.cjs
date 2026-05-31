@@ -3,11 +3,20 @@ const path = require('node:path');
 
 const repoRoot = path.resolve(__dirname, '..');
 const isWindows = process.platform === 'win32';
-const child = spawn(isWindows ? 'npx vite --port 4176' : 'npx', isWindows ? [] : ['vite', '--port', '4176'], {
+function portFromEnv(name, fallback) {
+  const value = process.env[name] || fallback;
+  if (!/^\d+$/.test(value)) {
+    throw new Error(`${name} must be a numeric port`);
+  }
+  return value;
+}
+const serverPort = portFromEnv('E2E_SERVER_PORT', '3002');
+const clientPort = portFromEnv('E2E_CLIENT_PORT', '4176');
+const child = spawn(isWindows ? `npx vite --port ${clientPort}` : 'npx', isWindows ? [] : ['vite', '--port', clientPort], {
   cwd: path.join(repoRoot, 'packages', 'client'),
   env: {
     ...process.env,
-    API_URL: 'http://localhost:3002',
+    API_URL: `http://localhost:${serverPort}`,
     VITE_API_KEY: '',
   },
   shell: isWindows,
