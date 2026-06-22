@@ -3,6 +3,19 @@ export type ColumnId = 'backlog' | 'in-progress' | 'review' | 'done';
 export type AgentStatus = 'idle' | 'planning' | 'executing' | 'complete' | 'failed';
 export type AgentType = 'copilot' | 'claude' | 'codex' | 'opencode' | 'hermes' | 'openclaw';
 
+/**
+ * State of the automatic PR + adversarial-review pipeline that runs after an
+ * agent finishes a task. See services/review-pipeline.ts on the server.
+ */
+export type ReviewStatus =
+  | 'opening_pr'         // creating/locating the PR for the finished branch
+  | 'reviewing'          // an adversarial reviewer agent is examining the diff
+  | 'changes_requested'  // reviewer rejected; task bounced back to in-progress
+  | 'approved'           // reviewer approved (merge in progress)
+  | 'merged'             // approved and merged into the base branch
+  | 'needs_human'        // round cap hit without approval — handed back to you
+  | 'error';             // the pipeline failed (see task events)
+
 export interface AgentInfo {
   name: AgentType;
   displayName: string;
@@ -33,6 +46,12 @@ export interface Task {
   attachments?: TaskAttachment[];
   projectId: string;
   summary?: string | null;
+  /** URL of the pull request opened by the auto-PR pipeline, if any. */
+  prUrl?: string;
+  /** How many adversarial-review cycles this task has been through. */
+  reviewRound?: number;
+  /** Current state of the auto-PR + adversarial-review pipeline. */
+  reviewStatus?: ReviewStatus;
 }
 
 export interface TaskGroup {
@@ -141,6 +160,10 @@ export interface AgentEvent {
     agentType?: AgentType;
     duration?: number;
     error?: string;
+    /** Set on events produced by the auto-PR/review pipeline ('pipeline' | 'review'). */
+    phase?: string;
+    /** Agent type that produced an adversarial-review event. */
+    reviewer?: AgentType;
   };
 }
 

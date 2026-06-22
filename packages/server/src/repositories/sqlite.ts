@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import type { Task, Priority, ColumnId, AgentStatus, AgentType, AgentEvent } from '../types.js';
+import type { Task, Priority, ColumnId, AgentStatus, AgentType, AgentEvent, ReviewStatus } from '../types.js';
 import type { TaskRepository } from './types.js';
 import { errorMessage } from '../utils.js';
 
@@ -24,6 +24,9 @@ interface TaskRow {
   group_id: string | null;
   group_order: number | null;
   summary: string | null;
+  pr_url: string | null;
+  review_round: number | null;
+  review_status: string | null;
 }
 
 function rowToTask(row: TaskRow): Task {
@@ -48,6 +51,9 @@ function rowToTask(row: TaskRow): Task {
     groupId: row.group_id ?? undefined,
     groupOrder: row.group_order ?? undefined,
     summary: row.summary ?? null,
+    prUrl: row.pr_url ?? undefined,
+    reviewRound: row.review_round ?? undefined,
+    reviewStatus: (row.review_status as ReviewStatus | null) ?? undefined,
   };
 }
 
@@ -76,9 +82,9 @@ export class SqliteTaskRepository implements TaskRepository {
       getById: db.prepare('SELECT * FROM tasks WHERE id = ?'),
       insert: db.prepare(`
         INSERT INTO tasks (id, project_id, title, description, priority, column_id, agent_status, agent_type, created_at, started_at, completed_at,
-          repo_path, branch_name, base_branch, use_worktree, worktree_path, archived, group_id, group_order, summary)
+          repo_path, branch_name, base_branch, use_worktree, worktree_path, archived, group_id, group_order, summary, pr_url, review_round, review_status)
         VALUES (@id, @project_id, @title, @description, @priority, @column_id, @agent_status, @agent_type, @created_at, @started_at, @completed_at,
-          @repo_path, @branch_name, @base_branch, @use_worktree, @worktree_path, @archived, @group_id, @group_order, @summary)
+          @repo_path, @branch_name, @base_branch, @use_worktree, @worktree_path, @archived, @group_id, @group_order, @summary, @pr_url, @review_round, @review_status)
       `),
       update: db.prepare(`
         UPDATE tasks SET
@@ -96,7 +102,10 @@ export class SqliteTaskRepository implements TaskRepository {
           use_worktree = @use_worktree,
           worktree_path = @worktree_path,
           archived = @archived,
-          summary = @summary
+          summary = @summary,
+          pr_url = @pr_url,
+          review_round = @review_round,
+          review_status = @review_status
         WHERE id = @id
       `),
       delete: db.prepare('DELETE FROM tasks WHERE id = ?'),
@@ -142,6 +151,9 @@ export class SqliteTaskRepository implements TaskRepository {
       group_id: task.groupId ?? null,
       group_order: task.groupOrder ?? null,
       summary: task.summary ?? null,
+      pr_url: task.prUrl ?? null,
+      review_round: task.reviewRound ?? null,
+      review_status: task.reviewStatus ?? null,
     });
     return task;
   }
@@ -169,6 +181,9 @@ export class SqliteTaskRepository implements TaskRepository {
         worktree_path: merged.worktreePath ?? null,
         archived: merged.archived ? 1 : 0,
         summary: merged.summary ?? null,
+        pr_url: merged.prUrl ?? null,
+        review_round: merged.reviewRound ?? null,
+        review_status: merged.reviewStatus ?? null,
       });
       return merged;
     })();

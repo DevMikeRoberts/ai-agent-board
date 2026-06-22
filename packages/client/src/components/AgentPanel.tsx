@@ -24,7 +24,7 @@ import {
   Download,
   Paperclip,
 } from 'lucide-react';
-import type { Task, AgentEvent, AgentEventType } from '@/types';
+import type { Task, AgentEvent, AgentEventType, ReviewStatus } from '@/types';
 import { getAgentDisplay } from '@/lib/agent-config';
 import { TerminalView } from './TerminalView';
 import { api, connectWS } from '@/lib/api';
@@ -798,10 +798,15 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onMergeLo
                 </div>
               )}
 
+              {/* Auto-review pipeline status */}
+              {task.reviewStatus && (
+                <ReviewStatusBadge status={task.reviewStatus} round={task.reviewRound} />
+              )}
+
               {/* PR / Cleanup actions — show when task is done or complete */}
               {(task.agentStatus === 'complete' || task.columnId === 'done') && (
                 <div className="flex items-center gap-2 pt-1">
-                  {!prUrl && onCreatePR && hasRemote === true && (
+                  {!prUrl && !task.prUrl && onCreatePR && hasRemote === true && (
                     <button
                       onClick={async () => {
                         setPrLoading(true);
@@ -821,9 +826,9 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onMergeLo
                       {prLoading ? 'Creating...' : 'Create PR'}
                     </button>
                   )}
-                  {prUrl && (
+                  {(prUrl ?? task.prUrl) && (
                     <a
-                      href={prUrl}
+                      href={prUrl ?? task.prUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors"
@@ -873,6 +878,15 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onMergeLo
               {/* PR / merge errors */}
               {prError && <ErrorBanner message={prError} onDismiss={() => setPrError(null)} />}
               {mergeError && <ErrorBanner message={mergeError} onDismiss={() => setMergeError(null)} />}
+            </div>
+          )}
+
+          {/* No branch → no PR/merge is possible. Explain why instead of showing nothing. */}
+          {!task.branchName && (task.agentStatus === 'complete' || task.columnId === 'done') && (
+            <div className="shrink-0 border-b border-border px-4 py-2.5">
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                This task ran without a git worktree, so its changes aren't on a dedicated branch and there's nothing to open a PR from. Re-run with <span className="font-medium text-foreground">Use Git Worktree</span> enabled to create a PR or merge.
+              </p>
             </div>
           )}
           {showWorktreeConfirm && (
@@ -1179,6 +1193,28 @@ export function AgentPanel({ task, onClose, onRun, onStop, onCreatePR, onMergeLo
         </>
       )}
     </AnimatePresence>
+  );
+}
+
+/** Compact status pill for the auto-PR + adversarial-review pipeline. */
+function ReviewStatusBadge({ status, round }: { status: ReviewStatus; round?: number }) {
+  const meta: Record<ReviewStatus, { label: string; dot: string; text: string; pulse?: boolean }> = {
+    opening_pr:        { label: 'Opening pull request…',     dot: 'bg-sky-500',     text: 'text-sky-600 dark:text-sky-400', pulse: true },
+    reviewing:         { label: 'Adversarial review…',       dot: 'bg-violet-500',  text: 'text-violet-600 dark:text-violet-400', pulse: true },
+    changes_requested: { label: 'Changes requested — re-running', dot: 'bg-amber-500', text: 'text-amber-600 dark:text-amber-400' },
+    approved:          { label: 'Approved — merging…',        dot: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400', pulse: true },
+    merged:            { label: 'Merged after review',        dot: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400' },
+    needs_human:       { label: 'Needs your review',          dot: 'bg-amber-500',   text: 'text-amber-600 dark:text-amber-400' },
+    error:             { label: 'Review pipeline error',      dot: 'bg-red-500',     text: 'text-red-500' },
+  };
+  const m = meta[status];
+  if (!m) return null;
+  return (
+    <div className={cn('flex items-center gap-1.5 text-[11px] font-medium', m.text)}>
+      <span className={cn('h-1.5 w-1.5 rounded-full', m.dot, m.pulse && 'animate-pulse')} />
+      <span>{m.label}</span>
+      {round ? <span className="text-muted-foreground">· round {round}</span> : null}
+    </div>
   );
 }
 

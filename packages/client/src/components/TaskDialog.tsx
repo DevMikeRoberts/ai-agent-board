@@ -47,7 +47,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
   const [repoPath, setRepoPath] = useState('');
   const [branchName, setBranchName] = useState('');
   const [baseBranch, setBaseBranch] = useState('main');
-  const [useWorktree, setUseWorktree] = useState(false);
+  const [useWorktree, setUseWorktree] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [pathError, setPathError] = useState('');
   const [pendingImages, setPendingImages] = useState<File[]>([]);
@@ -60,7 +60,9 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
   const defaultAgent = projectDefaults?.defaultAgentType ?? 'copilot';
   const defaultPriority = projectDefaults?.defaultPriority ?? 'medium';
   const defaultBaseBranch = projectDefaults?.defaultBaseBranch ?? 'main';
-  const defaultUseWorktree = projectDefaults?.defaultUseWorktree ?? false;
+  // Default ON: a worktree gives each task its own branch, so completed work can
+  // be opened as a PR or merged. Without it there's no branch and no PR/merge.
+  const defaultUseWorktree = projectDefaults?.defaultUseWorktree ?? true;
 
   // Pre-populate fields when editing
   useEffect(() => {
@@ -72,7 +74,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
       setRepoPath(lockedRepoPath || editTask.repoPath || '');
       setBranchName(editTask.branchName || `task/${slugify(editTask.title)}`);
       setBaseBranch(editTask.baseBranch || 'main');
-      setUseWorktree(editTask.useWorktree ?? false);
+      setUseWorktree(editTask.useWorktree ?? true);
       // Load attachments from server
       api.getAttachments(editTask.id).then(setExistingAttachments).catch(() => setExistingAttachments([]));
       // Highlight missing path if opened via Play button
