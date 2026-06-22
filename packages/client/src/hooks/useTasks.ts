@@ -119,13 +119,10 @@ export function useTasks(projectId = 'default') {
   }, []);
 
   const createPR = useCallback(async (id: string) => {
-    try {
-      const result = await api.createPR(id);
-      return result.url;
-    } catch (err) {
-      setError(`Failed to create PR: ${(err as Error).message}`);
-      return undefined;
-    }
+    // Let errors propagate so the AgentPanel shows a persistent inline banner
+    // (a global toast here would auto-dismiss after 5s and read as "did nothing").
+    const result = await api.createPR(id);
+    return result.url;
   }, []);
 
   const cleanupWorktree = useCallback(async (id: string) => {
@@ -138,13 +135,9 @@ export function useTasks(projectId = 'default') {
   }, []);
 
   const mergeLocal = useCallback(async (id: string) => {
-    try {
-      const result = await api.mergeLocal(id);
-      return result.baseBranch;
-    } catch (err) {
-      setError(`Failed to merge locally: ${(err as Error).message}`);
-      return undefined;
-    }
+    // Let errors propagate so the AgentPanel shows a persistent inline banner.
+    const result = await api.mergeLocal(id);
+    return result.baseBranch;
   }, []);
 
   const stopTask = useCallback(async (id: string) => {

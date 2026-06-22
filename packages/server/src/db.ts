@@ -141,6 +141,15 @@ function migrate(db: Database.Database): void {
   if (!colNames.has('summary')) {
     db.exec(`ALTER TABLE tasks ADD COLUMN summary TEXT`);
   }
+  if (!colNames.has('pr_url')) {
+    db.exec(`ALTER TABLE tasks ADD COLUMN pr_url TEXT`);
+  }
+  if (!colNames.has('review_round')) {
+    db.exec(`ALTER TABLE tasks ADD COLUMN review_round INTEGER`);
+  }
+  if (!colNames.has('review_status')) {
+    db.exec(`ALTER TABLE tasks ADD COLUMN review_status TEXT`);
+  }
 
   // Task groups table
   db.exec(`
@@ -418,6 +427,9 @@ export async function initPostgresDatabase(pool: Pool): Promise<void> {
   await addCol('group_id', 'TEXT');
   await addCol('group_order', 'INTEGER');
   await addCol('summary', 'TEXT');
+  await addCol('pr_url', 'TEXT');
+  await addCol('review_round', 'INTEGER');
+  await addCol('review_status', 'TEXT');
 
   // Task groups table
   await pool.query(`

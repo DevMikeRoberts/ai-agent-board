@@ -25,6 +25,9 @@ interface TaskRow {
   group_id: string | null;
   group_order: number | null;
   summary: string | null;
+  pr_url: string | null;
+  review_round: number | null;
+  review_status: string | null;
 }
 
 function rowToTask(row: TaskRow): Task {
@@ -70,6 +73,9 @@ function rowToTask(row: TaskRow): Task {
     groupId: row.group_id ?? undefined,
     groupOrder: row.group_order ?? undefined,
     summary: row.summary ?? null,
+    prUrl: row.pr_url ?? undefined,
+    reviewRound: row.review_round ?? undefined,
+    reviewStatus: (row.review_status as Task['reviewStatus']) ?? undefined,
   };
 }
 
@@ -100,8 +106,8 @@ export class PostgresTaskRepository implements TaskRepository {
     await this.pool.query(
       `INSERT INTO tasks (id, project_id, title, description, priority, column_id, agent_status, agent_type,
         created_at, started_at, completed_at, repo_path, branch_name, base_branch, use_worktree, worktree_path, archived,
-        group_id, group_order, summary)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
+        group_id, group_order, summary, pr_url, review_round, review_status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)`,
       [
         task.id,
         task.projectId,
@@ -123,6 +129,9 @@ export class PostgresTaskRepository implements TaskRepository {
         task.groupId ?? null,
         task.groupOrder ?? null,
         task.summary ?? null,
+        task.prUrl ?? null,
+        task.reviewRound ?? null,
+        task.reviewStatus ?? null,
       ]
     );
     return task;
@@ -147,8 +156,9 @@ export class PostgresTaskRepository implements TaskRepository {
           title = $1, description = $2, priority = $3, column_id = $4,
           agent_status = $5, agent_type = $6, started_at = $7, completed_at = $8,
           repo_path = $9, branch_name = $10, base_branch = $11, use_worktree = $12,
-          worktree_path = $13, archived = $14, summary = $15
-        WHERE id = $16`,
+          worktree_path = $13, archived = $14, summary = $15,
+          pr_url = $16, review_round = $17, review_status = $18
+        WHERE id = $19`,
         [
           merged.title,
           merged.description,
@@ -165,6 +175,9 @@ export class PostgresTaskRepository implements TaskRepository {
           merged.worktreePath ?? null,
           merged.archived ?? false,
           merged.summary ?? null,
+          merged.prUrl ?? null,
+          merged.reviewRound ?? null,
+          merged.reviewStatus ?? null,
           id,
         ]
       );

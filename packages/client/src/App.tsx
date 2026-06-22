@@ -300,7 +300,7 @@ function BoardPage({
 
     if (task.repoPath) {
       // Task already configured — run directly
-      const wantWorktree = task.useWorktree ?? false;
+      const wantWorktree = task.useWorktree ?? true;
       setSelectedTaskId(taskId);
       configureAndRunTask(taskId, {
         repoPath: task.repoPath,
