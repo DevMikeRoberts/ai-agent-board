@@ -36,6 +36,8 @@ services:
       AGENTBOARD_CONTAINER_MODE: ${AGENTBOARD_CONTAINER_MODE:-}
       AGENT_RUNNER_IMAGE: ${AGENT_RUNNER_IMAGE:-agentboard-agent-runner:latest}
       AGENTBOARD_DATA_DIR: /data
+      # Optional Claude model override for per-task containers + reviewer.
+      CLAUDE_MODEL: ${CLAUDE_MODEL:-}
     volumes:
       # Persistent DB + cloned repos. Bind mount (not a named volume) so the
       # host path is known to per-task sibling containers.

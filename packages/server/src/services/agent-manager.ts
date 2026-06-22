@@ -250,7 +250,10 @@ export class AgentManager {
     const dataHostPath = process.env.AGENTBOARD_DATA_HOST;
     const missing: string[] = [];
     if (!anthropicApiKey) missing.push('ANTHROPIC_API_KEY');
+    // Must be ABSOLUTE: it becomes the `docker run -v <src>:/repo` source on the
+    // host daemon, which rejects a relative path (or mounts the wrong dir).
     if (!dataHostPath) missing.push('AGENTBOARD_DATA_HOST');
+    else if (!path.isAbsolute(dataHostPath)) missing.push(`an ABSOLUTE AGENTBOARD_DATA_HOST (got "${dataHostPath}")`);
     if (!this.isDockerAvailable()) missing.push('a working Docker daemon');
     if (missing.length > 0) {
       console.warn(`[agent-manager] AGENTBOARD_CONTAINER_MODE is set but missing ${missing.join(', ')} — falling back to local execution`);
@@ -769,6 +772,9 @@ Use DECISION: REQUEST_CHANGES instead when the change is not ready. When request
       terminated = true;
       const entry = this.sessions.get(task.id);
       if (entry?.timeoutId) clearTimeout(entry.timeoutId);
+      // Always release the session here so every completion path (including the
+      // container branch's failure paths) clears `isRunning` and allows re-runs.
+      this.sessions.delete(task.id);
       const duration = Date.now() - sessionStartTime;
 
       // Item 5: Emit structured summary event
@@ -827,6 +833,12 @@ Use DECISION: REQUEST_CHANGES instead when the change is not ready. When request
           workspace = runner.prepareWorkspace(task);
           task.worktreePath = workspace.containerPath;
           if (onWorktreeCreated) onWorktreeCreated(workspace.containerPath);
+          // The container always runs Claude — reflect that as the task's agent
+          // so the review pipeline picks a DIFFERENT agent as the reviewer.
+          if (task.agentType !== 'claude') {
+            task.agentType = 'claude';
+            try { await this.eventRepo?.update(task.id, { agentType: 'claude' }); } catch { /* non-fatal */ }
+          }
           this.emitEvent(task.id, {
             id: uuid(), taskId: task.id, type: 'output',
             content: `Launching containerized Claude agent.\nWorkspace: ${workspace.containerPath}\nBranch: ${task.branchName} from ${task.baseBranch || 'main'}`,

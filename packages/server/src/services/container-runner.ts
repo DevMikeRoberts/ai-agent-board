@@ -75,8 +75,20 @@ export class ContainerRunner {
     fs.rmSync(containerPath, { recursive: true, force: true });
     fs.mkdirSync(path.dirname(containerPath), { recursive: true });
     execFileSync('git', ['clone', '--branch', baseBranch, task.repoPath, containerPath], { stdio: 'pipe' });
-    execFileSync('git', ['checkout', '-B', task.branchName], { cwd: containerPath, stdio: 'pipe' });
     execFileSync('git', ['remote', 'set-url', 'origin', originUrl], { cwd: containerPath, stdio: 'pipe' });
+
+    // If the task branch was already pushed in a prior round (and the workspace
+    // was since lost), base on the remote branch so the next push fast-forwards
+    // instead of being rejected as non-fast-forward.
+    let basedOnRemote = false;
+    try {
+      execFileSync('git', ['fetch', 'origin', task.branchName], { cwd: containerPath, stdio: 'pipe' });
+      execFileSync('git', ['checkout', '-B', task.branchName, `origin/${task.branchName}`], { cwd: containerPath, stdio: 'pipe' });
+      basedOnRemote = true;
+    } catch { /* no remote branch yet — branch from base */ }
+    if (!basedOnRemote) {
+      execFileSync('git', ['checkout', '-B', task.branchName], { cwd: containerPath, stdio: 'pipe' });
+    }
 
     return { containerPath, hostPath };
   }
@@ -100,6 +112,15 @@ export class ContainerRunner {
     task: Task,
     opts: { prompt: string; systemPrompt: string; hostWorkspacePath: string; onEvent: ContainerEventSink },
   ): Promise<ContainerRunResult> {
+    // The mount source is handed to the host Docker daemon, which requires an
+    // absolute path (a relative one is rejected or mounts the wrong directory).
+    if (!path.isAbsolute(opts.hostWorkspacePath)) {
+      return Promise.resolve({
+        status: 'failed',
+        error: `workspace host path must be absolute, got "${opts.hostWorkspacePath}" (set AGENTBOARD_DATA to an absolute path)`,
+      });
+    }
+
     const name = this.containerName(task.id);
 
     // Clean up any stale container with the same name (e.g. after a crash).
@@ -108,7 +129,9 @@ export class ContainerRunner {
     const args = [
       'run', '--rm', '--name', name,
       '-v', `${opts.hostWorkspacePath}:/repo`,
-      '-e', `ANTHROPIC_API_KEY=${this.cfg.anthropicApiKey}`,
+      // Name-only -e: the value is supplied via the spawned process env below so
+      // the API key never appears in argv / `ps` / `docker inspect`.
+      '-e', 'ANTHROPIC_API_KEY',
       '-e', `TASK_PROMPT=${opts.prompt}`,
       '-e', `CLAUDE_SYSTEM_PROMPT=${opts.systemPrompt}`,
       '-e', `TASK_TITLE=${task.title.replace(/[\r\n]+/g, ' ').slice(0, 200)}`,
@@ -125,7 +148,10 @@ export class ContainerRunner {
         resolve(result);
       };
 
-      const child = spawn('docker', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+      const child = spawn('docker', args, {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, ANTHROPIC_API_KEY: this.cfg.anthropicApiKey },
+      });
 
       const emitLines = (buf: Buffer) => {
         for (const line of buf.toString().split(/\r?\n/)) {

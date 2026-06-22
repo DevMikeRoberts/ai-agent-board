@@ -6,6 +6,10 @@ set -e
 if [ -n "${GH_TOKEN:-}" ]; then
   # Use the token for GitHub HTTPS pushes (works for git and gh).
   git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/" || true
+  # Also route SSH-style origins through the tokenized HTTPS endpoint (no SSH key
+  # in the container), so push works regardless of the repo's origin format.
+  git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "git@github.com:" || true
+  git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "ssh://git@github.com/" || true
   gh auth setup-git 2>/dev/null || true
 fi
 

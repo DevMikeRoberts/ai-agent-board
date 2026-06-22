@@ -146,7 +146,7 @@ export ALLOWED_ORIGINS="https://your-board.vercel.app"   # your Vercel URL
 export API_KEY="$(openssl rand -hex 24)"                 # protect the public endpoint
 export ANTHROPIC_API_KEY="sk-ant-..."                    # for the Claude agent + reviewer
 export GH_TOKEN="ghp_..."                                # for pushing branches / opening PRs
-export AGENTBOARD_DATA="./agentboard-data"               # persistent DB + repos (host path)
+export AGENTBOARD_DATA="$(pwd)/agentboard-data"          # persistent DB + repos (MUST be an absolute host path)
 
 docker compose up -d --build server
 ```
@@ -247,7 +247,7 @@ npm run hooks:install
 | `ANTHROPIC_API_KEY` | _(unset)_ | Anthropic key for the Claude agent in per-task containers + the reviewer |
 | `GH_TOKEN` | _(unset)_ | GitHub token the backend uses to push branches and open PRs |
 | `AGENT_RUNNER_IMAGE` | `agentboard-agent-runner:latest` | Image used for per-task agent containers |
-| `AGENTBOARD_DATA_HOST` | _(unset)_ | Host path backing the `/data` bind mount (for sibling-container mounts) |
+| `AGENTBOARD_DATA_HOST` | _(unset)_ | **Absolute** host path backing the `/data` bind mount (required for sibling-container mounts; container mode won't enable if relative) |
 | `AGENTBOARD_DATA_DIR` | `/data` | In-container mount point of the shared data dir |
 
 ## Project Structure
