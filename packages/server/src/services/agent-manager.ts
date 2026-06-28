@@ -13,6 +13,7 @@ import { UPLOADS_DIR } from '../routes/attachments.js';
 import type { AttachmentStore } from '../repositories/attachment-types.js';
 import { errorMessage } from '../utils.js';
 import { detectAvailableAgents } from './agent-detection.js';
+import { resolveAgentSelection, getConfiguredFallbackAgent } from './agent-fallback.js';
 import { ContainerRunner } from './container-runner.js';
 
 const AGENT_TIMEOUT_MS = parseInt(process.env.AGENT_TIMEOUT_MS || '600000', 10);
@@ -756,7 +757,7 @@ Use DECISION: REQUEST_CHANGES instead when the change is not ready. When request
   ): void {
     if (this.sessions.has(task.id)) return;
 
-    const agentType = task.agentType || 'copilot';
+    let agentType = task.agentType || 'copilot';
     const sessionStartTime = Date.now();
     let terminated = false;
 
@@ -896,16 +897,39 @@ Use DECISION: REQUEST_CHANGES instead when the change is not ready. When request
       return;
     }
 
+    // Resolve which agent actually picks up the task. If the requested agent is
+    // unavailable (uninstalled, unauthenticated, or out of credits), fall back
+    // to another available agent — preferring a free/local model (e.g. OpenCode
+    // driving a local Ollama model) so the work still gets done instead of the
+    // task failing outright.
+    const selection = resolveAgentSelection({
+      requested: agentType,
+      agents: this.availableAgents,
+      preferredFallback: getConfiguredFallbackAgent(),
+    });
+    if (!selection.agentType) {
+      void terminateOnce('failed', selection.reason || `Agent "${agentType}" is not available.`);
+      return;
+    }
+    if (selection.fellBack) {
+      agentType = selection.agentType;
+      this.emitEvent(task.id, {
+        id: uuid(), taskId: task.id, type: 'output',
+        content: selection.reason || `Selected agent unavailable — falling back to ${agentType}.`,
+        timestamp: Date.now(), metadata: { phase: 'fallback', agentType },
+      });
+      // Persist + broadcast the swap so the board, follow-up messages, and the
+      // review pipeline all use the agent that actually ran.
+      if (task.agentType !== agentType) {
+        task.agentType = agentType;
+        void this.eventRepo?.update(task.id, { agentType }).catch(() => {});
+        broadcast({ type: 'task_updated', payload: task });
+      }
+    }
+
     const provider = this.providers.get(agentType);
     if (!provider) {
       void terminateOnce('failed', `No provider registered for agent type: ${agentType}`);
-      return;
-    }
-
-    // Check if agent is available
-    const agentInfo = this.availableAgents.find(a => a.name === agentType);
-    if (!agentInfo?.available) {
-      void terminateOnce('failed', `Agent ${provider.displayName} is not available: ${agentInfo?.reason || 'unknown reason'}`);
       return;
     }
 

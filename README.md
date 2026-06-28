@@ -38,6 +38,28 @@ The server uses a **provider pattern** (via [`@codewithdan/agent-sdk-core`](http
 
 Each task can specify which agent to use. Available agents are auto-detected at startup by checking for installed CLIs. Six providers are supported: Copilot, Claude Code, Codex, OpenCode, Hermes, and OpenClaw. Events from all providers are normalized into a common `AgentEvent` format and streamed to the UI via WebSocket.
 
+### Agent availability fallback
+
+When a task picks up its agent, a resolver
+([`services/agent-fallback.ts`](packages/server/src/services/agent-fallback.ts))
+checks whether the requested agent is actually available. If it isn't —
+uninstalled, unauthenticated, or **out of credits** — the task no longer fails
+outright. Instead it falls back to another available agent, **preferring a
+free/local model** so the work still gets done. Agents are ranked by tier:
+
+| Tier | Agents | Why it's preferred on fallback |
+|------|--------|--------------------------------|
+| `local` | OpenCode | Runs a local model (e.g. **Ollama** on your Mac Mini) — free and never out of credits |
+| `subscription` | Copilot, Hermes, OpenClaw | Flat-rate plans, usually usable even when metered budgets are exhausted |
+| `metered` | Claude, Codex | Pay-per-token APIs that can run out of credits |
+
+The swap is recorded in the task's event log and the agent badge updates live.
+To make a **local Ollama model** the fallback, install and authenticate the
+OpenCode CLI and point it at your Ollama endpoint; OpenCode then shows up as
+available and is chosen first whenever a paid agent is down. Set
+`AGENTBOARD_FALLBACK_AGENT` to pin a specific fallback agent instead of relying
+on tier ranking.
+
 ### Task Groups
 
 For projects needing multiple parallel changes, **Task Groups** let you define a batch of related tasks in a single form:
@@ -238,6 +260,7 @@ npm run hooks:install
 | `OPENCLAW_GATEWAY_URL` | _(SDK default)_ | Optional OpenClaw Gateway WebSocket URL forwarded to `openclaw acp` |
 | `OPENCLAW_GATEWAY_TOKEN` / `OPENCLAW_GATEWAY_PASSWORD` | _(unset)_ | Optional OpenClaw Gateway credentials passed through environment variables |
 | `COPILOT_DENIED_TOOLS` | _(unset)_ | Comma-separated tool names to deny in Copilot sessions |
+| `AGENTBOARD_FALLBACK_AGENT` | _(unset)_ | Pin the agent used when a task's requested agent is unavailable (out of credits / not installed). Unset = prefer a free/local model by tier ranking |
 | `ALLOWED_REPO_ROOTS` | `$HOME`, temp, current workspace | Allowed repo root paths (comma-separated) |
 | `ALLOWED_ORIGINS` | `http://localhost:8081,http://localhost:4175,http://localhost:4176` | CORS origins |
 | `AGENT_TIMEOUT_MS` | `600000` | Max agent execution time (ms); also the per-task container timeout |
