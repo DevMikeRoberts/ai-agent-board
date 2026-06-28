@@ -423,18 +423,71 @@ export class AgentManager {
     task.branchName = branchName;
 
     const worktreePath = fs.mkdtempSync(path.join(os.tmpdir(), `agentboard-${task.id}-`));
-    const baseBranch = task.baseBranch || 'main';
+
+    // Determine the base branch: try configured value, then detect the repo's
+    // default branch, then fall back to common names.
+    let baseBranch = task.baseBranch || '';
+    if (!baseBranch) {
+      try {
+        const head = execFileSync('git', ['symbolic-ref', 'refs/remotes/origin/HEAD'], {
+          cwd: task.repoPath, stdio: 'pipe',
+        }).toString().trim();
+        baseBranch = head.replace('refs/remotes/origin/', '');
+      } catch {
+        /* fall through */
+      }
+    }
+    if (!baseBranch) {
+      try {
+        const head = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+          cwd: task.repoPath, stdio: 'pipe',
+        }).toString().trim();
+        if (head !== 'HEAD') baseBranch = head;
+      } catch {
+        /* fall through */
+      }
+    }
+    const candidates = baseBranch ? [baseBranch] : ['main', 'master'];
+
+    // Try each candidate base branch with `-b` to create a new branch.
+    for (const candidate of candidates) {
+      try {
+        execFileSync(
+          'git', ['worktree', 'add', '-b', task.branchName, worktreePath, candidate],
+          { cwd: task.repoPath, stdio: 'pipe' },
+        );
+        console.log(`[worktree] created at ${worktreePath} from ${candidate}`);
+        return worktreePath;
+      } catch {
+        /* try next candidate */
+      }
+    }
+
+    // If all candidates failed (e.g. empty repo with no commits), try without a
+    // start-point. Git infers `--orphan` on an empty repo, allowing worktree
+    // creation even when no branch has commits yet. If the repo has commits this
+    // simply branches from HEAD.
+    try {
+      execFileSync(
+        'git', ['worktree', 'add', '-b', task.branchName, worktreePath],
+        { cwd: task.repoPath, stdio: 'pipe' },
+      );
+      console.log(`[worktree] created at ${worktreePath} from HEAD`);
+      return worktreePath;
+    } catch {
+      /* try existing-branch fallback */
+    }
 
     try {
       execFileSync(
-        'git', ['worktree', 'add', '-b', branchName, worktreePath, baseBranch],
+        'git', ['worktree', 'add', worktreePath, task.branchName],
         { cwd: task.repoPath, stdio: 'pipe' },
       );
-      console.log(`[worktree] created ${branchName} at ${worktreePath} from ${baseBranch}`);
+      console.log(`[worktree] attached existing branch ${task.branchName} at ${worktreePath}`);
       return worktreePath;
-    } catch (err: unknown) {
-      console.error(`[worktree] failed:`, errorMessage(err));
-      throw new Error(`Failed to create worktree: ${errorMessage(err)}`);
+    } catch (err2: unknown) {
+      console.error(`[worktree] failed:`, errorMessage(err2));
+      throw new Error(`Failed to create worktree: ${errorMessage(err2)}`);
     }
   }
 
