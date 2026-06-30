@@ -154,7 +154,7 @@ export function createAgentRouter(
       }
     }
 
-    agentManager.startAgent(updated, makeStatusCallback(repo, task.id), makeWorktreeCallback(repo, task.id));
+    agentManager.startAgent(updated, makeStatusCallback(repo, task.id, agentManager), makeWorktreeCallback(repo, task.id));
 
     res.json(updated);
   }));

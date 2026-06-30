@@ -637,6 +637,56 @@ export class AgentManager {
     });
   }
 
+  /**
+   * Query the merge state of the task's open PR via the GitHub CLI. Returns the
+   * raw PR state (`OPEN` | `MERGED` | `CLOSED`) plus a convenience `merged` flag,
+   * or null when the state can't be determined (no `gh`, no PR for the branch,
+   * network/auth error). Best-effort: never throws. Used by {@link PrWatcher} to
+   * follow an auto-opened PR to its merge.
+   */
+  getPullRequestState(task: Task): { state: string; merged: boolean } | null {
+    if (!task.repoPath) return null;
+    // The PR URL uniquely identifies the PR even after the local branch is gone;
+    // fall back to the branch name when no URL was recorded.
+    const ref = task.prUrl || task.branchName;
+    if (!ref) return null;
+    const cwd = this.gitCwd(task);
+    try {
+      const out = execFileSync(
+        'gh', ['pr', 'view', ref, '--json', 'state,mergedAt'],
+        { cwd, stdio: 'pipe' },
+      ).toString().trim();
+      if (!out) return null;
+      const parsed = JSON.parse(out) as { state?: string; mergedAt?: string | null };
+      const state = parsed.state ?? 'UNKNOWN';
+      const merged = state === 'MERGED' || !!parsed.mergedAt;
+      return { state, merged };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Best-effort delete of the task's local branch once its PR has merged. Runs
+   * from the repo (never a worktree, which would still have the branch checked
+   * out) and is serialized per-repo to avoid racing concurrent git operations.
+   * Never throws — a missing/already-pruned branch is fine.
+   */
+  async deleteBranch(task: Task): Promise<void> {
+    if (!task.repoPath || !task.branchName) return;
+    const repoPath = task.repoPath;
+    const branchName = task.branchName;
+    await this.withRepoLock(repoPath, () => {
+      try {
+        execFileSync('git', ['branch', '-D', branchName], { cwd: repoPath, stdio: 'pipe' });
+        console.log(`[branch] deleted ${branchName}`);
+      } catch (err: unknown) {
+        // Branch may already be gone (e.g. worktree removal pruned it) — non-fatal.
+        console.warn(`[branch] delete ${branchName} skipped:`, errorMessage(err));
+      }
+    });
+  }
+
   // ─── Session Lifecycle ─────────────────────────────────────────────
 
   startAgent(

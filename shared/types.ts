@@ -145,6 +145,14 @@ export interface ProjectConfig {
    * be parsed from the error. Defaults to 60.
    */
   tokenLimitFallbackMinutes?: number;
+  /**
+   * Auto-PR: when enabled (the default), a task that completes successfully on a
+   * repo with a configured `origin` remote automatically opens a pull request
+   * for its branch. The board then watches that PR and, once it is merged, moves
+   * the task to "done" and cleans up the worktree/branch. Set to false to fall
+   * back to the manual Create-PR / Merge buttons.
+   */
+  autoPrEnabled?: boolean;
 }
 
 export interface ProjectPathValidation {

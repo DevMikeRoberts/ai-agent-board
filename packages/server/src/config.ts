@@ -40,11 +40,12 @@ function defaultConfig(): ProjectConfig {
     autoPickupEnabled: false,
     tokenLimitRetryEnabled: false,
     tokenLimitFallbackMinutes: DEFAULT_TOKEN_LIMIT_FALLBACK_MINUTES,
+    autoPrEnabled: true,
   };
 }
 
 /** Pull the optional behavior settings out of a parsed config blob, with clamping. */
-function readSettings(raw: Partial<ProjectConfig>): Pick<ProjectConfig, 'autoPickupEnabled' | 'tokenLimitRetryEnabled' | 'tokenLimitFallbackMinutes'> {
+function readSettings(raw: Partial<ProjectConfig>): Pick<ProjectConfig, 'autoPickupEnabled' | 'tokenLimitRetryEnabled' | 'tokenLimitFallbackMinutes' | 'autoPrEnabled'> {
   const fallback = Number(raw.tokenLimitFallbackMinutes);
   return {
     autoPickupEnabled: raw.autoPickupEnabled === true,
@@ -53,6 +54,8 @@ function readSettings(raw: Partial<ProjectConfig>): Pick<ProjectConfig, 'autoPic
       Number.isFinite(fallback) && fallback > 0
         ? Math.min(Math.round(fallback), 24 * 60)
         : DEFAULT_TOKEN_LIMIT_FALLBACK_MINUTES,
+    // Auto-PR defaults to ON: only an explicit `false` disables it.
+    autoPrEnabled: raw.autoPrEnabled !== false,
   };
 }
 
@@ -156,6 +159,9 @@ export function updateSettings(patch: Partial<ProjectConfig>): ProjectConfig {
     const n = Number(patch.tokenLimitFallbackMinutes);
     if (!Number.isFinite(n) || n <= 0) throw new Error('tokenLimitFallbackMinutes must be a positive number');
     next.tokenLimitFallbackMinutes = Math.min(Math.round(n), 24 * 60);
+  }
+  if (patch.autoPrEnabled !== undefined) {
+    next.autoPrEnabled = patch.autoPrEnabled === true;
   }
 
   writeConfig(next);

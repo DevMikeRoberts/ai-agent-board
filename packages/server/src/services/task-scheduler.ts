@@ -278,7 +278,7 @@ export class TaskScheduler {
 
     this.agentManager.startAgent(
       updated,
-      makeStatusCallback(this.repo, task.id),
+      makeStatusCallback(this.repo, task.id, this.agentManager),
       makeWorktreeCallback(this.repo, task.id),
     );
   }
