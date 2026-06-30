@@ -60,6 +60,23 @@ available and is chosen first whenever a paid agent is down. Set
 `AGENTBOARD_FALLBACK_AGENT` to pin a specific fallback agent instead of relying
 on tier ranking.
 
+### Auto-PR + merge watcher
+
+When **Auto-open PR on completion** is enabled (Settings ⚙️, on by default), a
+task that finishes successfully on a repo with a GitHub `origin` remote doesn't
+just stop in the **Review** column waiting for a manual click — the board
+automatically pushes its branch, opens a pull request, and records the PR URL on
+the task ([`autoOpenPrOnComplete`](packages/server/src/routes/helpers.ts)).
+
+From there the [`PrWatcher`](packages/server/src/services/pr-watcher.ts) service
+polls each open PR and, the moment it is merged, moves the task to **Done** and
+cleans up after it — removing the worktree (if it outlived PR creation) and
+deleting the local branch. Polling (rather than a GitHub webhook) keeps the flow
+self-contained and restart-safe: the watch state lives on the task row, so a
+restarted server simply resumes watching on its next tick. Repos without a
+remote are untouched and keep the manual **Create PR** / **Merge to main**
+buttons. Group children are excluded — they continue to roll up to their group.
+
 ### Token-limit retry
 
 Metered agents (Claude, Codex) and subscription plans can hit a token / usage /
@@ -113,7 +130,8 @@ Groups appear as a single card on the board showing aggregate progress. Click to
 - Agent panel with event coalescing (thinking, commands, output)
 - Git worktree isolation on every task (always on — each run gets its own branch + worktree; re-runs auto-pick a fresh non-colliding branch)
 - **Local merge or PR** — merge worktree branch to main locally, or create a PR if a GitHub remote exists (auto-detected)
-- Worktree auto-cleanup after merge, PR creation, or archival
+- **Auto-PR + merge watcher** — completed tasks auto-open a PR (when a remote exists) and move to Done automatically once that PR is merged, cleaning up the branch/worktree
+- Worktree auto-cleanup after merge, PR creation, watched-PR merge, or archival
 - **Dual database backends** — SQLite (zero-config default) or PostgreSQL
 - Task templates for reusable task configurations
 - **Task Groups** — define multiple related tasks in one form, launch with configurable parallelism (slider 1..N), monitor aggregate progress

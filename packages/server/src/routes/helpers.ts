@@ -7,7 +7,7 @@ import path from 'path';
 import type { Project, Task, TaskGroup } from '../types.js';
 import { isValidPriority, isValidColumnId, isValidAgentType, VALID_AGENT_TYPES, MAX_TITLE_LENGTH, MAX_DESCRIPTION_LENGTH } from '@ai-agent-board/shared/constants.js';
 import { errorMessage } from '../utils.js';
-import { getCloneRoot } from '../config.js';
+import { getCloneRoot, getConfig } from '../config.js';
 import type { TaskRepository } from '../repositories/types.js';
 import { broadcast } from '../websocket.js';
 import type { AgentManager } from '../services/agent-manager.js';
@@ -541,7 +541,11 @@ export function buildTask(body: Record<string, any>): Task {
 
 // ─── Agent lifecycle helpers ────────────────────────────────────────
 
-export function makeStatusCallback(repo: TaskRepository, taskId: string): (status: Task['agentStatus']) => void {
+export function makeStatusCallback(
+  repo: TaskRepository,
+  taskId: string,
+  agentManager?: AgentManager,
+): (status: Task['agentStatus']) => void {
   return async (status) => {
     const statusUpdates: Partial<Task> = { agentStatus: status };
     if (status === 'complete') {
@@ -550,7 +554,80 @@ export function makeStatusCallback(repo: TaskRepository, taskId: string): (statu
     }
     const t = await repo.update(taskId, statusUpdates);
     if (t) broadcastTaskUpdate(t);
+
+    // On a successful completion, automatically open a PR for the task's branch
+    // so the board can watch it through to merge (see PrWatcher). Best-effort and
+    // gated inside the helper; failures leave the task in review with the manual
+    // Create-PR button still available.
+    if (status === 'complete' && t && agentManager) {
+      await autoOpenPrOnComplete(repo, agentManager, t);
+    }
   };
+}
+
+/** Persist + broadcast an informational/error event on a task's timeline. */
+function emitTaskEvent(
+  repo: TaskRepository,
+  taskId: string,
+  type: 'output' | 'error',
+  content: string,
+  agentType?: Task['agentType'],
+): void {
+  const event = {
+    id: uuid(),
+    taskId,
+    type,
+    content,
+    timestamp: Date.now(),
+    metadata: { phase: 'auto-pr', ...(agentType ? { agentType } : {}), ...(type === 'error' ? { error: content } : {}) },
+  };
+  void repo.insertEvent(event).catch((err: unknown) =>
+    console.error('[auto-pr] failed to persist event:', errorMessage(err)),
+  );
+  broadcast({ type: 'agent_event', payload: event });
+}
+
+/**
+ * Open a pull request for a freshly completed task and clean up its worktree,
+ * mirroring POST /create-pr. Persists `prUrl` so {@link PrWatcher} can follow the
+ * PR to its merge. No-ops (leaving the manual buttons in charge) when auto-PR is
+ * disabled, the task is a group child, it already has a PR, or the repo has no
+ * `origin` remote. Never throws.
+ */
+export async function autoOpenPrOnComplete(
+  repo: TaskRepository,
+  agentManager: AgentManager,
+  task: Task,
+): Promise<void> {
+  if (getConfig().autoPrEnabled === false) return;
+  if (task.groupId) return;                    // group children roll up to the group
+  if (task.prUrl) return;                      // already has a PR
+  if (!task.branchName || !task.repoPath) return;
+  if (!agentManager.hasRemote(task)) return;   // local-only repo → keep manual flow
+
+  try {
+    const { url } = agentManager.createPR(task);
+    const updates: Partial<Task> = { prUrl: url };
+    // The branch is pushed; the worktree directory is no longer needed.
+    if (task.worktreePath) {
+      try { agentManager.removeWorktree(task); } catch { /* best effort */ }
+      updates.worktreePath = undefined;
+    }
+    const updated = await repo.update(task.id, updates);
+    if (updated) broadcastTaskUpdate(updated);
+    emitTaskEvent(
+      repo, task.id, 'output',
+      `Opened pull request for ${task.branchName}: ${url}\n` +
+      'Watching for merge — the task will move to Done and its branch/worktree will be cleaned up automatically once the PR is merged.',
+      task.agentType,
+    );
+  } catch (err: unknown) {
+    emitTaskEvent(
+      repo, task.id, 'error',
+      `Automatic PR creation failed: ${errorMessage(err)}\nUse the Create PR button to open it manually.`,
+      task.agentType,
+    );
+  }
 }
 
 export function makeWorktreeCallback(repo: TaskRepository, taskId: string): (worktreePath: string) => void {
@@ -576,6 +653,6 @@ export async function startAgentForTask(
   const updated = await repo.update(task.id, updates);
   if (updated) {
     broadcastTaskUpdate(updated);
-    agentManager.startAgent(updated, makeStatusCallback(repo, task.id), makeWorktreeCallback(repo, task.id));
+    agentManager.startAgent(updated, makeStatusCallback(repo, task.id, agentManager), makeWorktreeCallback(repo, task.id));
   }
 }

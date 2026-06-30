@@ -37,6 +37,7 @@ export function ConfigDialog({ open, config, onClose, onSubmit }: ConfigDialogPr
   const [cloneRoot, setCloneRoot] = useState('');
   const [autoPickup, setAutoPickup] = useState(false);
   const [tokenRetry, setTokenRetry] = useState(false);
+  const [autoPr, setAutoPr] = useState(true);
   const [fallbackMinutes, setFallbackMinutes] = useState(String(DEFAULT_FALLBACK_MINUTES));
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -46,6 +47,7 @@ export function ConfigDialog({ open, config, onClose, onSubmit }: ConfigDialogPr
     setCloneRoot(config?.cloneRoot ?? '');
     setAutoPickup(config?.autoPickupEnabled ?? false);
     setTokenRetry(config?.tokenLimitRetryEnabled ?? false);
+    setAutoPr(config?.autoPrEnabled ?? true);
     setFallbackMinutes(String(config?.tokenLimitFallbackMinutes ?? DEFAULT_FALLBACK_MINUTES));
     setError('');
     setSubmitting(false);
@@ -72,6 +74,7 @@ export function ConfigDialog({ open, config, onClose, onSubmit }: ConfigDialogPr
         autoPickupEnabled: autoPickup,
         tokenLimitRetryEnabled: tokenRetry,
         tokenLimitFallbackMinutes: Math.round(minutes),
+        autoPrEnabled: autoPr,
       });
       if (result === undefined) {
         setError('Failed to update settings');
@@ -136,6 +139,19 @@ export function ConfigDialog({ open, config, onClose, onSubmit }: ConfigDialogPr
 
               {/* Automation settings */}
               <div className="space-y-4 rounded-lg border border-border bg-background/50 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <label htmlFor="config-auto-pr" className="block text-sm font-medium">
+                      Auto-open PR on completion
+                    </label>
+                    <p className="mt-0.5 text-xs text-muted-foreground/70">
+                      When a task finishes on a repo with a remote, open a pull request for its branch and
+                      watch it — moving the task to Done and cleaning up the branch/worktree once merged.
+                    </p>
+                  </div>
+                  <Toggle id="config-auto-pr" checked={autoPr} onChange={setAutoPr} />
+                </div>
+
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <label htmlFor="config-auto-pickup" className="block text-sm font-medium">

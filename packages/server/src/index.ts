@@ -17,6 +17,7 @@ import { createProjectsRouter } from './routes/projects.js';
 import type { AttachmentStore } from './repositories/attachment-types.js';
 import { AgentManager } from './services/agent-manager.js';
 import { TaskScheduler } from './services/task-scheduler.js';
+import { PrWatcher } from './services/pr-watcher.js';
 import { authMiddleware } from './middleware/auth.js';
 import type { TaskRepository } from './repositories/types.js';
 import type { TemplateRepository } from './repositories/template-types.js';
@@ -47,6 +48,7 @@ let cleanupDb: () => void;
 // Initialize AgentManager
 const agentManager = new AgentManager();
 let scheduler: TaskScheduler;
+let prWatcher: PrWatcher;
 
 (async () => {
   // Load (and create on first run) the Agent Board config + clone root directory.
@@ -91,6 +93,10 @@ let scheduler: TaskScheduler;
   // Owns token-limit retry scheduling + backlog auto-pickup ("staggering").
   // Reads behavior settings live from the persisted config.
   scheduler = new TaskScheduler(taskRepo, agentManager, projectRepo, getConfig);
+
+  // Watches PRs auto-opened for completed tasks; moves them to "done" and
+  // cleans up the worktree/branch once the PR is merged.
+  prWatcher = new PrWatcher(taskRepo, agentManager, projectRepo);
 
   app.use('/api/projects', createProjectsRouter(projectRepo, taskRepo, groupRepo, agentManager, scheduler));
   app.use('/api/tasks', createTaskRouter(taskRepo, agentManager, projectRepo, scheduler));
@@ -176,6 +182,9 @@ let scheduler: TaskScheduler;
   // orphan recovery above, so re-armed retries see settled task state.
   await scheduler.start();
 
+  // Start watching auto-opened PRs for merges (review → done + cleanup).
+  prWatcher.start();
+
   server.listen(PORT, () => {
     console.log(`[server] listening on http://localhost:${PORT}`);
     console.log(`[server] WebSocket at ws://localhost:${PORT}/ws`);
@@ -191,6 +200,7 @@ let scheduler: TaskScheduler;
   function shutdown() {
     console.log('[server] shutting down...');
     scheduler?.stop();
+    prWatcher?.stop();
     agentManager.shutdownAll();
     try { cleanupDb(); } catch (err) { console.error('[server] db cleanup error:', err); }
     server.close(() => process.exit(0));

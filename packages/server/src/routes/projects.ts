@@ -229,12 +229,13 @@ export function createProjectsRouter(
   // (auto-pickup, token-limit retry). Every field is optional; only the provided
   // ones change.
   router.patch('/config', asyncHandler(async (req: Request, res: Response) => {
-    const { cloneRoot, autoPickupEnabled, tokenLimitRetryEnabled, tokenLimitFallbackMinutes } = req.body;
+    const { cloneRoot, autoPickupEnabled, tokenLimitRetryEnabled, tokenLimitFallbackMinutes, autoPrEnabled } = req.body;
     const patch: Partial<{
       cloneRoot: string;
       autoPickupEnabled: boolean;
       tokenLimitRetryEnabled: boolean;
       tokenLimitFallbackMinutes: number;
+      autoPrEnabled: boolean;
     }> = {};
 
     if (cloneRoot !== undefined) {
@@ -264,6 +265,12 @@ export function createProjectsRouter(
         res.status(400).json({ error: 'tokenLimitFallbackMinutes must be a positive number' }); return;
       }
       patch.tokenLimitFallbackMinutes = tokenLimitFallbackMinutes;
+    }
+    if (autoPrEnabled !== undefined) {
+      if (typeof autoPrEnabled !== 'boolean') {
+        res.status(400).json({ error: 'autoPrEnabled must be a boolean' }); return;
+      }
+      patch.autoPrEnabled = autoPrEnabled;
     }
 
     try {
