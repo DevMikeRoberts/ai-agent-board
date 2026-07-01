@@ -126,6 +126,9 @@ function migrate(db: Database.Database): void {
   if (!colNames.has('agent_type')) {
     db.exec(`ALTER TABLE tasks ADD COLUMN agent_type TEXT NOT NULL DEFAULT 'copilot'`);
   }
+  if (!colNames.has('model')) {
+    db.exec(`ALTER TABLE tasks ADD COLUMN model TEXT`);
+  }
   if (!colNames.has('archived')) {
     db.exec(`ALTER TABLE tasks ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`);
   }
@@ -194,6 +197,7 @@ function migrate(db: Database.Database): void {
       description   TEXT NOT NULL DEFAULT '',
       priority      TEXT NOT NULL DEFAULT 'medium',
       agent_type    TEXT NOT NULL DEFAULT 'copilot',
+      model         TEXT,
       repo_path     TEXT,
       base_branch   TEXT,
       use_worktree  INTEGER,
@@ -431,6 +435,7 @@ export async function initPostgresDatabase(pool: Pool): Promise<void> {
   await addCol('use_worktree', 'BOOLEAN');
   await addCol('worktree_path', 'TEXT');
   await addCol('agent_type', "TEXT NOT NULL DEFAULT 'copilot'");
+  await addCol('model', 'TEXT');
   await addCol('archived', 'BOOLEAN NOT NULL DEFAULT FALSE');
   await addCol('project_id', "TEXT NOT NULL DEFAULT 'default'");
   await addCol('group_id', 'TEXT');

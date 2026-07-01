@@ -181,7 +181,7 @@ export function createTaskRouter(repo: TaskRepository, agentManager: AgentManage
       return;
     }
 
-    const { title, description, priority, columnId, agentStatus, agentType, repoPath, branchName, baseBranch, useWorktree, archived } = req.body;
+    const { title, description, priority, columnId, agentStatus, agentType, repoPath, branchName, baseBranch, useWorktree, archived, model } = req.body;
 
     if (title !== undefined && (typeof title !== 'string' || !title.trim())) {
       res.status(400).json({ error: 'title must be a non-empty string' });
@@ -235,6 +235,14 @@ export function createTaskRouter(repo: TaskRepository, agentManager: AgentManage
         return;
       }
     }
+    if (model !== undefined && typeof model !== 'string') {
+      res.status(400).json({ error: 'model must be a string' });
+      return;
+    }
+    if (typeof model === 'string' && model.length > 200) {
+      res.status(400).json({ error: 'model identifier is too long' });
+      return;
+    }
 
     // Validate column transition if columnId is changing
     if (columnId && columnId !== task.columnId) {
@@ -253,6 +261,7 @@ export function createTaskRouter(repo: TaskRepository, agentManager: AgentManage
     if (columnId !== undefined) updates.columnId = columnId;
     if (agentStatus !== undefined) updates.agentStatus = agentStatus;
     if (agentType !== undefined) updates.agentType = agentType;
+    if (model !== undefined) updates.model = model || undefined;
     if (repoPath !== undefined && !taskProject.repoPath) updates.repoPath = typeof repoPath === 'string' ? expandTilde(repoPath) : repoPath;
     if (branchName !== undefined) updates.branchName = branchName || undefined;
     if (baseBranch !== undefined) updates.baseBranch = baseBranch;
