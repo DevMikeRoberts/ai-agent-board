@@ -654,17 +654,25 @@ export function App() {
           />
         ) : (
           /* No projects at all */
-          <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-            <FolderKanban className="h-12 w-12 text-zinc-600" />
+          <div className="board-ambient flex h-full flex-col items-center justify-center gap-5 text-center p-8">
+            <div
+              className="flex h-20 w-20 items-center justify-center rounded-3xl"
+              style={{ background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.28)', boxShadow: '0 0 40px rgba(249,115,22,0.15)' }}
+            >
+              <FolderKanban
+                className="h-10 w-10 text-orange-400"
+                style={{ filter: 'drop-shadow(0 0 10px rgba(249,115,22,0.6))' }}
+              />
+            </div>
             <div>
-              <h2 className="text-base font-semibold">No projects yet</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Create a project to get started
+              <h2 className="text-xl font-bold text-foreground">No projects yet</h2>
+              <p className="mt-1.5 text-sm text-muted-foreground">
+                Create a project to start an AI-powered board
               </p>
             </div>
             <button
               onClick={openCreateDialog}
-              className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              className="btn-orange-gradient flex items-center gap-2 rounded-xl px-6 py-2.5 text-sm font-bold"
             >
               <Plus className="h-4 w-4" />
               New Project

@@ -26,13 +26,13 @@ import { FcCelebration } from '@/components/fc/FcCelebration';
 
 const agentStatusConfig: Record<
   AgentStatus,
-  { icon: React.ElementType; label: string; className: string }
+  { icon: React.ElementType; label: string; className: string; glowColor: string }
 > = {
-  idle: { icon: Circle, label: 'Idle', className: 'text-muted-foreground' },
-  planning: { icon: Brain, label: 'Planning', className: 'text-purple-400' },
-  executing: { icon: Cog, label: 'Executing', className: 'text-blue-400' },
-  complete: { icon: CheckCircle2, label: 'Complete', className: 'text-emerald-400' },
-  failed: { icon: AlertCircle, label: 'Failed', className: 'text-red-400' },
+  idle:      { icon: Circle,       label: 'Idle',      className: 'text-muted-foreground', glowColor: 'transparent' },
+  planning:  { icon: Brain,        label: 'Planning',  className: 'text-purple-400',       glowColor: 'rgba(168,85,247,0.6)' },
+  executing: { icon: Cog,          label: 'Executing', className: 'text-blue-400',         glowColor: 'rgba(96,165,250,0.6)' },
+  complete:  { icon: CheckCircle2, label: 'Complete',  className: 'text-emerald-400',      glowColor: 'rgba(52,211,153,0.6)' },
+  failed:    { icon: AlertCircle,  label: 'Failed',    className: 'text-red-400',          glowColor: 'rgba(248,113,113,0.6)' },
 };
 
 function formatElapsed(startedAt?: number): string {
@@ -57,19 +57,14 @@ interface TaskCardProps {
 
 function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarchive, onRetry }: TaskCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({
-      id: task.id,
-      disabled: task.archived // Disable dragging for archived tasks
-    });
+    useDraggable({ id: task.id, disabled: task.archived });
   const agentDisplay = task.agentType ? getAgentDisplay(task.agentType) : undefined;
 
-  // Suppress click that fires immediately after a drag ends
   const wasDragging = useRef(false);
   useEffect(() => {
     if (isDragging) {
       wasDragging.current = true;
     } else if (wasDragging.current) {
-      // Clear on next frame so the click event from drag-end is suppressed
       const id = requestAnimationFrame(() => { wasDragging.current = false; });
       return () => cancelAnimationFrame(id);
     }
@@ -82,7 +77,6 @@ function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarc
   const agentStatus = agentStatusConfig[task.agentStatus];
   const StatusIcon = agentStatus.icon;
   const isActive = task.agentStatus === 'executing' || task.agentStatus === 'planning';
-  // A scheduled token-limit retry: show when one is pending and still in the future.
   const retryPending = typeof task.retryAt === 'number' && task.retryAt > Date.now();
   const retryLabel = retryPending
     ? new Date(task.retryAt!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -91,7 +85,6 @@ function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarc
   const needsInput = useNeedsInput(task.id);
   const fcState = taskToFcState(task, needsInput);
 
-  // Fire a one-off celebration when the task crosses into a finished state.
   const finished = task.agentStatus === 'complete' || task.columnId === 'done';
   const prevFinishedRef = useRef(finished);
   const [celebrate, setCelebrate] = useState(false);
@@ -107,10 +100,7 @@ function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarc
 
   const [elapsed, setElapsed] = useState('');
   useEffect(() => {
-    if (!isActive || !task.startedAt) {
-      setElapsed('');
-      return;
-    }
+    if (!isActive || !task.startedAt) { setElapsed(''); return; }
     const tick = () => setElapsed(formatElapsed(task.startedAt!));
     tick();
     const id = setInterval(tick, 1000);
@@ -126,29 +116,33 @@ function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarc
       data-fc-state={fcState}
       className={cn(
         'fc-card',
-        'group relative cursor-grab active:cursor-grabbing rounded-lg border border-border bg-card p-3 shadow-sm transition-all',
-        'hover:border-primary/30 hover:shadow-md',
+        'group relative cursor-grab active:cursor-grabbing rounded-2xl p-3.5 transition-all duration-200',
+        'hover:scale-[1.01]',
         priorityDisplay?.borderClass,
-        isDragging && 'z-50 rotate-2 scale-105 shadow-xl opacity-90',
-        isActive && 'border-primary/20',
-        task.archived && 'opacity-60 bg-muted'
+        isDragging && 'z-50 rotate-2 scale-105 shadow-2xl opacity-90',
+        task.archived && 'opacity-50'
       )}
       onClick={() => { if (!wasDragging.current) onClick(); }}
     >
+      {/* Hover shine overlay */}
+      <div
+        className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+        style={{
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.04) 0%, transparent 60%)',
+        }}
+        aria-hidden="true"
+      />
 
-      {/* Action buttons — top right, visible on hover */}
+      {/* Action buttons */}
       {(onEdit || onDelete || onArchive || onUnarchive || onRetry) && (
         <div
-          className="absolute right-2 top-2 flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+          className="absolute right-2 top-2 flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-150"
           onPointerDown={(e) => e.stopPropagation()}
         >
           {onRetry && task.agentStatus === 'failed' && !task.archived && (
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onRetry(task);
-              }}
-              className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-amber-400"
+              onClick={(e) => { e.stopPropagation(); onRetry(task); }}
+              className="flex h-6 w-6 items-center justify-center rounded-lg text-muted-foreground transition-all hover:bg-amber-500/15 hover:text-amber-400"
               aria-label="Retry task"
             >
               <RotateCw className="h-3 w-3" />
@@ -156,11 +150,8 @@ function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarc
           )}
           {onEdit && !task.archived && (
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onEdit(task);
-              }}
-              className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              onClick={(e) => { e.stopPropagation(); onEdit(task); }}
+              className="flex h-6 w-6 items-center justify-center rounded-lg text-muted-foreground transition-all hover:bg-white/8 hover:text-foreground"
               aria-label="Edit task"
             >
               <Pencil className="h-3 w-3" />
@@ -168,11 +159,8 @@ function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarc
           )}
           {onArchive && (task.columnId === 'done' || task.agentStatus === 'failed') && !task.archived && (
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onArchive(task);
-              }}
-              className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              onClick={(e) => { e.stopPropagation(); onArchive(task); }}
+              className="flex h-6 w-6 items-center justify-center rounded-lg text-muted-foreground transition-all hover:bg-white/8 hover:text-foreground"
               aria-label="Archive task"
             >
               <Archive className="h-3 w-3" />
@@ -180,11 +168,8 @@ function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarc
           )}
           {onUnarchive && task.archived && (
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onUnarchive(task);
-              }}
-              className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              onClick={(e) => { e.stopPropagation(); onUnarchive(task); }}
+              className="flex h-6 w-6 items-center justify-center rounded-lg text-muted-foreground transition-all hover:bg-white/8 hover:text-foreground"
               aria-label="Unarchive task"
             >
               <Archive className="h-3 w-3" />
@@ -192,11 +177,8 @@ function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarc
           )}
           {onDelete && (
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(task);
-              }}
-              className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-red-400"
+              onClick={(e) => { e.stopPropagation(); onDelete(task); }}
+              className="flex h-6 w-6 items-center justify-center rounded-lg text-muted-foreground transition-all hover:bg-red-500/15 hover:text-red-400"
               aria-label="Delete task"
             >
               <Trash2 className="h-3 w-3" />
@@ -207,36 +189,42 @@ function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarc
 
       <div>
         {/* Title with priority emoji */}
-        <h3 className="line-clamp-2 pr-16 text-base font-medium leading-snug text-card-foreground">
+        <h3 className="line-clamp-2 pr-16 text-[13px] font-semibold leading-snug text-card-foreground">
           {priorityDisplay && <span className="mr-1">{priorityDisplay.emoji}</span>}{task.title}
         </h3>
 
-        {/* Description preview */}
-        <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
+        {/* Description */}
+        <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
           {task.description}
         </p>
 
-        {/* Agent card state badge (card-states feature) */}
-        <div className="mt-2">
+        {/* State badge */}
+        <div className="mt-2.5">
           <FcStateBadge state={fcState} />
         </div>
 
         {/* Footer */}
         <div className="mt-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {/* Agent type badge */}
             {task.agentType && task.columnId !== 'backlog' && (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              <span
+                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                style={{
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  color: '#9ca3af',
+                }}
+              >
                 {agentDisplay?.emoji} {agentDisplay?.label}
               </span>
             )}
           </div>
 
           <div className="flex items-center gap-1.5">
-            {/* Pending token-limit retry */}
             {retryPending && (
               <span
-                className="flex items-center gap-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-400"
+                className="flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+                style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.25)', color: '#fbbf24' }}
                 title={`Auto-retry after token limit at ${new Date(task.retryAt!).toLocaleString()}`}
               >
                 <RotateCw className="h-3 w-3" />
@@ -244,44 +232,44 @@ function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarc
               </span>
             )}
 
-            {/* Elapsed time (running) */}
             {isActive && elapsed && (
-              <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <span className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground">
                 <Clock className="h-3 w-3" />
                 {elapsed}
               </span>
             )}
 
-            {/* Duration (completed/failed) */}
             {!isActive && (task.agentStatus === 'complete' || task.agentStatus === 'failed') && task.startedAt && task.completedAt && (
-              <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <span className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground">
                 <Clock className="h-3 w-3" />
                 {formatCompletedDuration(task.startedAt, task.completedAt)}
               </span>
             )}
 
-            {/* Agent status */}
+            {/* Agent status icon with glow */}
             <div className={cn('flex items-center gap-1', agentStatus.className)}>
               <StatusIcon
                 className={cn(
                   'h-3.5 w-3.5',
                   task.agentStatus === 'executing' && 'animate-spin',
-                  task.agentStatus === 'planning' && 'animate-pulse'
+                  task.agentStatus === 'planning'  && 'animate-pulse'
                 )}
+                style={agentStatus.glowColor !== 'transparent'
+                  ? { filter: `drop-shadow(0 0 4px ${agentStatus.glowColor})` }
+                  : {}}
               />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Agent working progress bar — large, pinned to the card bottom (card-states) */}
+      {/* Working progress bar */}
       {FC_STATE_META[fcState].working && (
         <div className="fc-card-bar" aria-hidden="true">
           <i />
         </div>
       )}
 
-      {/* One-off green glow + confetti when the task finishes (card-states) */}
       {celebrate && <FcCelebration />}
     </div>
   );
