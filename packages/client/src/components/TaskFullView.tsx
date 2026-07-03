@@ -884,7 +884,7 @@ export function TaskFullView({
                           <button
                             onClick={() => {
                               setShowWorktreeConfirm(false);
-                              onCleanupWorktree(task.id);
+                              onCleanupWorktree?.(task.id);
                             }}
                             className="rounded bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-500"
                           >
