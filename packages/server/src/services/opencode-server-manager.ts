@@ -1,5 +1,4 @@
 import { spawn, ChildProcess } from 'child_process';
-import { promisify } from 'util';
 import http from 'http';
 
 const OPENCODE_PORT = 4096;
@@ -188,7 +187,7 @@ export class OpenCodeServerManager {
           timeout: HEALTH_CHECK_TIMEOUT_MS,
         },
         (res) => {
-          const isHealthy = res.statusCode && res.statusCode >= 200 && res.statusCode < 500;
+          const isHealthy = res.statusCode !== undefined && res.statusCode >= 200 && res.statusCode < 500;
           resolve(isHealthy);
         }
       );

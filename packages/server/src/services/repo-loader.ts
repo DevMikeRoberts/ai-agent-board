@@ -1,5 +1,4 @@
 import { v4 as uuid } from 'uuid';
-import { getCloneRoot } from '../config.js';
 import type { ProjectRepository } from '../repositories/project-types.js';
 import { normalizeRepoUrl } from '../routes/helpers.js';
 
@@ -44,7 +43,7 @@ async function fetchPersonalRepos(): Promise<GitHubRepository[]> {
         break;
       }
 
-      const pageRepos: GitHubRepository[] = await response.json();
+      const pageRepos = (await response.json()) as GitHubRepository[];
       if (pageRepos.length === 0) {
         hasMore = false;
       } else {
