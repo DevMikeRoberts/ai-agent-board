@@ -463,7 +463,7 @@ export function isRateLimited(taskId: string): boolean {
 // ─── Task field validation ──────────────────────────────────────────
 
 export function validateTaskFields(body: Record<string, any>): string | null {
-  const { title, description, priority, columnId, agentType, repoPath, branchName, baseBranch, useWorktree, autoRun } = body;
+  const { title, description, priority, columnId, agentType, repoPath, branchName, baseBranch, useWorktree, autoRun, model } = body;
 
   if (!title || typeof title !== 'string' || !title.trim()) {
     return 'title is required and must be a non-empty string';
@@ -515,13 +515,19 @@ export function validateTaskFields(body: Record<string, any>): string | null {
   if (autoRun !== undefined && typeof autoRun !== 'boolean') {
     return 'autoRun must be a boolean';
   }
+  if (model !== undefined && typeof model !== 'string') {
+    return 'model must be a string';
+  }
+  if (typeof model === 'string' && model.length > 200) {
+    return 'model identifier is too long';
+  }
   return null;
 }
 
 // ─── Task builder ───────────────────────────────────────────────────
 
 export function buildTask(body: Record<string, any>): Task {
-  const { title, description, priority, columnId, agentType, repoPath, branchName, baseBranch, useWorktree, projectId } = body;
+  const { title, description, priority, columnId, agentType, repoPath, branchName, baseBranch, useWorktree, projectId, model } = body;
   return {
     id: uuid(),
     projectId: typeof projectId === 'string' && projectId ? projectId : 'default',
@@ -531,6 +537,7 @@ export function buildTask(body: Record<string, any>): Task {
     columnId: columnId || 'backlog',
     agentStatus: 'idle',
     agentType: agentType || 'copilot',
+    model: typeof model === 'string' && model ? model : undefined,
     createdAt: Date.now(),
     repoPath: typeof repoPath === 'string' ? expandTilde(repoPath) : undefined,
     branchName: branchName || undefined,

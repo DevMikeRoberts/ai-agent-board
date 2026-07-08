@@ -108,6 +108,7 @@ npm run build:server   # tsc -b tsconfig.build.json
 | `ALLOWED_REPO_ROOTS` | `$HOME`, temp, current workspace | Comma-separated allowed repo root paths (security whitelist) |
 | `ALLOWED_ORIGINS` | `http://localhost:4175,http://localhost:4176` | CORS origins |
 | `AGENT_TIMEOUT_MS` | `600000` (10 min) | Max agent execution time |
+| `AGENTBOARD_REPO_SCAN` | `1` (on) | Inject the repo-scan skill into non-Claude agents so they build repository context before implementing; set to `0`/`false` to disable |
 | `API_URL` | `http://localhost:3001` | Vite proxy target |
 | `PROJECTS_DIR` | `~/projects` | Host projects path |
 
