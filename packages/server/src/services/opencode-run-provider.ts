@@ -84,23 +84,27 @@ class OpenCodeRunSession implements AgentSession {
   private buildArgs(prompt: string, isFollowUp: boolean): string[] {
     const args: string[] = [];
 
+    // Global options (valid before subcommand)
     if (isFollowUp && this.lastSessionId) {
-      // Continue an existing session for follow-up messages
       args.push('--session', this.lastSessionId, '--continue');
     }
+    const configuredModel = this.getConfiguredModel();
+    if (configuredModel) {
+      args.push('-m', configuredModel);
+    }
 
+    // Subcommand
+    args.push('run');
+
+    // run-specific options (must come after 'run')
     args.push(
       '--format', 'json',
       '--dir', this.config.workingDirectory,
       '--dangerously-skip-permissions',
     );
 
-    const configuredModel = this.getConfiguredModel();
-    if (configuredModel) {
-      args.push('-m', configuredModel);
-    }
-
-    args.push('run', prompt);
+    // Message positional argument
+    args.push(prompt);
 
     return args;
   }
