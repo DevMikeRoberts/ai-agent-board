@@ -7,7 +7,8 @@ import type { Task, TaskGroup, AgentEvent, AgentType } from '../types.js';
 import type { TaskRepository } from '../repositories/types.js';
 import type { AgentProvider, AgentSession, AgentInfo, AgentAttachment } from '@codewithdan/agent-sdk-core';
 import type { AgentEvent as CoreAgentEvent } from '@codewithdan/agent-sdk-core';
-import { CopilotProvider, ClaudeProvider, CodexProvider, OpenCodeProvider, HermesProvider, OpenClawProvider } from '@codewithdan/agent-sdk-core';
+import { CopilotProvider, ClaudeProvider, CodexProvider, HermesProvider, OpenClawProvider } from '@codewithdan/agent-sdk-core';
+import { OpenCodeRunProvider } from './opencode-run-provider.js';
 import { broadcast } from '../websocket.js';
 import { UPLOADS_DIR } from '../routes/attachments.js';
 import type { AttachmentStore } from '../repositories/attachment-types.js';
@@ -16,7 +17,6 @@ import { detectAvailableAgents } from './agent-detection.js';
 import { resolveAgentSelection, getConfiguredFallbackAgent } from './agent-fallback.js';
 import { buildRepoScanPromptSection } from './repo-scan.js';
 import { ContainerRunner } from './container-runner.js';
-import { ensureOpenCodeServer, stopOpenCodeServer } from './opencode-server-manager.js';
 
 // Max agent execution time, in ms. Default 0 = no timeout: agents run until they
 // finish or are explicitly stopped. Set AGENT_TIMEOUT_MS to a positive value to
@@ -163,7 +163,7 @@ export class AgentManager {
     this.providers.set('copilot', new CopilotProvider());
     this.providers.set('claude', new ClaudeProvider());
     this.providers.set('codex', new CodexProvider());
-    this.providers.set('opencode', new OpenCodeProvider({ baseUrl: 'http://127.0.0.1:4096' }));
+    this.providers.set('opencode', new OpenCodeRunProvider());
     this.providers.set('hermes', new HermesProvider());
     this.providers.set('openclaw', new OpenClawProvider());
 
@@ -196,20 +196,6 @@ export class AgentManager {
         reason: 'Agent startup disabled (test environment)',
       }));
       return;
-    }
-
-    // Start the OpenCode server on port 4096 before initializing the provider,
-    // so the provider can connect to it via baseUrl instead of starting its own.
-    const opencodeInfo = this.availableAgents.find(a => a.name === 'opencode' && a.available);
-    if (opencodeInfo) {
-      try {
-        await ensureOpenCodeServer();
-        console.log('[agent-manager] OpenCode server started on port 4096');
-      } catch (err: unknown) {
-        console.error(`[agent-manager] failed to start OpenCode server: ${errorMessage(err)}`);
-        opencodeInfo.available = false;
-        opencodeInfo.reason = `Failed to start OpenCode server: ${errorMessage(err)}`;
-      }
     }
 
     // Start available providers
@@ -1422,9 +1408,6 @@ Optional list of any work you did not complete or that should be followed up. Om
     for (const provider of this.providers.values()) {
       provider.stop().catch(() => {});
     }
-
-    // Stop OpenCode server if it was started
-    stopOpenCodeServer().catch(() => {});
   }
 
   // ─── Group Queue ──────────────────────────────────────────────────
