@@ -44,6 +44,8 @@ export interface Task {
   /** @deprecated Worktrees removed — kept for DB backward compat. */
   worktreePath?: string;
   agentType?: AgentType;
+  /** Optional model string used by local providers (e.g. Ollama model name). */
+  model?: string;
   archived?: boolean;
   groupId?: string;
   groupOrder?: number;
@@ -227,6 +229,8 @@ export interface TaskTemplate {
   description: string;
   priority: Priority;
   agentType: AgentType;
+  /** Optional model for local providers (e.g. Ollama model name) */
+  model?: string;
   repoPath?: string;
   baseBranch?: string;
   /** @deprecated Worktrees removed — kept for DB backward compat. */
