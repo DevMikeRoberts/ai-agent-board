@@ -88,16 +88,12 @@ export class PrWatcher {
     await this.completeMergedTask(task);
   }
 
-  /** Move a merged-PR task to done and clean up its worktree + local branch. */
+  /** Move a merged-PR task to done and clean up its local branch. */
   private async completeMergedTask(task: Task): Promise<void> {
-    if (task.worktreePath) {
-      try { this.agentManager.removeWorktree(task); } catch { /* best effort */ }
-    }
     try { await this.agentManager.deleteBranch(task); } catch { /* best effort */ }
 
     const updated = await this.repo.update(task.id, {
       columnId: 'done',
-      worktreePath: undefined,
       completedAt: Date.now(),
     });
     if (updated) broadcastTaskUpdate(updated);
@@ -105,7 +101,7 @@ export class PrWatcher {
     this.emitNotice(
       task.id,
       `Pull request merged — task moved to Done.` +
-      (task.branchName ? ` Cleaned up branch ${task.branchName} and its worktree.` : ''),
+      (task.branchName ? ` Cleaned up branch ${task.branchName}.` : ''),
       task.agentType,
     );
     console.log(`[pr-watcher] task ${task.id} PR merged → done`);

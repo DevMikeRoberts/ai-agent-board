@@ -1,7 +1,6 @@
 import { v4 as uuid } from 'uuid';
 import { execFileSync } from 'child_process';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import type { Task, TaskGroup, AgentEvent, AgentType } from '../types.js';
 import type { TaskRepository } from '../repositories/types.js';
@@ -115,7 +114,6 @@ interface GroupQueue {
   failedTaskIds: Set<string>;
   tasks: Map<string, Task>;
   makeStatusCallback: (task: Task) => (status: Task['agentStatus']) => void | Promise<void>;
-  makeWorktreeCallback: (task: Task) => (worktreePath: string) => void | Promise<void>;
   onChildComplete: (taskId: string) => void | Promise<void>;
 }
 
@@ -359,81 +357,49 @@ export class AgentManager {
     }
   }
 
-  // ─── Worktree Management (moved from copilot.ts) ──────────────────
+  // ─── Branch Setup (replaces git worktrees) ─────────────────────────
 
-  // Returns true when `worktreePath` is registered with git as a worktree
-  // checked out on `branchName`. Used to safely reuse a worktree left over
-  // from a prior (e.g. failed) run instead of colliding on the branch.
-  private worktreeRegisteredForBranch(repoPath: string, worktreePath: string, branchName: string): boolean {
-    try {
-      const out = execFileSync('git', ['worktree', 'list', '--porcelain'], {
-        cwd: repoPath,
-        stdio: 'pipe',
-      }).toString();
-      const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
-      const target = norm(worktreePath);
-      for (const block of out.split(/\r?\n\r?\n/)) {
-        const lines = block.split(/\r?\n/);
-        const wtLine = lines.find((l) => l.startsWith('worktree '));
-        if (!wtLine) continue;
-        if (norm(wtLine.slice('worktree '.length)) !== target) continue;
-        return lines.includes(`branch refs/heads/${branchName}`);
-      }
-    } catch {
-      /* fall through — treat as not reusable */
-    }
-    return false;
-  }
-
-  setupWorktree(task: Task): string | undefined {
-    // Worktrees are mandatory for repo-backed tasks (no longer optional). Without
-    // a repo there's nothing to branch from; without a branch name we mint one.
-    if (!task.repoPath) return undefined;
+  /**
+   * Set up a fresh branch for the task by:
+   *  1. Fetching the latest from origin (if a remote exists)
+   *  2. Checking out the base branch and pulling latest
+   *  3. Creating and checking out a new task-specific branch
+   *
+   * This avoids merge conflicts in PRs by basing the work on the most recent
+   * state of the base branch rather than on a stale worktree snapshot.
+   */
+  private setupBranch(task: Task): void {
+    if (!task.repoPath) return;
     if (!task.branchName) task.branchName = this.generateBranchName(task);
 
-    // Reuse a valid worktree left over from a prior run (e.g. after a failed
-    // attempt). Without this, a restart would mint a new temp dir and fail with
-    // "branch already used by worktree", since the old worktree still holds the
-    // branch — and any in-progress work in it would be stranded.
-    if (
-      task.worktreePath &&
-      path.resolve(task.worktreePath) !== path.resolve(task.repoPath) &&
-      fs.existsSync(task.worktreePath) &&
-      this.worktreeRegisteredForBranch(task.repoPath, task.worktreePath, task.branchName)
-    ) {
-      console.log(`[worktree] reusing existing ${task.worktreePath}`);
-      return task.worktreePath;
-    }
-
-    // Clear stale worktree records (e.g. dirs deleted out from under git) so a
-    // fresh add for this branch isn't blocked by a dangling registration.
-    try {
-      execFileSync('git', ['worktree', 'prune'], { cwd: task.repoPath, stdio: 'pipe' });
-    } catch {
-      /* best effort */
-    }
-
-    // A re-run can collide with a branch/worktree left by a previous attempt
-    // (e.g. a merge or cleanup removed the worktree but kept the branch). Pick a
-    // fresh, non-colliding branch name so the new worktree never clashes; the
-    // rename is persisted by the caller so PR/merge/UI use the branch that ran.
-    const branchName = this.uniqueBranchName(task.repoPath, task.branchName);
-    task.branchName = branchName;
-
-    const worktreePath = fs.mkdtempSync(path.join(os.tmpdir(), `agentboard-${task.id}-`));
+    const repoPath = task.repoPath;
     const baseBranch = task.baseBranch || 'main';
 
+    // Stash any uncommitted changes so they don't interfere
     try {
-      execFileSync(
-        'git', ['worktree', 'add', '-b', branchName, worktreePath, baseBranch],
-        { cwd: task.repoPath, stdio: 'pipe' },
-      );
-      console.log(`[worktree] created ${branchName} at ${worktreePath} from ${baseBranch}`);
-      return worktreePath;
-    } catch (err: unknown) {
-      console.error(`[worktree] failed:`, errorMessage(err));
-      throw new Error(`Failed to create worktree: ${errorMessage(err)}`);
-    }
+      execFileSync('git', ['stash', 'push', '--include-untracked', '-m', `agentboard-stash-${task.id}`], { cwd: repoPath, stdio: 'pipe' });
+    } catch { /* nothing to stash */ }
+
+    // Fetch the latest from origin
+    try {
+      execFileSync('git', ['fetch', 'origin', baseBranch], { cwd: repoPath, stdio: 'pipe', env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } });
+    } catch { /* no remote — proceed with local base branch */ }
+
+    // Checkout base branch
+    execFileSync('git', ['checkout', baseBranch], { cwd: repoPath, stdio: 'pipe' });
+
+    // Pull latest changes
+    try {
+      execFileSync('git', ['pull', 'origin', baseBranch], { cwd: repoPath, stdio: 'pipe', env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } });
+    } catch { /* no remote */ }
+
+    // Pick a non-colliding branch name (important for re-runs)
+    const branchName = this.uniqueBranchName(repoPath, task.branchName);
+    task.branchName = branchName;
+
+    // Create and checkout the task branch
+    execFileSync('git', ['checkout', '-b', branchName], { cwd: repoPath, stdio: 'pipe' });
+    console.log(`[branch] created ${branchName} from latest ${baseBranch}`);
   }
 
   /** Generate a readable branch name for a task that lacks one. */
@@ -468,52 +434,29 @@ export class AgentManager {
     return `${desired}-${Date.now()}`;
   }
 
-  removeWorktree(task: Task): void {
-    if (!task.worktreePath || !task.repoPath) return;
-    try {
-      execFileSync('git', ['worktree', 'remove', task.worktreePath, '--force'], {
-        cwd: task.repoPath,
-        stdio: 'pipe',
-      });
-      console.log(`[worktree] removed ${task.worktreePath}`);
-    } catch (err: unknown) {
-      // Container-mode workspaces are standalone clones, not linked worktrees, so
-      // `git worktree remove` won't apply — fall back to a plain directory delete.
-      try {
-        if (fs.existsSync(task.worktreePath)) {
-          fs.rmSync(task.worktreePath, { recursive: true, force: true });
-          console.log(`[worktree] removed directory ${task.worktreePath}`);
-          return;
-        }
-      } catch (rmErr: unknown) {
-        console.error(`[worktree] directory remove failed:`, errorMessage(rmErr));
-      }
-      console.error(`[worktree] remove failed:`, errorMessage(err));
-      throw new Error(`Failed to remove worktree: ${errorMessage(err)}`);
-    }
-  }
-
   /**
-   * Commit the agent's uncommitted work to its worktree branch so there is
-   * something to open a PR from or merge. Agents are instructed to make edits
-   * but not to commit (and the board treats a dirty worktree as a normal end
-   * state), so without this the branch has no new commits and `gh pr create`
-   * fails with "No commits between …". Best-effort and idempotent: no-ops on a
-   * clean tree (e.g. the agent already committed) and never blocks completion.
+   * Commit the agent's uncommitted work to its branch so there is something to
+   * open a PR from or merge. Agents are instructed to make edits but not to
+   * commit (and the board treats a dirty working tree as a normal end state),
+   * so without this the branch has no new commits and `gh pr create` fails with
+   * "No commits between …". Best-effort and idempotent: no-ops on a clean tree
+   * (e.g. the agent already committed) and never blocks completion.
    */
-  private commitAgentWork(task: Task, worktreePath: string): void {
+  private commitAgentWork(task: Task): void {
+    if (!task.repoPath) return;
+    const cwd = task.repoPath;
     try {
       const status = execFileSync('git', ['status', '--porcelain'], {
-        cwd: worktreePath, stdio: 'pipe',
+        cwd, stdio: 'pipe',
       }).toString().trim();
       if (!status) return; // nothing to commit — agent already committed or made no changes
 
-      execFileSync('git', ['add', '-A'], { cwd: worktreePath, stdio: 'pipe' });
+      execFileSync('git', ['add', '-A'], { cwd, stdio: 'pipe' });
       const subject = task.title.replace(/\s+/g, ' ').trim().slice(0, 72) || 'AI Agent Board task';
       execFileSync(
         'git',
         ['commit', '--no-verify', '-m', subject, '-m', `Automated commit from AI Agent Board task ${task.id}`],
-        { cwd: worktreePath, stdio: 'pipe' },
+        { cwd, stdio: 'pipe' },
       );
       console.log(`[commit] committed agent work on ${task.branchName}`);
       this.emitEvent(task.id, {
@@ -544,9 +487,8 @@ export class AgentManager {
     }
   }
 
-  /** Directory to run git/gh from: the worktree when it still exists, else the repo. */
+  /** Directory to run git/gh from — always the repo root. */
   private gitCwd(task: Task): string {
-    if (task.worktreePath && fs.existsSync(task.worktreePath)) return task.worktreePath;
     return task.repoPath!;
   }
 
@@ -692,7 +634,6 @@ export class AgentManager {
   startAgent(
     task: Task,
     onStatusChange: (status: Task['agentStatus']) => void | Promise<void>,
-    onWorktreeCreated?: (worktreePath: string) => void | Promise<void>,
   ): void {
     if (this.sessions.has(task.id)) return;
 
@@ -773,7 +714,6 @@ export class AgentManager {
         try {
           workspace = runner.prepareWorkspace(task);
           task.worktreePath = workspace.containerPath;
-          if (onWorktreeCreated) onWorktreeCreated(workspace.containerPath);
           // The container always runs Claude — reflect that as the task's agent
           // so the review pipeline picks a DIFFERENT agent as the reviewer.
           if (task.agentType !== 'claude') {
@@ -876,48 +816,31 @@ export class AgentManager {
     // Synchronous placeholder to prevent duplicate starts during async session creation
     this.sessions.set(task.id, { startTime: sessionStartTime, agentType });
 
-    // Always run inside a dedicated git worktree for any repo-backed task — this
-    // is mandatory (no longer optional) so every run is isolated on its own branch.
-    let worktreePath: string | undefined;
+    // For repo-backed tasks, create a fresh branch based on the latest state
+    // of the base branch instead of using a git worktree. This prevents stale
+    // base branches that cause merge conflicts in PRs.
     if (task.repoPath) {
-      const priorWorktree = task.worktreePath;
       const priorBranch = task.branchName;
       try {
-        worktreePath = this.setupWorktree(task);
-        if (worktreePath) {
-          task.worktreePath = worktreePath;
-          if (onWorktreeCreated) onWorktreeCreated(worktreePath);
-          // setupWorktree may have generated or de-collided the branch name on a
-          // re-run — persist + broadcast it so PR/merge/UI use the branch that ran.
-          if (task.branchName && task.branchName !== priorBranch) {
-            void this.eventRepo?.update(task.id, { branchName: task.branchName }).catch(() => {});
-            broadcast({ type: 'task_updated', payload: task });
-          }
-          const reused = priorWorktree != null && path.resolve(priorWorktree) === path.resolve(worktreePath);
-          let dirtyHint = '';
-          if (reused) {
-            try {
-              const status = execFileSync('git', ['status', '--porcelain'], {
-                cwd: worktreePath, stdio: 'pipe',
-              }).toString().trim();
-              dirtyHint = status ? '\nNote: worktree has uncommitted changes from a prior run.' : '';
-            } catch {
-              /* ignore status probe failures */
-            }
-          }
-          this.emitEvent(task.id, {
-            id: uuid(), taskId: task.id, type: 'output',
-            content: `${reused ? 'Reusing existing git worktree at' : 'Git worktree created at'} ${worktreePath}\nBranch: ${task.branchName}\nBase: ${task.baseBranch || 'main'}${dirtyHint}`,
-            timestamp: Date.now(),
-          });
+        this.setupBranch(task);
+        // setupBranch may have generated or de-collided the branch name on a
+        // re-run — persist + broadcast it so PR/merge/UI use the branch that ran.
+        if (task.branchName && task.branchName !== priorBranch) {
+          void this.eventRepo?.update(task.id, { branchName: task.branchName }).catch(() => {});
+          broadcast({ type: 'task_updated', payload: task });
         }
+        this.emitEvent(task.id, {
+          id: uuid(), taskId: task.id, type: 'output',
+          content: `Branch created: ${task.branchName}\nBase: ${task.baseBranch || 'main'} (pulled latest)`,
+          timestamp: Date.now(),
+        });
       } catch (err: unknown) {
         this.emitEvent(task.id, {
           id: uuid(), taskId: task.id, type: 'error',
-          content: `Worktree setup failed: ${errorMessage(err)}`,
+          content: `Branch setup failed: ${errorMessage(err)}`,
           timestamp: Date.now(),
         });
-        terminateOnce('failed', `Worktree setup failed: ${errorMessage(err)}`);
+        terminateOnce('failed', `Branch setup failed: ${errorMessage(err)}`);
         return;
       }
     }
@@ -925,7 +848,7 @@ export class AgentManager {
     // Launch the agent session asynchronously
     (async () => {
       try {
-        const workingDirectory = worktreePath || task.repoPath || process.cwd();
+        const workingDirectory = task.repoPath || process.cwd();
         const hasGit = fs.existsSync(path.join(workingDirectory, '.git'));
         // Sanitize task content to prevent prompt injection via </context> breakout
         const safeTitle = task.title.replace(/[<>]/g, '');
@@ -933,7 +856,6 @@ export class AgentManager {
 <context>
 You are a coding agent working on a task in the project directory: ${workingDirectory}
 Task: ${safeTitle}
-${worktreePath ? `\nIMPORTANT: All file paths MUST be under ${worktreePath}. Do NOT reference or edit files at ${task.repoPath} directly.` : ''}
 ${!hasGit ? `\nIMPORTANT: This directory is not a git repository. Run \`git init\` first before making any changes, so all work is tracked.` : ''}
 Complete the task described in the user prompt. Be thorough — read relevant files,
 make precise edits, and verify your changes compile/pass tests when applicable.
@@ -1094,50 +1016,49 @@ Optional list of any work you did not complete or that should be followed up. Om
         // Primary completion path — status comes from the provider
         if (this.sessions.has(task.id)) {
           this.sessions.delete(task.id);
-          // On success, persist the agent-authored summary BEFORE the status
-          // transition so the task-update broadcast carries it to clients.
-          // Always write (extracted value or null) so a rerun can't leave a
-          // stale summary from a previous run. Never let this block completion.
-          if (result.status === 'complete') {
-            try {
-              const summary = extractTaskSummary(summaryBuffer);
-              await this.eventRepo?.update(task.id, { summary });
-            } catch (err) {
-              console.error(`[agent-manager] failed to persist summary for task ${task.id}:`, errorMessage(err));
-            }
-            // Commit the agent's work so the task branch has something to PR/merge.
-            // Worktree runs only — we never auto-commit on the repo's main checkout.
-            if (worktreePath) this.commitAgentWork(task, worktreePath);
+        // On success, persist the agent-authored summary BEFORE the status
+        // transition so the task-update broadcast carries it to clients.
+        // Always write (extracted value or null) so a rerun can't leave a
+        // stale summary from a previous run. Never let this block completion.
+        if (result.status === 'complete') {
+          try {
+            const summary = extractTaskSummary(summaryBuffer);
+            await this.eventRepo?.update(task.id, { summary });
+          } catch (err) {
+            console.error(`[agent-manager] failed to persist summary for task ${task.id}:`, errorMessage(err));
           }
-          terminateOnce(result.status, result.error);
-          session.destroy().catch(() => {});
+          // Commit the agent's work so the task branch has something to PR/merge.
+          if (task.repoPath) this.commitAgentWork(task);
         }
-      } catch (err: unknown) {
-        const message = errorMessage(err);
-        const isCliMissing =
-          message.includes('ENOENT') ||
-          message.includes('not found') ||
-          message.includes('spawn');
-
-        const errorContent = isCliMissing
-          ? `${provider.displayName} CLI is not installed or not found in PATH.`
-          : `Failed to start ${provider.displayName} session: ${message}`;
-
-        this.emitEvent(task.id, {
-          id: uuid(), taskId: task.id, type: 'error',
-          content: errorContent,
-          timestamp: Date.now(),
-        });
-
-        const entry = this.sessions.get(task.id);
-        if (entry) this.sessions.delete(task.id);
-        terminateOnce('failed', errorContent);
+        terminateOnce(result.status, result.error);
+        session.destroy().catch(() => {});
       }
-    })().catch((err: unknown) => {
-      console.error(`[agent-manager] unhandled error for task ${task.id}:`, err);
-      terminateOnce('failed');
-    });
-  }
+    } catch (err: unknown) {
+      const message = errorMessage(err);
+      const isCliMissing =
+        message.includes('ENOENT') ||
+        message.includes('not found') ||
+        message.includes('spawn');
+
+      const errorContent = isCliMissing
+        ? `${provider.displayName} CLI is not installed or not found in PATH.`
+        : `Failed to start ${provider.displayName} session: ${message}`;
+
+      this.emitEvent(task.id, {
+        id: uuid(), taskId: task.id, type: 'error',
+        content: errorContent,
+        timestamp: Date.now(),
+      });
+
+      const entry = this.sessions.get(task.id);
+      if (entry) this.sessions.delete(task.id);
+      terminateOnce('failed', errorContent);
+    }
+  })().catch((err: unknown) => {
+    console.error(`[agent-manager] unhandled error for task ${task.id}:`, err);
+    terminateOnce('failed');
+  });
+}
 
   async sendMessage(taskId: string, message: string, attachmentIds?: string[]): Promise<boolean> {
     const entry = this.sessions.get(taskId);
@@ -1260,7 +1181,6 @@ Optional list of any work you did not complete or that should be followed up. Om
     group: TaskGroup,
     children: Task[],
     makeStatusCb: (task: Task) => (status: Task['agentStatus']) => void | Promise<void>,
-    makeWorktreeCb: (task: Task) => (worktreePath: string) => void | Promise<void>,
     onChildComplete: (taskId: string) => void | Promise<void>,
   ): void {
     if (this.groupQueues.has(group.id)) return;
@@ -1274,7 +1194,6 @@ Optional list of any work you did not complete or that should be followed up. Om
       failedTaskIds: new Set(),
       tasks: new Map(children.map((c) => [c.id, c])),
       makeStatusCallback: makeStatusCb,
-      makeWorktreeCallback: makeWorktreeCb,
       onChildComplete,
     };
 
@@ -1326,7 +1245,7 @@ Optional list of any work you did not complete or that should be followed up. Om
         }
       };
 
-      this.startAgent(task, wrappedStatusCb, q.makeWorktreeCallback(task));
+      this.startAgent(task, wrappedStatusCb);
 
       // Start more if we haven't hit concurrency limit
       startNext();

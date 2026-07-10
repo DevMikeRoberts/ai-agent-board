@@ -463,7 +463,7 @@ export function isRateLimited(taskId: string): boolean {
 // ─── Task field validation ──────────────────────────────────────────
 
 export function validateTaskFields(body: Record<string, any>): string | null {
-  const { title, description, priority, columnId, agentType, repoPath, branchName, baseBranch, useWorktree, autoRun } = body;
+  const { title, description, priority, columnId, agentType, repoPath, branchName, baseBranch, autoRun } = body;
 
   if (!title || typeof title !== 'string' || !title.trim()) {
     return 'title is required and must be a non-empty string';
@@ -509,9 +509,6 @@ export function validateTaskFields(body: Record<string, any>): string | null {
   if (typeof baseBranch === 'string' && !isValidGitRef(baseBranch)) {
     return 'baseBranch contains invalid characters';
   }
-  if (useWorktree !== undefined && typeof useWorktree !== 'boolean') {
-    return 'useWorktree must be a boolean';
-  }
   if (autoRun !== undefined && typeof autoRun !== 'boolean') {
     return 'autoRun must be a boolean';
   }
@@ -521,7 +518,7 @@ export function validateTaskFields(body: Record<string, any>): string | null {
 // ─── Task builder ───────────────────────────────────────────────────
 
 export function buildTask(body: Record<string, any>): Task {
-  const { title, description, priority, columnId, agentType, repoPath, branchName, baseBranch, useWorktree, projectId } = body;
+  const { title, description, priority, columnId, agentType, repoPath, branchName, baseBranch, projectId } = body;
   return {
     id: uuid(),
     projectId: typeof projectId === 'string' && projectId ? projectId : 'default',
@@ -535,7 +532,6 @@ export function buildTask(body: Record<string, any>): Task {
     repoPath: typeof repoPath === 'string' ? expandTilde(repoPath) : undefined,
     branchName: branchName || undefined,
     baseBranch: baseBranch || undefined,
-    useWorktree: useWorktree ?? undefined,
   };
 }
 
@@ -607,18 +603,12 @@ export async function autoOpenPrOnComplete(
 
   try {
     const { url } = agentManager.createPR(task);
-    const updates: Partial<Task> = { prUrl: url };
-    // The branch is pushed; the worktree directory is no longer needed.
-    if (task.worktreePath) {
-      try { agentManager.removeWorktree(task); } catch { /* best effort */ }
-      updates.worktreePath = undefined;
-    }
-    const updated = await repo.update(task.id, updates);
+    const updated = await repo.update(task.id, { prUrl: url });
     if (updated) broadcastTaskUpdate(updated);
     emitTaskEvent(
       repo, task.id, 'output',
       `Opened pull request for ${task.branchName}: ${url}\n` +
-      'Watching for merge — the task will move to Done and its branch/worktree will be cleaned up automatically once the PR is merged.',
+      'Watching for merge — the task will move to Done and its branch will be cleaned up automatically once the PR is merged.',
       task.agentType,
     );
   } catch (err: unknown) {
@@ -628,13 +618,6 @@ export async function autoOpenPrOnComplete(
       task.agentType,
     );
   }
-}
-
-export function makeWorktreeCallback(repo: TaskRepository, taskId: string): (worktreePath: string) => void {
-  return async (worktreePath) => {
-    const t = await repo.update(taskId, { worktreePath });
-    if (t) broadcastTaskUpdate(t);
-  };
 }
 
 export async function startAgentForTask(
@@ -653,6 +636,6 @@ export async function startAgentForTask(
   const updated = await repo.update(task.id, updates);
   if (updated) {
     broadcastTaskUpdate(updated);
-    agentManager.startAgent(updated, makeStatusCallback(repo, task.id, agentManager), makeWorktreeCallback(repo, task.id));
+    agentManager.startAgent(updated, makeStatusCallback(repo, task.id, agentManager));
   }
 }

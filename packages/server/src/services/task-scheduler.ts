@@ -4,7 +4,7 @@ import type { TaskRepository } from '../repositories/types.js';
 import type { ProjectRepository } from '../repositories/project-types.js';
 import type { AgentManager, TaskSettledInfo } from './agent-manager.js';
 import { broadcast } from '../websocket.js';
-import { broadcastTaskUpdate, makeStatusCallback, makeWorktreeCallback } from '../routes/helpers.js';
+import { broadcastTaskUpdate, makeStatusCallback } from '../routes/helpers.js';
 import { detectTokenLimit } from './token-limit.js';
 import { errorMessage } from '../utils.js';
 
@@ -279,7 +279,6 @@ export class TaskScheduler {
     this.agentManager.startAgent(
       updated,
       makeStatusCallback(this.repo, task.id, this.agentManager),
-      makeWorktreeCallback(this.repo, task.id),
     );
   }
 

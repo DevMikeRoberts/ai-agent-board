@@ -47,7 +47,6 @@ type TaskSubmitData = {
   repoPath?: string;
   branchName?: string;
   baseBranch?: string;
-  useWorktree?: boolean;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -68,9 +67,8 @@ function BoardPage({
     defaultAgentType: project.defaultAgentType,
     defaultPriority: project.defaultPriority,
     defaultBaseBranch: project.defaultBaseBranch,
-    defaultUseWorktree: project.defaultUseWorktree,
   };
-  const { tasks, error, clearError, showArchived, setShowArchived, addTask, updateTask, moveTask, runTask, stopTask, deleteTask, archiveTask, unarchiveTask, configureAndRunTask, createPR, mergeLocal, cleanupWorktree } = useTasks(project.id);
+  const { tasks, error, clearError, showArchived, setShowArchived, addTask, updateTask, moveTask, runTask, stopTask, deleteTask, archiveTask, unarchiveTask, configureAndRunTask, createPR, mergeLocal } = useTasks(project.id);
   const { groups, createGroup, runGroup, stopGroup, deleteGroup, updateGroup, refreshGroup } = useTaskGroups(project.id);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
@@ -329,7 +327,6 @@ function BoardPage({
         repoPath: task.repoPath,
         branchName: task.branchName || `task/${slugify(task.title)}`,
         baseBranch: task.baseBranch || 'main',
-        useWorktree: true,
         agentType: task.agentType,
       });
     } else {
@@ -477,7 +474,7 @@ function BoardPage({
         projectDefaults={projectDefaults}
       />
 
-      <AgentPanel task={selectedTask} onClose={handleClosePanel} onExpand={handleExpandTask} onRun={handleRunWithConfig} onStop={stopTask} onCreatePR={createPR} onMergeLocal={mergeLocal} onCleanupWorktree={cleanupWorktree} onReconfigureRetry={handleReconfigureRetry} theme={theme} />
+      <AgentPanel task={selectedTask} onClose={handleClosePanel} onExpand={handleExpandTask} onRun={handleRunWithConfig} onStop={stopTask} onCreatePR={createPR} onMergeLocal={mergeLocal} onReconfigureRetry={handleReconfigureRetry} theme={theme} />
 
       <TaskFullView
         task={fullViewTask}
@@ -491,7 +488,6 @@ function BoardPage({
         onUnarchive={handleUnarchiveTask}
         onCreatePR={createPR}
         onMergeLocal={mergeLocal}
-        onCleanupWorktree={cleanupWorktree}
         onReconfigureRetry={handleReconfigureRetry}
         theme={theme}
       />
