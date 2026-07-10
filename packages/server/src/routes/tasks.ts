@@ -181,7 +181,7 @@ export function createTaskRouter(repo: TaskRepository, agentManager: AgentManage
       return;
     }
 
-    const { title, description, priority, columnId, agentStatus, agentType, repoPath, branchName, baseBranch, useWorktree, archived, model } = req.body;
+    const { title, description, priority, columnId, agentStatus, agentType, repoPath, branchName, baseBranch, archived } = req.body;
 
     if (title !== undefined && (typeof title !== 'string' || !title.trim())) {
       res.status(400).json({ error: 'title must be a non-empty string' });
@@ -265,7 +265,6 @@ export function createTaskRouter(repo: TaskRepository, agentManager: AgentManage
     if (repoPath !== undefined && !taskProject.repoPath) updates.repoPath = typeof repoPath === 'string' ? expandTilde(repoPath) : repoPath;
     if (branchName !== undefined) updates.branchName = branchName || undefined;
     if (baseBranch !== undefined) updates.baseBranch = baseBranch;
-    if (useWorktree !== undefined) updates.useWorktree = Boolean(useWorktree);
     if (archived !== undefined) updates.archived = Boolean(archived);
 
     // Reset agent state when moved to in-progress
@@ -373,8 +372,7 @@ function enforceProjectRepoPath(body: Record<string, any>, project: Project): Re
 
 /**
  * Fill task fields left undefined by the request with the project's configured defaults.
- * Each field remains overridable: an explicit value (including `useWorktree: false`) is
- * preserved. Applied at create time only — editing a task never re-applies defaults.
+ * Each field is overridable. Applied at create time only — editing a task never re-applies defaults.
  */
 function applyProjectDefaults(body: Record<string, any>, project: Project): Record<string, any> {
   const result = { ...body };
@@ -386,9 +384,6 @@ function applyProjectDefaults(body: Record<string, any>, project: Project): Reco
   }
   if (result.baseBranch === undefined && project.defaultBaseBranch !== undefined) {
     result.baseBranch = project.defaultBaseBranch;
-  }
-  if (result.useWorktree === undefined && project.defaultUseWorktree !== undefined) {
-    result.useWorktree = project.defaultUseWorktree;
   }
   return result;
 }

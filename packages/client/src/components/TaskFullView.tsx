@@ -326,7 +326,6 @@ interface TaskFullViewProps {
   onUnarchive?: (task: Task) => void;
   onCreatePR?: (id: string) => Promise<string | undefined>;
   onMergeLocal?: (id: string) => Promise<string | undefined>;
-  onCleanupWorktree?: (id: string) => Promise<void>;
   onReconfigureRetry?: (id: string) => void;
   theme?: 'dark' | 'light';
 }
@@ -343,7 +342,6 @@ export function TaskFullView({
   onUnarchive,
   onCreatePR,
   onMergeLocal,
-  onCleanupWorktree,
   onReconfigureRetry,
   theme,
 }: TaskFullViewProps) {
@@ -358,7 +356,6 @@ export function TaskFullView({
   const [followUpMessage, setFollowUpMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [followUpImages, setFollowUpImages] = useState<File[]>([]);
-  const [showWorktreeConfirm, setShowWorktreeConfirm] = useState(false);
   const [hasRemote, setHasRemote] = useState<boolean | null>(null);
   const [activeTab, setActiveTab] = useState<'events' | 'terminal' | 'changes' | 'summary'>(
     'events'
@@ -388,7 +385,6 @@ export function TaskFullView({
     setMergeResult(null);
     setMergeLoading(false);
     setMergeError(null);
-    setShowWorktreeConfirm(false);
     setHasRemote(null);
     setFollowUpMessage('');
     setSending(false);
@@ -778,11 +774,6 @@ export function TaskFullView({
                         <span className="font-mono break-all text-[10px]">{task.repoPath}</span>
                       </InfoRow>
                     )}
-                    {task.worktreePath && (
-                      <InfoRow icon={Folder} label="Worktree">
-                        <span className="font-mono break-all text-[10px]">{task.worktreePath}</span>
-                      </InfoRow>
-                    )}
                   </div>
                 </>
               )}
@@ -854,43 +845,6 @@ export function TaskFullView({
                       <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-400">
                         <GitMerge className="h-3.5 w-3.5" />
                         Merged to {mergeResult}
-                      </div>
-                    )}
-
-                    {/* Cleanup worktree */}
-                    {task.worktreePath && onCleanupWorktree && !showWorktreeConfirm && (
-                      <button
-                        onClick={() => setShowWorktreeConfirm(true)}
-                        className="flex w-full items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30 transition-colors"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Clean up worktree
-                      </button>
-                    )}
-
-                    {showWorktreeConfirm && (
-                      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
-                        <p className="text-xs font-medium text-amber-200 mb-1">Delete worktree?</p>
-                        <p className="text-xs text-amber-300/80 mb-3">
-                          Removes the worktree directory. Push your changes first if you haven't already.
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setShowWorktreeConfirm(false)}
-                            className="rounded px-3 py-1 text-xs text-zinc-300 hover:bg-zinc-700"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={() => {
-                              setShowWorktreeConfirm(false);
-                              onCleanupWorktree?.(task.id);
-                            }}
-                            className="rounded bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-500"
-                          >
-                            Delete
-                          </button>
-                        </div>
                       </div>
                     )}
 

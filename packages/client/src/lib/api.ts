@@ -23,7 +23,6 @@ export interface CreateGroupChild {
   title: string;
   description?: string;
   agentType?: AgentType;
-  useWorktree?: boolean;
 }
 
 function withQuery(path: string, params: Record<string, string | boolean | undefined>): string {
@@ -101,7 +100,7 @@ export const api = {
   getTasks: (includeArchived = false, projectId?: string) =>
     request<Task[]>(withQuery('/tasks', { includeArchived, projectId })),
 
-  createTask: (data: { title: string; description?: string; priority?: Priority; columnId?: ColumnId; agentType?: AgentType; model?: string; repoPath?: string; branchName?: string; baseBranch?: string; useWorktree?: boolean; autoRun?: boolean; projectId?: string }) =>
+  createTask: (data: { title: string; description?: string; priority?: Priority; columnId?: ColumnId; agentType?: AgentType; repoPath?: string; branchName?: string; baseBranch?: string; autoRun?: boolean; projectId?: string }) =>
     request<Task>('/tasks', { method: 'POST', body: JSON.stringify(data) }),
 
   updateTask: (id: string, data: Partial<Task>) =>
@@ -121,14 +120,11 @@ export const api = {
 
   getAgents: () => request<AgentInfo[]>('/agents'),
 
-  configureTask: (id: string, config: { repoPath: string; branchName: string; baseBranch: string; useWorktree: boolean; agentType?: AgentType }) =>
+  configureTask: (id: string, config: { repoPath: string; branchName: string; baseBranch: string; agentType?: AgentType }) =>
     request<Task>(`/tasks/${id}/configure`, { method: 'POST', body: JSON.stringify(config) }),
 
   createPR: (id: string) =>
     request<{ url: string }>(`/tasks/${id}/create-pr`, { method: 'POST' }),
-
-  cleanupWorktree: (id: string) =>
-    request<{ success: boolean }>(`/tasks/${id}/cleanup-worktree`, { method: 'POST' }),
 
   mergeLocal: (id: string) =>
     request<{ merged: boolean; baseBranch: string }>(`/tasks/${id}/merge-local`, { method: 'POST' }),

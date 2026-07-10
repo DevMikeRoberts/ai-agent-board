@@ -10,7 +10,7 @@ import type { AgentManager } from '../services/agent-manager.js';
 import type { TaskScheduler } from '../services/task-scheduler.js';
 import {
   asyncHandler, paramId, isAllowedRepoPath, expandTilde, isValidGitRef, normalizeRepoPathForCompare,
-  broadcastTaskUpdate, broadcastGroupUpdate, makeStatusCallback, makeWorktreeCallback, isRateLimited,
+  broadcastTaskUpdate, broadcastGroupUpdate, makeStatusCallback, isRateLimited,
 } from './helpers.js';
 
 export function createAgentRouter(
@@ -31,7 +31,7 @@ export function createAgentRouter(
       return;
     }
 
-    const { repoPath, branchName, baseBranch, useWorktree, agentType } = req.body;
+    const { repoPath, branchName, baseBranch, agentType } = req.body;
     const project = projectRepo ? await projectRepo.getById(task.projectId ?? 'default') : undefined;
     if (req.body.projectId !== undefined && req.body.projectId !== (task.projectId ?? 'default')) {
       res.status(400).json({ error: 'projectId is immutable' });
@@ -52,10 +52,6 @@ export function createAgentRouter(
     }
     if (baseBranch !== undefined && typeof baseBranch !== 'string') {
       res.status(400).json({ error: 'baseBranch must be a string' });
-      return;
-    }
-    if (useWorktree !== undefined && typeof useWorktree !== 'boolean') {
-      res.status(400).json({ error: 'useWorktree must be a boolean' });
       return;
     }
     if (agentType !== undefined && !isValidAgentType(agentType)) {
@@ -91,7 +87,6 @@ export function createAgentRouter(
     if (repoPath !== undefined && !project?.repoPath) updates.repoPath = typeof repoPath === 'string' ? expandTilde(repoPath) : repoPath;
     if (branchName !== undefined) updates.branchName = branchName || undefined;
     if (baseBranch !== undefined) updates.baseBranch = baseBranch;
-    if (useWorktree !== undefined) updates.useWorktree = useWorktree;
     if (agentType !== undefined) updates.agentType = agentType;
 
     const updated = await repo.update(id, updates);
@@ -154,7 +149,7 @@ export function createAgentRouter(
       }
     }
 
-    agentManager.startAgent(updated, makeStatusCallback(repo, task.id, agentManager), makeWorktreeCallback(repo, task.id));
+    agentManager.startAgent(updated, makeStatusCallback(repo, task.id, agentManager));
 
     res.json(updated);
   }));

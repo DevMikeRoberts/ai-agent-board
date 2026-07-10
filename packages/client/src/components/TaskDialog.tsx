@@ -15,11 +15,11 @@ import ImageUpload from './ImageUpload';
 interface TaskDialogProps {
   open: boolean;
   onClose: () => void;
-  onSubmit: (task: { title: string; description: string; priority: Priority; columnId: ColumnId; agentType: AgentType; model?: string; autoRun?: boolean; repoPath?: string; branchName?: string; baseBranch?: string; useWorktree?: boolean; projectId?: string }) => Promise<unknown>;
+  onSubmit: (task: { title: string; description: string; priority: Priority; columnId: ColumnId; agentType: AgentType; autoRun?: boolean; repoPath?: string; branchName?: string; baseBranch?: string }) => Promise<unknown>;
   /** When set, dialog is in edit mode with pre-populated fields */
   editTask?: Task | null;
   /** Called on save in edit mode */
-  onEditSubmit?: (id: string, updates: { title: string; description: string; priority: Priority; agentType: AgentType; model?: string; repoPath?: string; branchName?: string; baseBranch?: string; useWorktree?: boolean }) => Promise<unknown>;
+  onEditSubmit?: (id: string, updates: { title: string; description: string; priority: Priority; agentType: AgentType; repoPath?: string; branchName?: string; baseBranch?: string }) => Promise<unknown>;
   /** When true, highlight missing required fields (e.g. opened from Play button) */
   highlightRequired?: boolean;
   /** Project-level repo path that cannot be changed per task. */
@@ -29,7 +29,6 @@ interface TaskDialogProps {
     defaultAgentType?: AgentType;
     defaultPriority?: Priority;
     defaultBaseBranch?: string;
-    defaultUseWorktree?: boolean;
   };
 }
 
@@ -152,15 +151,12 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
     }
     setPathError('');
 
-    // Every task runs in its own git worktree, so it always has a branch —
-    // auto-generate one from the title when no custom name was entered.
     const effectiveBranch = branchName.trim() || `task/${slugify(title.trim())}`;
 
     const repoFields = {
       repoPath: trimmedPath,
       branchName: effectiveBranch,
       baseBranch: baseBranch.trim() || 'main',
-      useWorktree: true,
     };
 
     setSubmitting(true);
@@ -525,7 +521,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
                     </div>
                   </div>
                   <p className="text-[10px] text-muted-foreground/60">
-                    Each task runs in its own git worktree on this branch (created from the base branch). Leave the branch blank to auto-generate it from the title.
+                    Each task creates a branch from the latest copy of the base branch. Leave the branch blank to auto-generate it from the title.
                   </p>
                 </div>
 

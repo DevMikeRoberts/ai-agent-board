@@ -466,13 +466,10 @@ export function createProjectsRouter(
     const childTasks = (await Promise.all(groups.map((g) => groupRepo.getChildTasks(g.id)))).flat();
     const tasks = [...standaloneTasks, ...childTasks];
 
-    // Stop agents, drop cached events, and clean up worktrees (best effort).
+    // Stop agents and drop cached events (best effort).
     for (const task of tasks) {
       await agentManager.stopAgent(task.id);
       agentManager.clearEvents(task.id);
-      if (task.worktreePath) {
-        try { agentManager.removeWorktree(task); } catch { /* best effort */ }
-      }
     }
 
     const deleted = await projectRepo.delete(id);

@@ -106,7 +106,7 @@ export function useTasks(projectId = 'default') {
 
   const configureAndRunTask = useCallback(async (
     id: string,
-    config: { repoPath: string; branchName: string; baseBranch: string; useWorktree: boolean; agentType?: AgentType }
+    config: { repoPath: string; branchName: string; baseBranch: string; agentType?: AgentType }
   ) => {
     try {
       const configured = await api.configureTask(id, config);
@@ -123,15 +123,6 @@ export function useTasks(projectId = 'default') {
     // (a global toast here would auto-dismiss after 5s and read as "did nothing").
     const result = await api.createPR(id);
     return result.url;
-  }, []);
-
-  const cleanupWorktree = useCallback(async (id: string) => {
-    try {
-      await api.cleanupWorktree(id);
-      setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, worktreePath: undefined } : t)));
-    } catch (err) {
-      setError(`Failed to clean up worktree: ${(err as Error).message}`);
-    }
   }, []);
 
   const mergeLocal = useCallback(async (id: string) => {
@@ -189,5 +180,5 @@ export function useTasks(projectId = 'default') {
 
   const clearError = useCallback(() => setError(null), []);
 
-  return { tasks, error, clearError, showArchived, setShowArchived, addTask, updateTask, moveTask, runTask, stopTask, deleteTask, archiveTask, unarchiveTask, configureAndRunTask, createPR, mergeLocal, cleanupWorktree };
+  return { tasks, error, clearError, showArchived, setShowArchived, addTask, updateTask, moveTask, runTask, stopTask, deleteTask, archiveTask, unarchiveTask, configureAndRunTask, createPR, mergeLocal };
 }

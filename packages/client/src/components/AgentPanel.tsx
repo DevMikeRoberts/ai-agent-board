@@ -17,7 +17,6 @@ import {
   GitBranch,
   ExternalLink,
   GitMerge,
-  Trash2,
   Send,
   FileText,
   RotateCw,
@@ -222,7 +221,6 @@ interface AgentPanelProps {
   onStop?: (id: string) => void;
   onCreatePR?: (id: string) => Promise<string | undefined>;
   onMergeLocal?: (id: string) => Promise<string | undefined>;
-  onCleanupWorktree?: (id: string) => Promise<void>;
   onReconfigureRetry?: (id: string) => void;
   theme?: 'dark' | 'light';
 }
@@ -429,7 +427,7 @@ function EventItem({ event }: { event: CoalescedEvent }) {
   );
 }
 
-export function AgentPanel({ task, onClose, onExpand, onRun, onStop, onCreatePR, onMergeLocal, onCleanupWorktree, onReconfigureRetry, theme }: AgentPanelProps) {
+export function AgentPanel({ task, onClose, onExpand, onRun, onStop, onCreatePR, onMergeLocal, onReconfigureRetry, theme }: AgentPanelProps) {
   const [events, setEvents] = useState<AgentEvent[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [prUrl, setPrUrl] = useState<string | null>(null);
@@ -448,7 +446,6 @@ export function AgentPanel({ task, onClose, onExpand, onRun, onStop, onCreatePR,
   // auto-default (Summary for review/done) doesn't clobber an explicit choice.
   const userSelectedTabRef = useRef(false);
   const agentDisplay = task?.agentType ? getAgentDisplay(task.agentType) : undefined;
-  const [showWorktreeConfirm, setShowWorktreeConfirm] = useState(false);
   const [hasRemote, setHasRemote] = useState<boolean | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -472,7 +469,6 @@ export function AgentPanel({ task, onClose, onExpand, onRun, onStop, onCreatePR,
     setMergeResult(null);
     setMergeLoading(false);
     setMergeError(null);
-    setShowWorktreeConfirm(false);
     setHasRemote(null);
     setFollowUpMessage('');
     setSending(false);
@@ -794,7 +790,7 @@ export function AgentPanel({ task, onClose, onExpand, onRun, onStop, onCreatePR,
             </div>
           )}
 
-          {/* Worktree info bar */}
+          {/* Branch info bar */}
           {task.branchName && (
             <div className="shrink-0 border-b border-border px-4 py-2 space-y-1.5">
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -803,13 +799,8 @@ export function AgentPanel({ task, onClose, onExpand, onRun, onStop, onCreatePR,
                 <span className="text-muted-foreground/50">from</span>
                 <span className="font-mono">{task.baseBranch || 'main'}</span>
               </div>
-              {task.worktreePath && (
-                <div className="text-[10px] text-muted-foreground font-mono truncate">
-                  {task.worktreePath}
-                </div>
-              )}
 
-              {/* PR / Cleanup actions — show when task is done or complete */}
+              {/* PR / actions — show when task is done or complete */}
               {(task.agentStatus === 'complete' || task.columnId === 'done') && (
                 <div className="flex items-center gap-2 pt-1">
                   {!prUrl && !task.prUrl && onCreatePR && hasRemote === true && (
@@ -869,47 +860,12 @@ export function AgentPanel({ task, onClose, onExpand, onRun, onStop, onCreatePR,
                       Merged to {mergeResult}
                     </span>
                   )}
-                  {task.worktreePath && onCleanupWorktree && (
-                    <button
-                      onClick={() => setShowWorktreeConfirm(true)}
-                      className="flex items-center gap-1.5 rounded-md border border-border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30 transition-colors"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                      Clean up worktree
-                    </button>
-                  )}
                 </div>
               )}
 
               {/* PR / merge errors */}
               {prError && <ErrorBanner message={prError} onDismiss={() => setPrError(null)} />}
               {mergeError && <ErrorBanner message={mergeError} onDismiss={() => setMergeError(null)} />}
-            </div>
-          )}
-
-          {showWorktreeConfirm && (
-            <div className="mx-4 my-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
-              <p className="text-xs text-amber-200 font-medium mb-1">Delete worktree?</p>
-              <p className="text-xs text-amber-300/80 mb-3">
-                This removes the worktree directory and its files. If you haven't created a PR yet, you won't be able to push these changes afterward.
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowWorktreeConfirm(false)}
-                  className="rounded px-3 py-1 text-xs text-zinc-300 hover:bg-zinc-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    setShowWorktreeConfirm(false);
-                    if (task && onCleanupWorktree) onCleanupWorktree(task.id);
-                  }}
-                  className="rounded bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-500"
-                >
-                  Delete worktree
-                </button>
-              </div>
             </div>
           )}
 

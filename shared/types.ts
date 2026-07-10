@@ -39,7 +39,9 @@ export interface Task {
   repoPath?: string;
   branchName?: string;
   baseBranch?: string;
+  /** @deprecated Worktrees removed — kept for DB backward compat. */
   useWorktree?: boolean;
+  /** @deprecated Worktrees removed — kept for DB backward compat. */
   worktreePath?: string;
   agentType?: AgentType;
   /** Optional model string used by local providers (e.g. Ollama model name). */
@@ -59,7 +61,7 @@ export interface Task {
   /**
    * Epoch ms at which this task is scheduled to automatically re-run after its
    * agent hit a token/usage/rate limit. Set by the token-limit retry scheduler;
-   * cleared once the retry fires (or the task is run/edited/deleted manually).
+   * cleared once the retry fires (or the task is run/edited/manually).
    */
   retryAt?: number;
 }
@@ -102,6 +104,7 @@ export interface Project {
   defaultAgentType?: AgentType;
   defaultPriority?: Priority;
   defaultBaseBranch?: string;
+  /** @deprecated Worktrees removed — kept for DB backward compat. */
   defaultUseWorktree?: boolean;
 }
 
@@ -113,6 +116,7 @@ export interface CreateProjectRequest {
   defaultAgentType?: AgentType;
   defaultPriority?: Priority;
   defaultBaseBranch?: string;
+  /** @deprecated Worktrees removed. */
   defaultUseWorktree?: boolean;
 }
 
@@ -123,6 +127,7 @@ export interface UpdateProjectRequest {
   defaultAgentType?: AgentType | null;
   defaultPriority?: Priority | null;
   defaultBaseBranch?: string | null;
+  /** @deprecated Worktrees removed. */
   defaultUseWorktree?: boolean | null;
 }
 
@@ -228,6 +233,7 @@ export interface TaskTemplate {
   model?: string;
   repoPath?: string;
   baseBranch?: string;
+  /** @deprecated Worktrees removed — kept for DB backward compat. */
   useWorktree?: boolean;
   createdAt: number;
 }
