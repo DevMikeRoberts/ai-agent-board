@@ -704,6 +704,195 @@ export class AgentManager {
   }
 
   /**
+   * Resolve merge conflicts on the task's branch by merging the latest base
+   * branch into it and, when that produces conflicts, launching an AI agent
+   * session to resolve them intelligently.
+   *
+   * Flow:
+   *  1. Fetch `origin/{baseBranch}`
+   *  2. Check out the task's feature branch
+   *  3. `git merge origin/{baseBranch}` — auto-merges what it can
+   *  4. If merge produces conflicts, create a provider session whose prompt
+   *     lists the conflicting files and asks the agent to resolve every
+   *     conflict marker while preserving the intent of both sides
+   *  5. Verify all conflicts are gone after the agent finishes
+   *  6. Stage the resolution, commit, and push
+   *
+   * Uses the per-repo mutex so it never races concurrent git operations.
+   * Throws on failure (caller is responsible for emitting a user-facing
+   * error event).
+   */
+  async resolveMergeConflicts(task: Task): Promise<void> {
+    if (!task.repoPath || !task.branchName) {
+      throw new Error('Task has no repo path or branch name configured');
+    }
+    const cwd = this.gitCwd(task);
+    const baseBranch = task.baseBranch || 'main';
+    const branchName: string = task.branchName;
+    const repoPath: string = task.repoPath;
+
+    return this.withRepoLock(repoPath, async () => {
+      // 1. Fetch latest base branch
+      this.emitEvent(task.id, {
+        id: uuid(), taskId: task.id, type: 'output',
+        content: `Fetching latest origin/${baseBranch} to resolve merge conflicts…`,
+        timestamp: Date.now(), metadata: { phase: 'conflict-resolution' },
+      });
+      execFileSync('git', ['fetch', 'origin', baseBranch], { cwd, stdio: 'pipe', timeout: 30_000 });
+
+      // 2. Check out the feature branch
+      execFileSync('git', ['checkout', branchName], { cwd, stdio: 'pipe' });
+
+      // 3. Merge base into feature branch
+      try {
+        execFileSync('git', ['merge', `origin/${baseBranch}`, '--no-edit'], {
+          cwd, stdio: 'pipe', timeout: 30_000,
+        });
+        execFileSync('git', ['push', 'origin', branchName], {
+          cwd, stdio: 'pipe', timeout: 60_000,
+        });
+        this.emitEvent(task.id, {
+          id: uuid(), taskId: task.id, type: 'output',
+          content: `Merged origin/${baseBranch} into ${branchName} — no conflicts. Pushed update.`,
+          timestamp: Date.now(), metadata: { phase: 'conflict-resolution' },
+        });
+        return;
+      } catch {
+        // Merge has conflicts — proceed with agent-based resolution
+      }
+
+      // 4. List conflicted files
+      const conflictOutput = execFileSync('git', ['diff', '--name-only', '--diff-filter=U'], { cwd, stdio: 'pipe' })
+        .toString().trim();
+      const conflictedFiles = conflictOutput ? conflictOutput.split('\n').filter(Boolean) : [];
+      if (conflictedFiles.length === 0) {
+        throw new Error('Merge failed but no conflicted files detected');
+      }
+
+      this.emitEvent(task.id, {
+        id: uuid(), taskId: task.id, type: 'output',
+        content:
+          `Merge with origin/${baseBranch} produced conflicts in ${conflictedFiles.length} file(s):\n` +
+          conflictedFiles.map((f) => `  - ${f}`).join('\n') +
+          '\nLaunching agent to resolve conflicts…',
+        timestamp: Date.now(), metadata: { phase: 'conflict-resolution' },
+      });
+
+      // 5. Resolve which agent to use (honour fallback chain)
+      let agentType = task.agentType || 'copilot';
+      const selection = resolveAgentSelection({
+        requested: agentType,
+        agents: this.availableAgents,
+        preferredFallback: getConfiguredFallbackAgent(),
+      });
+      if (!selection.agentType) {
+        throw new Error(selection.reason || `Agent "${agentType}" is not available to resolve conflicts`);
+      }
+      agentType = selection.agentType;
+
+      const provider = this.providers.get(agentType);
+      if (!provider) {
+        throw new Error(`No provider registered for agent type: ${agentType}`);
+      }
+
+      // 6. Build concise conflict-resolution prompts
+      const safeTitle = task.title.replace(/[<>]/g, '');
+      const repoScanSection = buildRepoScanPromptSection(agentType, repoPath);
+
+      const systemPrompt = `
+<context>
+You are a coding agent resolving merge conflicts in the repository at ${repoPath}.
+
+Your task is to fix ALL merge conflict markers (<<<<<<<, =======, >>>>>>>) in the
+conflicted files listed below. For each conflict examine both the HEAD version (the
+feature branch) and the MERGE_HEAD version (the base branch), then produce a single
+correct merged result that preserves the intent of both sides.
+
+${repoScanSection}
+
+When you have finished fixing all conflicts, end your VERY LAST message with:
+<task-summary>
+## Completed
+What conflicts you resolved and how.
+</task-summary>
+</context>
+`;
+
+      const prompt =
+        `Task: ${safeTitle}\n\n` +
+        'The following files have merge conflicts between the feature branch and the base branch:\n' +
+        conflictedFiles.map((f) => `  - ${f}`).join('\n') +
+        '\n\n' +
+        'For each conflicted file, read it, examine both sides of every conflict marker, ' +
+        'and edit the file to produce the correct merged result. Remove ALL conflict markers ' +
+        '(<<<<<<<, =======, >>>>>>> and any accompanying git metadata lines).\n' +
+        'Do NOT add or remove anything unrelated to the conflict resolution.';
+
+      this.emitEvent(task.id, {
+        id: uuid(), taskId: task.id, type: 'output',
+        content: `Agent ${provider.displayName} is resolving ${conflictedFiles.length} merge conflict(s)…`,
+        timestamp: Date.now(), metadata: { phase: 'conflict-resolution', agentType },
+      });
+
+      // 7. Create session and execute conflict resolution
+      const session = await provider.createSession({
+        contextId: `conflict-${task.id}`,
+        workingDirectory: repoPath,
+        repoPath,
+        systemPrompt,
+        onEvent: (coreEvent) => {
+          const eventType = coreEvent.type === 'error' ? 'error' : 'output';
+          this.emitEvent(task.id, {
+            id: coreEvent.id, taskId: task.id,
+            type: eventType as AgentEvent['type'],
+            content: coreEvent.content,
+            timestamp: coreEvent.timestamp,
+            metadata: { phase: 'conflict-resolution', agentType },
+          });
+        },
+      });
+
+      const result = await session.execute(prompt);
+      session.destroy().catch(() => {});
+
+      if (result.status === 'failed') {
+        throw new Error(`Agent conflict resolution failed: ${result.error || 'unknown error'}`);
+      }
+
+      // 8. Verify all conflicts are gone
+      const remaining = execFileSync('git', ['diff', '--name-only', '--diff-filter=U'], { cwd, stdio: 'pipe' })
+        .toString().trim();
+      if (remaining) {
+        throw new Error(
+          `Agent did not resolve all conflicts. Remaining conflicted files:\n${
+            remaining.split('\n').filter(Boolean).join('\n')
+          }`,
+        );
+      }
+
+      // 9. Stage, commit, and push the resolution
+      execFileSync('git', ['add', '-A'], { cwd, stdio: 'pipe' });
+      execFileSync(
+        'git',
+        ['commit', '--no-verify', '-m', `Resolve merge conflicts between ${branchName} and ${baseBranch}`,
+          '-m', 'Automated conflict resolution from AI Agent Board.'],
+        { cwd, stdio: 'pipe' },
+      );
+      execFileSync('git', ['push', 'origin', branchName], {
+        cwd, stdio: 'pipe', timeout: 60_000,
+      });
+
+      this.emitEvent(task.id, {
+        id: uuid(), taskId: task.id, type: 'output',
+        content:
+          `Merge conflicts resolved and pushed to ${branchName}. ` +
+          'The pull request has been updated — GitHub will re-compute the merge state shortly.',
+        timestamp: Date.now(), metadata: { phase: 'conflict-resolution' },
+      });
+    });
+  }
+
+  /**
    * Best-effort delete of the task's local branch once its PR has merged. Runs
    * from the repo (never a worktree, which would still have the branch checked
    * out) and is serialized per-repo to avoid racing concurrent git operations.

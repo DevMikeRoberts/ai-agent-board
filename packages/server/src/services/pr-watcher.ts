@@ -233,10 +233,15 @@ export class PrWatcher {
 
   /**
    * Rebase the task's branch on its base branch to auto-fix merge conflicts,
-   * then force-push so the PR is updated. Emits success or error events.
+   * then force-push so the PR is updated. When the rebase fails due to
+   * conflicts, falls through to agent-based resolution — the AI agent reads
+   * the conflicting files and fixes every conflict marker.
+   *
+   * Emits success or error events for each stage.
    */
   private async attemptConflictFix(task: Task): Promise<void> {
     try {
+      // First try: clean rebase (linear history)
       await this.agentManager.rebaseOnBase(task);
       // Conflict fix in progress flag will be cleared on the next tick once we
       // confirm the mergeable state has changed, but we remove it here too so
@@ -249,17 +254,33 @@ export class PrWatcher {
         task.agentType,
       );
       console.log(`[pr-watcher] task ${task.id} auto-rebase succeeded`);
-    } catch (err: unknown) {
+      return;
+    } catch (rebaseErr: unknown) {
+      console.log(`[pr-watcher] task ${task.id} rebase failed, trying agent-based resolution: ${errorMessage(rebaseErr)}`);
+    }
+
+    // Fallback: agent-based merge conflict resolution
+    try {
+      await this.agentManager.resolveMergeConflicts(task);
       this.conflictFixInProgress.delete(task.id);
       this.emitNotice(
         task.id,
-        `Could not automatically resolve merge conflicts: ${errorMessage(err)}\n` +
+        `Agent resolved merge conflicts between ${task.branchName} and ${task.baseBranch || 'main'}. ` +
+        'The pull request has been updated — GitHub will re-compute the merge state shortly.',
+        task.agentType,
+      );
+      console.log(`[pr-watcher] task ${task.id} agent conflict resolution succeeded`);
+    } catch (agentErr: unknown) {
+      this.conflictFixInProgress.delete(task.id);
+      this.emitNotice(
+        task.id,
+        'Could not automatically resolve merge conflicts.\n' +
         'Manual conflict resolution is required. Resolve the conflicts, push to ' +
         `${task.branchName}, and the PR will be updated.`,
         task.agentType,
         'error',
       );
-      console.log(`[pr-watcher] task ${task.id} auto-rebase failed: ${errorMessage(err)}`);
+      console.log(`[pr-watcher] task ${task.id} both rebase and agent resolution failed`);
     }
   }
 
