@@ -1,32 +1,27 @@
-import { Sun, Moon } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { PixelIcon } from './PixelIcon';
 
 interface ThemeToggleProps {
   theme: 'dark' | 'light';
   toggleTheme: () => void;
 }
 
+/** A pixel light-bulb: lit yellow in dark mode ("the arcade is on"),
+ *  inked-out in light mode. Flips with a springy somersault on toggle. */
 export function ThemeToggle({ theme, toggleTheme }: ThemeToggleProps) {
   return (
     <motion.button
-      whileTap={{ scale: 0.88 }}
+      whileTap={{ scale: 0.85, rotate: 180 }}
+      transition={{ type: 'spring', stiffness: 380, damping: 16 }}
       onClick={toggleTheme}
-      className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/8 bg-white/5 text-zinc-400 transition-all hover:border-orange-500/30 hover:bg-orange-500/8 hover:text-orange-300"
+      className="flex h-11 w-11 items-center justify-center rounded-xl border-2 border-border bg-card transition-colors hover:border-neon-yellow"
       aria-label="Toggle theme"
+      title={theme === 'dark' ? 'Lights on' : 'Lights off'}
     >
-      <motion.div
-        key={theme}
-        initial={{ scale: 0.5, rotate: -90, opacity: 0 }}
-        animate={{ scale: 1, rotate: 0, opacity: 1 }}
-        exit={{ scale: 0.5, rotate: 90, opacity: 0 }}
-        transition={{ duration: 0.2, ease: 'easeOut' }}
-      >
-        {theme === 'dark' ? (
-          <Sun className="h-4 w-4" />
-        ) : (
-          <Moon className="h-4 w-4" />
-        )}
-      </motion.div>
+      <PixelIcon
+        name="light-bulb"
+        className={theme === 'dark' ? 'h-5 w-5 text-neon-yellow' : 'h-5 w-5 text-foreground/70'}
+      />
     </motion.button>
   );
 }
