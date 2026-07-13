@@ -446,6 +446,24 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
                 </label>
               )}
 
+              {/* Model selection for Claude */}
+              {agentType === 'claude' && (
+                <div>
+                  <label className="mb-1.5 block font-pixel text-[10px] text-muted-foreground [text-transform:lowercase]">Model</label>
+                  <select
+                    value={model ?? ''}
+                    onChange={(e) => setModel(e.target.value || undefined)}
+                    className="w-full h-11 rounded-xl border-2 border-border bg-card px-3 text-sm placeholder:text-muted-foreground/50 focus:border-neon-pink focus:outline-none transition-colors"
+                  >
+                    <option value="">Use provider default (CLAUDE_MODEL env)</option>
+                    <option value="claude-opus-4-20250514">claude-opus-4-20250514</option>
+                    <option value="claude-sonnet-4-20250514">claude-sonnet-4-20250514</option>
+                    <option value="claude-haiku-4-20250414">claude-haiku-4-20250414</option>
+                  </select>
+                  <p className="mt-1 text-xs text-muted-foreground/60">Claude model selection (overrides CLAUDE_MODEL env).</p>
+                </div>
+              )}
+
               {/* Model selection for OpenCode (local Ollama models) */}
               {agentType === 'opencode' && (
                 <div>
