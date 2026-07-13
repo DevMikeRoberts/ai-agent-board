@@ -250,20 +250,13 @@ export function ProjectDialog({
           <motion.div
             role="dialog"
             aria-modal="true"
-            initial={{ opacity: 0, scale: 0.92, y: 24, rotate: -1 }}
-            animate={{ opacity: 1, scale: 1, y: 0, rotate: 0 }}
-            exit={{ opacity: 0, scale: 0.92, y: 24 }}
-            transition={{ type: 'spring', stiffness: 320, damping: 22 }}
-            className="sticker panel-neon fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-full max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-[1.75rem] bg-popover p-6"
-            style={{ '--panel': 'var(--color-neon-green)' } as React.CSSProperties}
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 sticker rounded-[1.75rem] bg-popover p-6"
           >
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="flex items-center gap-2.5 font-display text-xl leading-none [text-transform:lowercase]">
-                <span className="sticker-sm flex h-9 w-9 items-center justify-center rounded-xl" style={{ backgroundColor: 'var(--color-neon-green)', color: 'var(--color-ink)' }}>
-                  <PixelIcon name="home-2" className="h-5 w-5" />
-                </span>
-                {mode === 'edit' ? 'edit project' : 'create project'}
-              </h2>
+              <h2 className="text-base font-semibold">{mode === 'edit' ? 'Edit Project' : 'Create Project'}</h2>
               <button
                 onClick={onClose}
                 className="flex h-9 w-9 items-center justify-center rounded-xl border-2 border-border font-pixel text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground"
@@ -276,23 +269,22 @@ export function ProjectDialog({
             <form onSubmit={handleSubmit} className="space-y-4">
               {mode === 'create' && (
                 <div>
-                  <span className="mb-1.5 block font-pixel text-[10px] text-muted-foreground [text-transform:lowercase]">project source</span>
-                  <div role="radiogroup" aria-label="Project Source" className="grid grid-cols-2 gap-2.5">
+                  <span className="mb-1.5 block font-pixel text-[10px] text-muted-foreground [text-transform:lowercase]">Project Source</span>
+                  <div role="radiogroup" aria-label="Project Source" className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       role="radio"
                       aria-checked={sourceType === 'local'}
                       onClick={() => { setSourceType('local'); setError(''); }}
                       className={[
-                        'flex h-11 items-center justify-center gap-2 rounded-full border-2 font-display text-sm transition-all [text-transform:lowercase]',
+                        'flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors',
                         sourceType === 'local'
-                          ? 'sticker-sm border-ink'
-                          : 'border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground',
+                          ? 'border-primary bg-primary/10 text-foreground'
+                          : 'border-border text-muted-foreground hover:bg-accent',
                       ].join(' ')}
-                      style={sourceType === 'local' ? { backgroundColor: 'var(--color-neon-green)', color: 'var(--color-ink)' } : undefined}
                     >
                       <PixelIcon name="floppy-disk" className="h-4 w-4" />
-                      local path
+                      Local Path
                     </button>
                     <button
                       type="button"
@@ -300,15 +292,14 @@ export function ProjectDialog({
                       aria-checked={sourceType === 'repo'}
                       onClick={() => { setSourceType('repo'); setError(''); }}
                       className={[
-                        'flex h-11 items-center justify-center gap-2 rounded-full border-2 font-display text-sm transition-all [text-transform:lowercase]',
+                        'flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors',
                         sourceType === 'repo'
-                          ? 'sticker-sm border-ink'
-                          : 'border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground',
+                          ? 'border-primary bg-primary/10 text-foreground'
+                          : 'border-border text-muted-foreground hover:bg-accent',
                       ].join(' ')}
-                      style={sourceType === 'repo' ? { backgroundColor: 'var(--color-neon-green)', color: 'var(--color-ink)' } : undefined}
                     >
                       <PixelIcon name="global-public" className="h-4 w-4" />
-                      github url
+                      GitHub URL
                     </button>
                   </div>
                 </div>
@@ -316,7 +307,7 @@ export function ProjectDialog({
 
               <div>
                 <label htmlFor="project-name" className="mb-1.5 block font-pixel text-[10px] text-muted-foreground [text-transform:lowercase]">
-                  project name
+                  Project Name
                 </label>
                 <input
                   id="project-name"
@@ -328,24 +319,23 @@ export function ProjectDialog({
                   }}
                   placeholder={mode === 'create' ? 'Defaults to the folder/repo name' : 'Project name'}
                   autoFocus
-                  className="h-11 w-full rounded-xl border-2 border-border bg-card px-3 text-sm placeholder:text-muted-foreground/50 focus:border-neon-pink focus:outline-none transition-colors"
+                  className="w-full h-11 rounded-xl border-2 border-border bg-card px-3 text-sm placeholder:text-muted-foreground/50 focus:border-neon-pink focus:outline-none transition-colors"
                 />
               </div>
 
               {showRepoField && (
                 <div>
-                  <label htmlFor="project-repo-url" className="mb-1.5 flex items-center gap-1.5 font-pixel text-[10px] text-muted-foreground [text-transform:lowercase]">
-                    <PixelIcon name="global-public" className="h-3.5 w-3.5" />
-                    repository url
+                  <label htmlFor="project-repo-url" className="mb-1.5 block font-pixel text-[10px] text-muted-foreground [text-transform:lowercase]">
+                    Repository URL
                   </label>
                   <input
                     id="project-repo-url"
                     value={repoUrl}
                     onChange={(e) => handleUrlChange(e.target.value)}
                     placeholder="https://github.com/owner/repo.git"
-                    className="h-11 w-full rounded-xl border-2 border-border bg-card px-3 font-mono text-sm placeholder:text-muted-foreground/50 focus:border-neon-pink focus:outline-none transition-colors"
+                    className="w-full h-11 rounded-xl border-2 border-border bg-card px-3 font-mono text-sm placeholder:text-muted-foreground/50 focus:border-neon-pink focus:outline-none transition-colors"
                   />
-                  <p className="mt-1.5 text-xs text-muted-foreground/70">
+                  <p className="mt-1 text-xs text-muted-foreground/60">
                     {mode === 'create'
                       ? 'The repo is cloned into your configured clone root on create.'
                       : 'Source URL the repo was cloned from (metadata only).'}
@@ -355,18 +345,17 @@ export function ProjectDialog({
 
               {showLocalFields && (
                 <div>
-                  <label htmlFor="project-repo-path" className="mb-1.5 flex items-center gap-1.5 font-pixel text-[10px] text-muted-foreground [text-transform:lowercase]">
-                    <PixelIcon name="floppy-disk" className="h-3.5 w-3.5" />
-                    local path
+                  <label htmlFor="project-repo-path" className="mb-1.5 block font-pixel text-[10px] text-muted-foreground [text-transform:lowercase]">
+                    Local Path
                   </label>
-                  <div className="flex gap-2.5">
+                  <div className="flex gap-2">
                     <input
                       id="project-repo-path"
                       value={repoPath}
                       onChange={(e) => handlePathChange(e.target.value)}
                       onBlur={() => { void validatePath(repoPath); }}
                       placeholder={getRepoPathPlaceholder()}
-                      className="h-11 min-w-0 flex-1 rounded-xl border-2 border-border bg-card px-3 font-mono text-sm placeholder:text-muted-foreground/50 focus:border-neon-pink focus:outline-none transition-colors"
+                      className="min-w-0 flex-1 h-11 rounded-xl border-2 border-border bg-card px-3 font-mono text-sm placeholder:text-muted-foreground/50 focus:border-neon-pink focus:outline-none transition-colors"
                     />
                     <button
                       type="button"
@@ -375,21 +364,21 @@ export function ProjectDialog({
                       className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl border-2 border-border px-3 font-pixel text-[11px] text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 [text-transform:lowercase]"
                     >
                       <PixelIcon name="open-book-bookmark" className="h-4 w-4" />
-                      {selectingDirectory ? 'browsing…' : 'browse…'}
+                      {selectingDirectory ? 'Browsingâ¦' : 'Browseâ¦'}
                     </button>
                   </div>
-                  <p className="mt-1.5 text-xs text-muted-foreground/70">{getRepoPathHelpText()}</p>
+                  <p className="mt-1 text-xs text-muted-foreground/60">{getRepoPathHelpText()}</p>
                   {pathStatus.kind !== 'idle' && (
                     <p
                       className={[
-                        'mt-1.5 font-pixel text-[10px] [text-transform:lowercase]',
+                        'mt-1 text-xs',
                         pathStatus.kind === 'validating' ? 'text-muted-foreground' : '',
                         pathStatus.kind === 'valid' ? 'text-neon-green' : '',
                         pathStatus.kind === 'warning' ? 'text-neon-yellow' : '',
                         pathStatus.kind === 'invalid' ? 'text-destructive' : '',
                       ].join(' ')}
                     >
-                      {pathStatus.kind === 'validating' ? 'validating local path…' : pathStatus.message}
+                      {pathStatus.kind === 'validating' ? 'Validating Local Pathâ¦' : pathStatus.message}
                     </p>
                   )}
                 </div>
@@ -397,28 +386,26 @@ export function ProjectDialog({
 
               {error && (
                 <div className="flex items-center gap-2 rounded-xl border-2 border-destructive/40 bg-destructive/10 px-3 py-2.5 font-pixel text-[11px] text-destructive">
-                  <PixelIcon name="alert-triangle-1" className="h-4 w-4 shrink-0" />
                   {error}
                 </div>
               )}
 
               <div className="space-y-4 rounded-2xl border-2 border-border bg-card/50 p-4">
-                <p className="flex items-center gap-1.5 font-pixel text-[10px] text-muted-foreground [text-transform:lowercase]">
-                  <PixelIcon name="settings-toggle-horizontal" className="h-3.5 w-3.5" />
-                  task defaults
-                  <span className="ml-1 text-muted-foreground/60">— applied to new tasks, overridable per task</span>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/70">
+                  Task Defaults
+                  <span className="ml-2 font-normal normal-case text-muted-foreground/50">applied to new tasks, overridable per task</span>
                 </p>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label htmlFor="project-default-agent" className="mb-1.5 block font-pixel text-[10px] text-muted-foreground [text-transform:lowercase]">
-                      default agent
+                      Default Agent
                     </label>
                     <select
                       id="project-default-agent"
                       value={defaultAgentType}
                       onChange={(e) => setDefaultAgentType(e.target.value)}
-                      className="h-11 w-full rounded-xl border-2 border-border bg-card px-3 text-sm focus:border-neon-pink focus:outline-none transition-colors"
+                      className="h-11 w-full rounded-xl border-2 border-border bg-card px-3 text-sm focus:border-neon-pink focus:outline-none"
                     >
                       <option value="">No default</option>
                       {AGENT_OPTIONS.map((a) => (
@@ -429,13 +416,13 @@ export function ProjectDialog({
 
                   <div>
                     <label htmlFor="project-default-priority" className="mb-1.5 block font-pixel text-[10px] text-muted-foreground [text-transform:lowercase]">
-                      default priority
+                      Default Priority
                     </label>
                     <select
                       id="project-default-priority"
                       value={defaultPriority}
                       onChange={(e) => setDefaultPriority(e.target.value)}
-                      className="h-11 w-full rounded-xl border-2 border-border bg-card px-3 text-sm focus:border-neon-pink focus:outline-none transition-colors"
+                      className="h-11 w-full rounded-xl border-2 border-border bg-card px-3 text-sm focus:border-neon-pink focus:outline-none"
                     >
                       <option value="">No default</option>
                       {PRIORITY_OPTIONS.map((p) => (
@@ -445,45 +432,28 @@ export function ProjectDialog({
                   </div>
 
                   <div>
-                    <label htmlFor="project-default-base-branch" className="mb-1.5 flex items-center gap-1.5 font-pixel text-[10px] text-muted-foreground [text-transform:lowercase]">
-                      <PixelIcon name="flag" className="h-3.5 w-3.5" />
-                      default base branch
+                    <label htmlFor="project-default-base-branch" className="mb-1.5 block font-pixel text-[10px] text-muted-foreground [text-transform:lowercase]">
+                      Default Base Branch
                     </label>
                     <input
                       id="project-default-base-branch"
                       value={defaultBaseBranch}
                       onChange={(e) => setDefaultBaseBranch(e.target.value)}
                       placeholder="No default"
-                      className="h-11 w-full rounded-xl border-2 border-border bg-card px-3 font-mono text-sm placeholder:text-muted-foreground/50 focus:border-neon-pink focus:outline-none transition-colors"
+                      className="w-full h-11 rounded-xl border-2 border-border bg-card px-3 font-mono text-sm placeholder:text-muted-foreground/50 focus:border-neon-pink focus:outline-none transition-colors"
                     />
                   </div>
 
-                  <div>
-                    <label htmlFor="project-default-worktree" className="mb-1.5 flex items-center gap-1.5 font-pixel text-[10px] text-muted-foreground [text-transform:lowercase]">
-                      <PixelIcon name="hierarchy-2" className="h-3.5 w-3.5" />
-                      default worktree
-                    </label>
-                    <select
-                      id="project-default-worktree"
-                      value={defaultUseWorktree}
-                      onChange={(e) => setDefaultUseWorktree(e.target.value as 'inherit' | 'true' | 'false')}
-                      className="h-11 w-full rounded-xl border-2 border-border bg-card px-3 text-sm focus:border-neon-pink focus:outline-none transition-colors"
-                    >
-                      <option value="inherit">No default</option>
-                      <option value="true">Enabled</option>
-                      <option value="false">Disabled</option>
-                    </select>
-                  </div>
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2.5 pt-2">
+              <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="h-11 rounded-full border-2 border-border px-4 font-display text-sm text-foreground/80 transition-colors hover:border-foreground/40 hover:text-foreground [text-transform:lowercase]"
+                  className="h-11 rounded-full border-2 border-border px-4 font-display text-sm text-foreground/80 hover:border-foreground/40 hover:text-foreground transition-colors [text-transform:lowercase]"
                 >
-                  cancel
+                  Cancel
                 </button>
                 <button
                   type="submit"
@@ -491,8 +461,8 @@ export function ProjectDialog({
                   className="sticker-sm sticker-press h-11 rounded-full bg-primary px-5 font-display text-sm text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50 [text-transform:lowercase]"
                 >
                   {submitting
-                    ? (mode === 'edit' ? 'saving…' : (sourceType === 'repo' ? 'cloning…' : 'creating…'))
-                    : (mode === 'edit' ? 'save changes' : 'create project')}
+                    ? (mode === 'edit' ? 'Savingâ¦' : (sourceType === 'repo' ? 'Cloningâ¦' : 'Creatingâ¦'))
+                    : (mode === 'edit' ? 'Save Changes' : 'Create Project')}
                 </button>
               </div>
             </form>

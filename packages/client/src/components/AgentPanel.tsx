@@ -1,23 +1,23 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';import Markdown from 'react-markdown';
+import { motion, AnimatePresence } from 'framer-motion';
+import Markdown from 'react-markdown';
 import type { Task, AgentEvent, AgentEventType } from '@/types';
 import { getAgentDisplay } from '@/lib/agent-config';
+import { PixelIcon } from '@/components/PixelIcon';
 import { TerminalView } from './TerminalView';
-import { PixelIcon } from './PixelIcon';
 import { api, connectWS } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
-/** Pixel-icon name per event type (see PixelIcon / the streamline pack). */
 const eventIconMap: Record<AgentEventType, string> = {
   thinking: 'light-bulb',
   tool_call: 'cog-browser',
-  file_read: 'open-book-bookmark',
+  file_read: 'quill-ink',
   file_write: 'quill-ink',
   file_edit: 'quill-ink',
   command: 'old-electronics',
   command_output: 'old-electronics',
-  output: 'message',
-  test_result: 'iris-scan-approved',
+  output: 'old-electronics',
+  test_result: 'rating-star-1',
   error: 'alert-triangle-1',
   complete: 'rating-star-1',
 };
@@ -219,10 +219,11 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="flex h-6 w-6 items-center justify-center rounded-md font-pixel text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-      aria-label={copied ? 'Copied' : 'Copy'}
+      className="flex h-6 w-6 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
     >
-      {copied ? <span className="text-neon-green">✓</span> : <PixelIcon name="clip-1" className="h-3 w-3" />}
+      {copied
+        ? <PixelIcon name="iris-scan-approved" className="h-3 w-3 text-neon-green" />
+        : <PixelIcon name="clip-1" className="h-3 w-3" />}
     </button>
   );
 }
@@ -272,7 +273,7 @@ function EventItem({ event }: { event: CoalescedEvent }) {
         className="flex w-full items-start gap-2 rounded-xl px-2 py-1.5 text-left hover:bg-accent/50 transition-colors"
       >
         <div className={cn('mt-0.5 shrink-0', color)}>
-          <PixelIcon name={iconName} className="h-4 w-4" />
+          <PixelIcon name={iconName} className="h-3.5 w-3.5" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
@@ -280,18 +281,18 @@ function EventItem({ event }: { event: CoalescedEvent }) {
               {label}
             </span>
             {headerSummary && (
-              <span className="truncate text-[10px] text-muted-foreground font-mono">
+              <span className="truncate font-pixel text-[10px] text-muted-foreground">
                 {headerSummary}
               </span>
             )}
             {!headerSummary && hasFile && (
-              <span className="truncate text-[10px] text-muted-foreground font-mono">
+              <span className="truncate font-pixel text-[10px] text-muted-foreground">
                 {event.metadata!.file}
               </span>
             )}
             <span
               className={cn(
-                'ml-auto shrink-0 font-pixel text-xs text-muted-foreground/60 transition-transform',
+                'ml-auto shrink-0 font-pixel text-[11px] text-muted-foreground/60 transition-transform',
                 expanded && 'rotate-90'
               )}
               aria-hidden="true"
@@ -315,7 +316,7 @@ function EventItem({ event }: { event: CoalescedEvent }) {
               {/* Thinking / text content — render as code block if it looks like code */}
               {(event.type === 'thinking' || event.type === 'complete' || event.type === 'error') && (
                 looksLikeCode(event.content) ? (
-                  <div className="rounded-lg px-2.5 py-1.5 font-mono text-xs whitespace-pre-wrap" style={{ backgroundColor: 'var(--code-bg)', color: 'var(--code-text)' }}>
+                  <div className="rounded-md px-2.5 py-1.5 font-mono text-xs whitespace-pre-wrap" style={{ backgroundColor: 'var(--code-bg)', color: 'var(--code-text)' }}>
                     {event.content}
                   </div>
                 ) : (
@@ -332,14 +333,14 @@ function EventItem({ event }: { event: CoalescedEvent }) {
 
               {/* Command — user follow-up messages have distinct styling */}
               {event.type === 'command' && event.content.startsWith('You: ') && (
-                <div className="rounded-lg border-2 border-neon-blue/30 bg-neon-blue/10 px-2.5 py-1.5 text-xs text-neon-blue">
+                <div className="rounded-xl border-2 border-neon-blue/30 bg-neon-blue/10 px-2.5 py-1.5 text-xs text-neon-blue">
                   {event.content}
                 </div>
               )}
 
               {/* Command — show parsed command cleanly */}
               {event.type === 'command' && !event.content.startsWith('You: ') && (
-                <div className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 font-mono text-xs" style={{ backgroundColor: 'var(--code-bg)', color: 'var(--code-command)' }}>
+                <div className="flex items-center gap-1 rounded-md px-2.5 py-1.5 font-mono text-xs" style={{ backgroundColor: 'var(--code-bg)', color: 'var(--code-command)' }}>
                   <span className="text-muted-foreground select-none">$</span>
                   <span className="flex-1">{event.toolArgs || event.content}</span>
                   <CopyButton text={event.toolArgs || event.content} />
@@ -374,7 +375,7 @@ function EventItem({ event }: { event: CoalescedEvent }) {
                     </div>
                   )}
                   {toolDetail && (
-                    <div className="flex items-start gap-1 rounded-lg px-2.5 py-1.5 font-mono text-xs whitespace-pre-wrap" style={{ backgroundColor: 'var(--code-bg)', color: 'var(--code-text)' }}>
+                    <div className="flex items-start gap-1 rounded-md px-2.5 py-1.5 font-mono text-xs whitespace-pre-wrap" style={{ backgroundColor: 'var(--code-bg)', color: 'var(--code-text)' }}>
                       <span className="flex-1 overflow-x-auto">{toolDetail}</span>
                       <CopyButton text={toolDetail} />
                     </div>
@@ -384,7 +385,7 @@ function EventItem({ event }: { event: CoalescedEvent }) {
 
               {/* Diff */}
               {hasDiff && (
-                <div className="mt-1 overflow-x-auto rounded-lg p-2.5 font-mono text-[11px] leading-relaxed" style={{ backgroundColor: 'var(--code-bg)' }}>
+                <div className="mt-1 overflow-x-auto rounded-md p-2.5 font-mono text-[11px] leading-relaxed" style={{ backgroundColor: 'var(--code-bg)' }}>
                   {event.metadata!.diff!.split('\n').map((line, i) => (
                     <div
                       key={i}
@@ -620,82 +621,83 @@ export function AgentPanel({ task, onClose, onExpand, onRun, onStop, onCreatePR,
             style={{ backgroundColor: 'var(--overlay-bg)' }}
           />
           <motion.div
-            initial={{ x: '100%', opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
+            initial={{ x: '100%', opacity: 0, rotate: 1 }}
+            animate={{ x: 0, opacity: 1, rotate: 0 }}
             exit={{ x: '100%', opacity: 0 }}
-            transition={{ type: 'spring', damping: 26, stiffness: 260 }}
-            className="panel-neon fixed right-0 top-0 z-[60] flex h-full w-full flex-col rounded-l-[1.75rem] shadow-2xl md:max-w-md md:w-[460px]"
+            transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+            className="panel-neon panel-neon-glow fixed right-0 top-0 z-[60] flex h-full w-full flex-col overflow-hidden rounded-l-[1.75rem] bg-card shadow-2xl md:max-w-md md:w-[420px]"
             style={{ '--panel': 'var(--color-neon-blue)' } as React.CSSProperties}
           >
           {/* Progress bar */}
           {(task.agentStatus === 'planning' || task.agentStatus === 'executing' || task.agentStatus === 'complete') && (
-            <div className="h-2 w-full bg-ink shrink-0 rounded-tl-[1.75rem] overflow-hidden">
+            <div className="h-2.5 w-full bg-ink shrink-0">
               <div
                 className={cn(
-                  'h-full transition-all duration-700 ease-in-out',
+                  'h-full rounded-r-full transition-all duration-700 ease-in-out',
                   task.agentStatus === 'complete'
                     ? 'w-full bg-neon-green'
                     : task.agentStatus === 'executing'
-                      ? 'w-3/5 bg-primary animate-px-blink'
-                      : 'w-1/4 bg-neon-purple animate-px-blink'
+                      ? 'w-3/5 bg-primary animate-pulse'
+                      : 'w-1/4 bg-neon-purple animate-pulse'
                 )}
               />
             </div>
           )}
 
           {/* Header */}
-          <div className="flex shrink-0 items-center justify-between border-b-2 border-border px-4 py-3.5">
+          <div className="flex shrink-0 items-center justify-between border-b-2 border-border px-4 py-3">
             <div className="min-w-0 flex-1">
-              <h3 className="truncate font-display text-lg leading-tight [text-transform:lowercase]">{task.title}</h3>
-              <div className="mt-1 flex items-center gap-2.5 font-pixel text-[10px]">
+              <h3 className="truncate font-display text-sm [text-transform:lowercase]">{task.title}</h3>
+              <div className="mt-1 flex items-center gap-2">
                 {task.agentType && agentDisplay && (
-                  <span className="flex items-center gap-1 text-muted-foreground [text-transform:lowercase]">
-                    <PixelIcon name="chipset" className="h-3 w-3" />
-                    {agentDisplay.label}
+                  <span className="font-pixel text-[10px] text-muted-foreground [text-transform:lowercase]">
+                    {agentDisplay.emoji} {agentDisplay.label}
                   </span>
                 )}
                 {isActive && (
-                  <span className="flex items-center gap-1 text-primary [text-transform:lowercase]">
-                    <span className="relative flex h-2 w-2">
-                      <span className="absolute inline-flex h-full w-full animate-ping bg-primary opacity-75" />
-                      <span className="relative inline-flex h-2 w-2 bg-primary" />
+                  <span className="flex items-center gap-1 font-pixel text-[10px] text-primary [text-transform:lowercase]">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
                     </span>
                     active
                   </span>
                 )}
                 {task.agentStatus === 'complete' && (
-                  <span className="flex items-center gap-1 text-neon-green [text-transform:lowercase]">
+                  <span className="flex items-center gap-1 font-pixel text-[10px] text-neon-green [text-transform:lowercase]">
                     <PixelIcon name="rating-star-1" className="h-3 w-3" />
                     complete
                   </span>
                 )}
                 {task.agentStatus === 'failed' && (
-                  <span className="flex items-center gap-1 text-destructive [text-transform:lowercase]">
+                  <span className="flex items-center gap-1 font-pixel text-[10px] text-destructive [text-transform:lowercase]">
                     <PixelIcon name="alert-triangle-1" className="h-3 w-3" />
                     failed
                   </span>
                 )}
-                <span className="text-muted-foreground [text-transform:lowercase]">
+                <span className="font-pixel text-[10px] text-muted-foreground [text-transform:lowercase]">
                   {events.length} events
                 </span>
               </div>
             </div>
-            <div className="ml-3 flex items-center gap-2">
+            <div className="ml-3 flex items-center gap-1.5">
               {/* Run / Stop / Retry buttons */}
               {!isActive && task.agentStatus !== 'complete' && onRun && (
                 <button
                   onClick={() => onRun(task.id)}
-                  className="sticker-sm sticker-press flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                  className="sticker-sm sticker-press flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground"
                   style={{ backgroundColor: 'var(--color-neon-green)', color: 'var(--color-ink)' }}
                   title={task.agentStatus === 'failed' ? 'Retry agent' : 'Run agent'}
                 >
-                  <PixelIcon name={task.agentStatus === 'failed' ? 'recycle' : 'flash'} className="h-5 w-5" />
+                  {task.agentStatus === 'failed'
+                    ? <PixelIcon name="recycle" className="h-4 w-4" />
+                    : <PixelIcon name="flash" className="h-4 w-4" />}
                 </button>
               )}
               {!isActive && task.agentStatus === 'failed' && onReconfigureRetry && (
                 <button
                   onClick={() => onReconfigureRetry(task.id)}
-                  className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl border-2 border-border bg-card px-3 font-pixel text-[11px] text-neon-yellow hover:border-neon-yellow transition-colors [text-transform:lowercase]"
+                  className="flex h-9 shrink-0 items-center gap-1.5 rounded-xl border-2 border-border bg-card px-3 font-display text-xs text-foreground/80 [text-transform:lowercase] hover:border-foreground/40 hover:text-foreground transition-colors"
                   title="Reconfigure and retry"
                 >
                   <PixelIcon name="cog-browser" className="h-3.5 w-3.5" />
@@ -705,25 +707,26 @@ export function AgentPanel({ task, onClose, onExpand, onRun, onStop, onCreatePR,
               {isActive && onStop && (
                 <button
                   onClick={() => onStop(task.id)}
-                  className="sticker-sm sticker-press flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-destructive text-cream"
+                  className="sticker-sm sticker-press flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-destructive text-primary-foreground"
                   title="Stop agent"
                 >
-                  <span className="block h-3 w-3 bg-current" aria-hidden="true" />
+                  <span className="h-2.5 w-2.5 bg-current" aria-hidden="true" />
                 </button>
               )}
               {onExpand && task && (
                 <button
                   onClick={() => onExpand(task)}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border-2 border-border bg-card text-foreground/80 hover:border-foreground/40 hover:text-foreground transition-colors"
                   title="Expand to full page view"
                 >
-                  <Maximize2 className="h-4 w-4" />
+                  <PixelIcon name="expand-1" className="h-4 w-4" />
                 </button>
               )}
               <button
                 onClick={onClose}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 border-border bg-card font-pixel text-foreground hover:border-destructive hover:bg-destructive hover:text-cream transition-colors"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border-2 border-border bg-card font-pixel text-sm text-foreground/80 hover:border-destructive hover:text-destructive transition-colors"
                 title="Close panel (Esc)"
+                aria-label="Close panel"
               >
                 ✕
               </button>
@@ -844,50 +847,12 @@ export function AgentPanel({ task, onClose, onExpand, onRun, onStop, onCreatePR,
                       merged to {mergeResult}
                     </span>
                   )}
-                  {task.worktreePath && onCleanupWorktree && (
-                    <button
-                      onClick={() => setShowWorktreeConfirm(true)}
-                      className="flex items-center gap-1.5 rounded-full border-2 border-border bg-card px-3 py-1.5 font-pixel text-[10px] text-muted-foreground hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive transition-colors [text-transform:lowercase]"
-                    >
-                      <PixelIcon name="bin" className="h-3.5 w-3.5" />
-                      clean up worktree
-                    </button>
-                  )}
                 </div>
               )}
 
               {/* PR / merge errors */}
               {prError && <ErrorBanner message={prError} onDismiss={() => setPrError(null)} />}
               {mergeError && <ErrorBanner message={mergeError} onDismiss={() => setMergeError(null)} />}
-            </div>
-          )}
-          {showWorktreeConfirm && (
-            <div className="mx-4 my-2 rounded-2xl border-2 border-neon-yellow/40 bg-neon-yellow/10 p-3.5">
-              <p className="flex items-center gap-1.5 font-display text-sm text-neon-yellow mb-1.5 [text-transform:lowercase]">
-                <PixelIcon name="alert-triangle-1" className="h-4 w-4" />
-                delete worktree?
-              </p>
-              <p className="text-xs text-foreground/70 mb-3">
-                This removes the worktree directory and its files. If you haven't created a PR yet, you won't be able to push these changes afterward.
-              </p>
-              <div className="flex items-center gap-2.5">
-                <button
-                  onClick={() => setShowWorktreeConfirm(false)}
-                  className="h-9 rounded-full border-2 border-border px-3.5 font-pixel text-[11px] text-foreground/80 hover:border-foreground/40 transition-colors [text-transform:lowercase]"
-                >
-                  cancel
-                </button>
-                <button
-                  onClick={() => {
-                    setShowWorktreeConfirm(false);
-                    if (task && onCleanupWorktree) onCleanupWorktree(task.id);
-                  }}
-                  className="sticker-sm sticker-press flex h-9 items-center gap-1.5 rounded-full bg-destructive px-3.5 font-pixel text-[11px] text-cream [text-transform:lowercase]"
-                >
-                  <PixelIcon name="bin" className="h-3.5 w-3.5" />
-                  delete worktree
-                </button>
-              </div>
             </div>
           )}
 
@@ -1150,9 +1115,7 @@ function TabButton({ active, onClick, icon, hue, children }: { active: boolean; 
       onClick={onClick}
       className={cn(
         'flex h-10 items-center gap-1.5 rounded-full px-3.5 font-display text-sm transition-all [text-transform:lowercase]',
-        active
-          ? 'sticker-sm border-ink'
-          : 'border-2 border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground'
+        active ? 'sticker-sm border-ink' : 'border-2 border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground'
       )}
       style={active ? { backgroundColor: hue, color: 'var(--color-ink)' } : undefined}
     >

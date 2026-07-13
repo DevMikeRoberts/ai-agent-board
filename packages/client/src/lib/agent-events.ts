@@ -3,44 +3,35 @@
  * Used by both AgentPanel (sidebar) and TaskFullView (full-page view).
  */
 
-import type { ElementType } from 'react';
 import type { AgentEvent, AgentEventType } from '@/types';
-import {
-  Brain,
-  Cog,
-  FileText,
-  FileCode2,
-  Terminal,
-  CheckCircle2,
-  AlertCircle,
-} from 'lucide-react';
 
-export const eventIconMap: Record<AgentEventType, ElementType> = {
-  thinking: Brain,
-  tool_call: Cog,
-  file_read: FileText,
-  file_write: FileCode2,
-  file_edit: FileCode2,
-  command: Terminal,
-  command_output: Terminal,
-  output: Terminal,
-  test_result: CheckCircle2,
-  error: AlertCircle,
-  complete: CheckCircle2,
+/** Pixel-icon name per event type (rendered via <PixelIcon name={...} />). */
+export const eventIconMap: Record<AgentEventType, string> = {
+  thinking: 'light-bulb',
+  tool_call: 'cog-browser',
+  file_read: 'open-book-bookmark',
+  file_write: 'quill-ink',
+  file_edit: 'quill-ink',
+  command: 'old-electronics',
+  command_output: 'old-electronics',
+  output: 'message',
+  test_result: 'iris-scan-approved',
+  error: 'alert-triangle-1',
+  complete: 'rating-star-1',
 };
 
 export const eventColorMap: Record<AgentEventType, string> = {
-  thinking: 'text-purple-500 dark:text-purple-400',
-  tool_call: 'text-blue-500 dark:text-blue-400',
-  file_read: 'text-sky-500 dark:text-sky-400',
-  file_write: 'text-amber-500 dark:text-amber-400',
-  file_edit: 'text-amber-500 dark:text-amber-400',
-  command: 'text-cyan-600 dark:text-cyan-400',
-  command_output: 'text-zinc-500 dark:text-zinc-400',
-  output: 'text-zinc-500 dark:text-zinc-400',
-  test_result: 'text-emerald-500 dark:text-emerald-400',
-  error: 'text-red-500 dark:text-red-400',
-  complete: 'text-emerald-500 dark:text-emerald-400',
+  thinking: 'text-neon-purple',
+  tool_call: 'text-neon-blue',
+  file_read: 'text-neon-blue',
+  file_write: 'text-neon-yellow',
+  file_edit: 'text-neon-yellow',
+  command: 'text-neon-green',
+  command_output: 'text-muted-foreground',
+  output: 'text-muted-foreground',
+  test_result: 'text-neon-green',
+  error: 'text-destructive',
+  complete: 'text-neon-green',
 };
 
 export const eventLabelMap: Record<AgentEventType, string> = {

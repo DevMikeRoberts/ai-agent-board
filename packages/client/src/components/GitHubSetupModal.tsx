@@ -1,6 +1,6 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { CheckCircle, Github, Loader2, X, ExternalLink, KeyRound, RefreshCw } from 'lucide-react';
+import { PixelIcon } from '@/components/PixelIcon';
 import { api } from '@/lib/api';
 
 interface GitHubStatus {
@@ -112,7 +112,7 @@ export function GitHubSetupModal({ onImported }: GitHubSetupModalProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm"
+            className="fixed inset-0 z-50 bg-[var(--overlay-bg)] backdrop-blur-sm"
             onClick={dismiss}
           />
 
@@ -121,180 +121,169 @@ export function GitHubSetupModal({ onImported }: GitHubSetupModalProps) {
             role="dialog"
             aria-modal="true"
             aria-label="Connect GitHub"
-            initial={{ opacity: 0, scale: 0.95, y: 24 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 24 }}
-            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-            className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-white/10 bg-card shadow-2xl"
-            style={{ backdropFilter: 'blur(20px)' }}
+            initial={{ opacity: 0, y: 24, scale: 0.92, rotate: -1 }}
+            animate={{ opacity: 1, y: 0, scale: 1, rotate: 0 }}
+            exit={{ opacity: 0, y: 24, scale: 0.92, rotate: -1 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+            className="sticker panel-neon panel-neon-glow fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-[1.75rem] bg-popover p-6"
+            style={{ '--panel': 'var(--color-neon-green)' } as React.CSSProperties}
           >
-            {/* Top accent line */}
-            <div
-              className="absolute inset-x-0 top-0 h-px"
-              style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(249,115,22,0.7) 35%, rgba(251,146,60,0.9) 50%, rgba(249,115,22,0.7) 65%, transparent 100%)' }}
-              aria-hidden="true"
-            />
+            {/* Header */}
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div
+                  className="sticker-sm flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                  style={{ backgroundColor: 'var(--color-neon-green)', color: 'var(--color-ink)' }}
+                >
+                  <PixelIcon name="global-public" className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="font-display text-xl text-foreground [text-transform:lowercase]">connect github</h2>
+                  <p className="font-pixel text-[10px] text-muted-foreground lowercase">auto-load your repos as projects</p>
+                </div>
+              </div>
+              <button
+                onClick={dismiss}
+                className="sticker-sm sticker-press flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-border bg-card font-pixel text-sm text-foreground/70 hover:text-foreground"
+                aria-label="Skip for now"
+              >
+                ✕
+              </button>
+            </div>
 
-            <div className="p-6">
-              {/* Header */}
-              <div className="mb-5 flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3">
+            {/* Content based on phase */}
+            {phase === 'done' && result ? (
+              <div className="space-y-4">
+                <div className="flex flex-col items-center gap-3 py-4 text-center">
                   <div
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
-                    style={{ background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.25)' }}
+                    className="sticker-sm flex h-14 w-14 items-center justify-center rounded-2xl"
+                    style={{ backgroundColor: 'var(--color-neon-green)', color: 'var(--color-ink)' }}
                   >
-                    <Github className="h-5 w-5 text-orange-400" />
+                    <PixelIcon name="rating-star-1" className="h-7 w-7" />
                   </div>
-                  <div>
-                    <h2 className="text-base font-bold text-foreground">Connect GitHub</h2>
-                    <p className="text-xs text-muted-foreground">Auto-load your repos as projects</p>
+                  {username && (
+                    <p className="text-sm font-medium text-foreground">
+                      Connected as <span className="text-neon-green">@{username}</span>
+                    </p>
+                  )}
+                  <div className="text-sm text-muted-foreground">
+                    {result.imported > 0 ? (
+                      <p>
+                        <span className="font-semibold text-neon-green">{result.imported}</span> repo{result.imported !== 1 ? 's' : ''} imported
+                        {result.skipped > 0 && `, ${result.skipped} already existed`}
+                        {result.errors > 0 && `, ${result.errors} failed`}.
+                      </p>
+                    ) : (
+                      <p>All your repos are already loaded{result.skipped > 0 ? ` (${result.skipped} found)` : ''}.</p>
+                    )}
                   </div>
                 </div>
+
                 <button
-                  onClick={dismiss}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-zinc-600 transition-colors hover:bg-white/8 hover:text-zinc-300"
-                  aria-label="Skip for now"
+                  onClick={handleDone}
+                  className="sticker-sm sticker-press flex h-11 w-full items-center justify-center gap-2 rounded-full bg-primary px-4 font-display text-sm text-primary-foreground [text-transform:lowercase]"
                 >
-                  <X className="h-4 w-4" />
+                  done
                 </button>
               </div>
-
-              {/* Content based on phase */}
-              {phase === 'done' && result ? (
-                <div className="space-y-4">
-                  <div className="flex flex-col items-center gap-3 py-4 text-center">
-                    <div
-                      className="flex h-14 w-14 items-center justify-center rounded-2xl"
-                      style={{ background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.25)' }}
-                    >
-                      <CheckCircle className="h-7 w-7 text-emerald-400" />
-                    </div>
-                    {username && (
-                      <p className="text-sm font-medium text-foreground">
-                        Connected as <span className="text-orange-400">@{username}</span>
-                      </p>
-                    )}
-                    <div className="text-sm text-muted-foreground">
-                      {result.imported > 0 ? (
-                        <p>
-                          <span className="font-semibold text-emerald-400">{result.imported}</span> repo{result.imported !== 1 ? 's' : ''} imported
-                          {result.skipped > 0 && `, ${result.skipped} already existed`}
-                          {result.errors > 0 && `, ${result.errors} failed`}.
-                        </p>
-                      ) : (
-                        <p>All your repos are already loaded{result.skipped > 0 ? ` (${result.skipped} found)` : ''}.</p>
-                      )}
-                    </div>
+            ) : phase === 'importing' ? (
+              <div className="flex flex-col items-center gap-3 py-8 text-center">
+                <PixelIcon name="loading-circle-1" className="h-8 w-8 animate-px-spin-fast text-neon-green" />
+                <p className="font-pixel text-[11px] text-muted-foreground lowercase">fetching your repositories…</p>
+              </div>
+            ) : isEnvConfigured ? (
+              /* Token already set via env var — just show import button */
+              <div className="space-y-4">
+                <div className="sticker-sm rounded-xl border-2 border-border bg-card p-3 text-sm text-neon-green">
+                  <p className="font-medium">GitHub token detected from environment</p>
+                  {status?.username && (
+                    <p className="mt-0.5 font-pixel text-[10px] text-muted-foreground lowercase">signed in as @{status.username}</p>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Import all your personal (non-fork) GitHub repositories as projects.
+                </p>
+                {error && (
+                  <div className="sticker-sm rounded-xl border-2 border-destructive bg-card px-3 py-2 text-sm text-destructive">
+                    {error}
                   </div>
-
+                )}
+                <div className="flex gap-2">
                   <button
-                    onClick={handleDone}
-                    className="btn-orange-gradient w-full rounded-xl py-2.5 text-sm font-semibold"
+                    onClick={dismiss}
+                    className="h-11 flex-1 rounded-xl border-2 border-border bg-card font-pixel text-[11px] text-foreground/80 lowercase transition-colors hover:border-foreground/40 hover:text-foreground"
                   >
-                    Done
+                    skip for now
+                  </button>
+                  <button
+                    onClick={handleImportOnly}
+                    className="sticker-sm sticker-press flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-primary px-4 font-display text-sm text-primary-foreground [text-transform:lowercase]"
+                  >
+                    <PixelIcon name="recycle" className="h-4 w-4" />
+                    import repos
                   </button>
                 </div>
-              ) : phase === 'importing' ? (
-                <div className="flex flex-col items-center gap-3 py-8 text-center">
-                  <Loader2 className="h-8 w-8 animate-spin text-orange-400" />
-                  <p className="text-sm text-muted-foreground">Fetching your repositories…</p>
-                </div>
-              ) : isEnvConfigured ? (
-                /* Token already set via env var — just show import button */
-                <div className="space-y-4">
-                  <div
-                    className="rounded-xl border border-emerald-500/20 bg-emerald-500/8 p-3 text-sm text-emerald-400"
+              </div>
+            ) : (
+              /* No token — show token input form */
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Provide a GitHub Personal Access Token to automatically load all your
+                  repositories as projects.
+                </p>
+
+                <div>
+                  <label htmlFor="github-token-input" className="mb-1.5 block font-pixel text-[10px] text-muted-foreground lowercase">
+                    personal access token
+                  </label>
+                  <div className="relative">
+                    <PixelIcon name="key" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      id="github-token-input"
+                      type="password"
+                      value={token}
+                      onChange={(e) => { setToken(e.target.value); setError(''); }}
+                      placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                      autoFocus
+                      autoComplete="off"
+                      className="h-11 w-full rounded-xl border-2 border-border bg-card pl-9 pr-3 font-pixel text-[11px] placeholder:text-muted-foreground focus:border-neon-pink focus:outline-none transition-colors"
+                    />
+                  </div>
+                  <a
+                    href="https://github.com/settings/tokens/new?scopes=repo&description=AgentBoard"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-1.5 inline-flex items-center gap-1 font-pixel text-[10px] text-neon-green lowercase hover:text-neon-pink"
                   >
-                    <p className="font-medium">GitHub token detected from environment</p>
-                    {status?.username && (
-                      <p className="mt-0.5 text-xs text-emerald-400/70">Signed in as @{status.username}</p>
-                    )}
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Import all your personal (non-fork) GitHub repositories as projects.
-                  </p>
-                  {error && (
-                    <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-400">
-                      {error}
-                    </div>
-                  )}
-                  <div className="flex gap-2">
-                    <button
-                      onClick={dismiss}
-                      className="flex-1 rounded-xl border border-white/8 bg-white/5 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/8 hover:text-foreground"
-                    >
-                      Skip for now
-                    </button>
-                    <button
-                      onClick={handleImportOnly}
-                      className="btn-orange-gradient flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold"
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" />
-                      Import Repos
-                    </button>
-                  </div>
+                    <PixelIcon name="hyperlink" className="h-3 w-3" />
+                    create a token on github (needs <code className="font-pixel">repo</code> scope)
+                  </a>
                 </div>
-              ) : (
-                /* No token — show token input form */
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    Provide a GitHub Personal Access Token to automatically load all your
-                    repositories as projects.
-                  </p>
 
-                  <div>
-                    <label htmlFor="github-token-input" className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                      Personal Access Token
-                    </label>
-                    <div className="relative">
-                      <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-600" />
-                      <input
-                        id="github-token-input"
-                        type="password"
-                        value={token}
-                        onChange={(e) => { setToken(e.target.value); setError(''); }}
-                        placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                        autoFocus
-                        autoComplete="off"
-                        className="w-full rounded-xl border border-white/10 bg-background/80 py-2.5 pl-9 pr-3 font-mono text-sm placeholder:text-muted-foreground/40 focus:border-orange-500/50 focus:outline-none focus:ring-1 focus:ring-orange-500/30"
-                      />
-                    </div>
-                    <a
-                      href="https://github.com/settings/tokens/new?scopes=repo&description=AgentBoard"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-1.5 inline-flex items-center gap-1 text-xs text-orange-500/70 hover:text-orange-400"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      Create a token on GitHub (needs <code className="font-mono">repo</code> scope)
-                    </a>
+                {error && (
+                  <div className="sticker-sm rounded-xl border-2 border-destructive bg-card px-3 py-2 text-sm text-destructive">
+                    {error}
                   </div>
+                )}
 
-                  {error && (
-                    <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-400">
-                      {error}
-                    </div>
-                  )}
-
-                  <div className="flex gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={dismiss}
-                      className="flex-1 rounded-xl border border-white/8 bg-white/5 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/8 hover:text-foreground"
-                    >
-                      Skip for now
-                    </button>
-                    <button
-                      type="submit"
-                      className="btn-orange-gradient flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold"
-                    >
-                      <Github className="h-3.5 w-3.5" />
-                      Connect &amp; Import
-                    </button>
-                  </div>
-                </form>
-              )}
-            </div>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={dismiss}
+                    className="h-11 flex-1 rounded-xl border-2 border-border bg-card font-pixel text-[11px] text-foreground/80 lowercase transition-colors hover:border-foreground/40 hover:text-foreground"
+                  >
+                    skip for now
+                  </button>
+                  <button
+                    type="submit"
+                    className="sticker-sm sticker-press flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-primary px-4 font-display text-sm text-primary-foreground [text-transform:lowercase]"
+                  >
+                    <PixelIcon name="global-public" className="h-4 w-4" />
+                    connect &amp; import
+                  </button>
+                </div>
+              </form>
+            )}
           </motion.div>
         </>
       )}
