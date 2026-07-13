@@ -1,22 +1,22 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { PixelIcon } from './PixelIcon';
 import type { Task, TaskAttachment, ColumnId, AgentType, AgentInfo, Priority } from '@/types';
 import { AGENT_OPTIONS } from '@/lib/agent-config';
 import { PRIORITY_OPTIONS } from '@/lib/priority-config';
 import { cn, getRepoPathHelpText, getRepoPathPlaceholder, isAbsoluteRepoPath, slugify } from '@/lib/utils';
 import { getRecentRepoPaths, addRepoPath } from '@/lib/repo-history';
 import { api } from '@/lib/api';
-import { PixelIcon } from '@/components/PixelIcon';
 import ImageUpload from './ImageUpload';
 
 interface TaskDialogProps {
   open: boolean;
   onClose: () => void;
-  onSubmit: (task: { title: string; description: string; priority: Priority; columnId: ColumnId; agentType: AgentType; autoRun?: boolean; repoPath?: string; branchName?: string; baseBranch?: string }) => Promise<unknown>;
+  onSubmit: (task: { title: string; description: string; priority: Priority; columnId: ColumnId; agentType: AgentType; model?: string; autoRun?: boolean; repoPath?: string; branchName?: string; baseBranch?: string }) => Promise<unknown>;
   /** When set, dialog is in edit mode with pre-populated fields */
   editTask?: Task | null;
   /** Called on save in edit mode */
-  onEditSubmit?: (id: string, updates: { title: string; description: string; priority: Priority; agentType: AgentType; repoPath?: string; branchName?: string; baseBranch?: string }) => Promise<unknown>;
+  onEditSubmit?: (id: string, updates: { title: string; description: string; priority: Priority; agentType: AgentType; model?: string; repoPath?: string; branchName?: string; baseBranch?: string }) => Promise<unknown>;
   /** When true, highlight missing required fields (e.g. opened from Play button) */
   highlightRequired?: boolean;
   /** Project-level repo path that cannot be changed per task. */
@@ -31,13 +31,6 @@ interface TaskDialogProps {
 
 const agents = AGENT_OPTIONS;
 const priorities = PRIORITY_OPTIONS;
-
-/** Shared Midnight Arcade input shell. */
-const inputShell =
-  'w-full h-11 rounded-xl border-2 border-border bg-card px-3 font-pixel text-[11px] text-foreground placeholder:text-muted-foreground focus:border-neon-pink focus:outline-none transition-colors';
-
-/** Label above inputs. */
-const labelShell = 'mb-1.5 flex items-center gap-1.5 font-pixel text-[10px] lowercase text-muted-foreground';
 
 export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, highlightRequired, lockedRepoPath, projectDefaults }: TaskDialogProps) {
   const [title, setTitle] = useState('');
@@ -82,7 +75,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
         setPathError('Local path is required to run the agent');
       }
     } else if (open && !editTask) {
-      // Opening in create mode — prefill from project defaults (each overridable)
+      // Opening in create mode â prefill from project defaults (each overridable)
       setPriority(defaultPriority);
       setAgentType(defaultAgent);
       setModel(undefined);
@@ -125,7 +118,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
 
         const selectedInfo = result.find((agent) => agent.name === agentType);
         const firstAvailable = result.find((agent) => agent.available);
-        // Don't auto-swap when the project configures a default agent — respect the choice.
+        // Don't auto-swap when the project configures a default agent â respect the choice.
         if (!editTask && !projectDefaults?.defaultAgentType && selectedInfo && !selectedInfo.available && firstAvailable) {
           setAgentType(firstAvailable.name);
         }
@@ -143,7 +136,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
     e.preventDefault();
     if (!title.trim() || submitting) return;
 
-    // Client-side path validation — required
+    // Client-side path validation â required
     const trimmedPath = (lockedRepoPath || repoPath).trim();
     if (!trimmedPath) {
       setPathError('Local path is required');
@@ -175,7 +168,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
           model: model || undefined,
           ...repoFields,
         });
-        if (result === undefined) return; // Server error — keep dialog open
+        if (result === undefined) return; // Server error â keep dialog open
       } else {
         if (!hasLockedRepoPath) addRepoPath(trimmedPath);
         const result = await onSubmit({
@@ -188,7 +181,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
           autoRun: autoRun || undefined,
           ...repoFields,
         }) as Task | undefined;
-        if (result === undefined) return; // Server error — keep dialog open
+        if (result === undefined) return; // Server error â keep dialog open
 
         // Upload pending images after task creation
         if (pendingImages.length > 0 && result?.id) {
@@ -200,7 +193,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
         }
       }
 
-      // Success — reset and close
+      // Success â reset and close
       setTitle('');
       setDescription('');
       setPriority(defaultPriority);
@@ -255,29 +248,31 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
             onClick={onClose}
           />
 
-          {/* Dialog — giant blue neon sticker panel */}
+          {/* Dialog */}
           <motion.div
             role="dialog"
             aria-modal="true"
-            initial={{ opacity: 0, y: 24, scale: 0.92, rotate: -1 }}
-            animate={{ opacity: 1, y: 0, scale: 1, rotate: 0 }}
-            exit={{ opacity: 0, y: 24, scale: 0.92, rotate: -1 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="sticker panel-neon fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col rounded-[1.75rem] bg-popover p-6"
+            initial={{ opacity: 0, scale: 0.92, y: 24, rotate: -1 }}
+            animate={{ opacity: 1, scale: 1, y: 0, rotate: 0 }}
+            exit={{ opacity: 0, scale: 0.92, y: 24 }}
+            transition={{ type: 'spring', damping: 22, stiffness: 320 }}
+            className="sticker panel-neon fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-[1.75rem] bg-popover p-6 max-h-[90vh] flex flex-col"
             style={{ '--panel': 'var(--color-neon-blue)' } as React.CSSProperties}
           >
             {/* Header */}
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="flex items-center gap-2.5 font-display text-xl leading-none text-foreground [text-transform:lowercase]">
-                <PixelIcon name="flash" className="h-5 w-5 text-neon-blue" />
-                {isEditMode ? 'Edit Task' : 'Create Task'}
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="flex items-center gap-2.5 font-display text-xl leading-none [text-transform:lowercase]">
+                <span className="sticker-sm flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+                  <PixelIcon name="flash" className="h-5 w-5" />
+                </span>
+                {isEditMode ? 'edit task' : 'create task'}
               </h2>
               <button
                 onClick={onClose}
+                className="flex h-9 w-9 items-center justify-center rounded-xl border-2 border-border font-pixel text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-colors"
                 aria-label="Close"
-                className="flex h-9 w-9 items-center justify-center rounded-xl border-2 border-border bg-card font-pixel text-sm text-foreground/80 transition-colors hover:border-foreground/40 hover:text-foreground"
               >
-                ✕
+                â
               </button>
             </div>
 
@@ -285,38 +280,37 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
               <div className="space-y-4 overflow-y-auto flex-1 min-h-0 px-1">
               {/* Title */}
               <div>
-                <label className={labelShell}>
-                  title
+                <label className="mb-1.5 block font-pixel text-[10px] text-muted-foreground [text-transform:lowercase]">
+                  Title
                 </label>
                 <input
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="what needs to be done?"
+                  placeholder="What needs to be done?"
                   autoFocus
-                  className={inputShell}
+                  className="w-full h-11 rounded-xl border-2 border-border bg-card px-3 text-sm placeholder:text-muted-foreground/50 focus:border-neon-pink focus:outline-none transition-colors"
                 />
               </div>
 
               {/* Description */}
               <div>
-                <label className={labelShell}>
-                  description
+                <label className="mb-1.5 block font-pixel text-[10px] text-muted-foreground [text-transform:lowercase]">
+                  Description
                 </label>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="describe the task for the selected agent…"
+                  placeholder="Describe the task for the selected agent..."
                   rows={4}
-                  className="w-full resize-none rounded-xl border-2 border-border bg-card px-3 py-2.5 font-pixel text-[11px] leading-relaxed text-foreground placeholder:text-muted-foreground focus:border-neon-pink focus:outline-none transition-colors"
+                  className="w-full resize-none h-11 rounded-xl border-2 border-border bg-card px-3 text-sm placeholder:text-muted-foreground/50 focus:border-neon-pink focus:outline-none transition-colors"
                 />
               </div>
 
               {/* Image attachments */}
               <div>
-                <label className={labelShell}>
-                  <PixelIcon name="camera-1" className="h-3.5 w-3.5" />
-                  images
+                <label className="mb-1.5 block font-pixel text-[10px] text-muted-foreground [text-transform:lowercase]">
+                  Images
                 </label>
                 <ImageUpload
                   taskId={isEditMode ? editTask!.id : undefined}
@@ -328,19 +322,19 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
 
               {/* Priority */}
               <div className="relative" ref={priorityRef}>
-                <label className={labelShell}>
-                  priority
+                <label className="mb-1.5 block font-pixel text-[10px] text-muted-foreground [text-transform:lowercase]">
+                  Priority
                 </label>
                 <button
                   type="button"
                   onClick={() => setShowPriority(!showPriority)}
-                  className="flex h-11 w-full items-center justify-between rounded-xl border-2 border-border bg-card px-3 font-pixel text-[11px] text-foreground transition-colors hover:border-foreground/40"
+                  className="flex h-11 w-full items-center justify-between rounded-xl border-2 border-border bg-card px-3 text-sm hover:border-foreground/40 transition-colors"
                 >
                   <span className="flex items-center gap-2">
-                    <span className="text-sm">{selectedPriority.emoji}</span>
+                    <span>{selectedPriority.emoji}</span>
                     {selectedPriority.label}
                   </span>
-                  <span className={cn('font-pixel text-xs text-muted-foreground transition-transform', showPriority && 'rotate-180')}>▼</span>
+                  <span className={cn("shrink-0 font-pixel text-sm text-muted-foreground transition-transform", showPriority && "rotate-180")} aria-hidden="true">▾</span>
                 </button>
 
                 <AnimatePresence>
@@ -349,7 +343,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
                       initial={{ opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -4 }}
-                      className="sticker-sm absolute left-0 right-0 top-full z-10 mt-1.5 overflow-hidden rounded-xl bg-popover"
+                      className="absolute left-0 right-0 top-full z-10 mt-1 overflow-hidden rounded-xl border-2 border-border bg-popover shadow-xl"
                     >
                       {priorities.map((p) => (
                         <button
@@ -360,11 +354,11 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
                             setShowPriority(false);
                           }}
                           className={cn(
-                            'flex h-11 w-full items-center gap-2 px-3 font-pixel text-[11px] text-foreground hover:bg-accent transition-colors',
+                            'flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors',
                             priority === p.value && 'bg-accent'
                           )}
                         >
-                          <span className="text-sm">{p.emoji}</span>
+                          <span>{p.emoji}</span>
                           {p.label}
                         </button>
                       ))}
@@ -375,23 +369,22 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
 
               {/* Agent */}
               <div className="relative" ref={agentRef}>
-                <label className={labelShell}>
-                  <PixelIcon name="chipset" className="h-3.5 w-3.5" />
-                  agent
+                <label className="mb-1.5 block font-pixel text-[10px] text-muted-foreground [text-transform:lowercase]">
+                  Agent
                 </label>
                 <button
                   type="button"
                   onClick={() => setShowAgent(!showAgent)}
-                  className="flex h-11 w-full items-center justify-between rounded-xl border-2 border-border bg-card px-3 font-pixel text-[11px] text-foreground transition-colors hover:border-foreground/40"
+                  className="flex h-11 w-full items-center justify-between rounded-xl border-2 border-border bg-card px-3 text-sm hover:border-foreground/40 transition-colors"
                 >
                   <span className="flex items-center gap-2">
-                    <span className="text-sm">{selectedAgent.emoji}</span>
+                    <span>{selectedAgent.emoji}</span>
                     {selectedAgent.label}
                     {selectedAgentInfo && !selectedAgentInfo.available && (
-                      <span className="font-pixel text-[10px] text-destructive">unavailable</span>
+                      <span className="text-xs text-destructive">Unavailable</span>
                     )}
                   </span>
-                  <span className={cn('font-pixel text-xs text-muted-foreground transition-transform', showAgent && 'rotate-180')}>▼</span>
+                  <span className={cn("shrink-0 font-pixel text-sm text-muted-foreground transition-transform", showAgent && "rotate-180")} aria-hidden="true">▾</span>
                 </button>
 
                 <AnimatePresence>
@@ -400,7 +393,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
                       initial={{ opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -4 }}
-                      className="sticker-sm absolute left-0 right-0 top-full z-10 mt-1.5 overflow-hidden rounded-xl bg-popover"
+                      className="absolute left-0 right-0 top-full z-10 mt-1 overflow-hidden rounded-xl border-2 border-border bg-popover shadow-xl"
                     >
                       {agents.map((a) => {
                         const info = agentAvailability.get(a.value);
@@ -415,19 +408,19 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
                               setShowAgent(false);
                             }}
                             className={cn(
-                              'flex h-11 w-full items-center gap-2 px-3 font-pixel text-[11px] text-foreground hover:bg-accent transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent',
+                              'flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent',
                               agentType === a.value && 'bg-accent'
                             )}
                             title={unavailable ? info?.reason || `${a.label} is unavailable` : undefined}
                           >
-                            <span className="text-sm">{a.emoji}</span>
+                            <span>{a.emoji}</span>
                             <span className="flex-1 text-left">{a.label}</span>
                             {info && (
                               <span className={cn(
-                                'font-pixel text-[10px]',
+                                'text-[10px]',
                                 info.available ? 'text-neon-green' : 'text-destructive'
                               )}>
-                                {info.available ? 'available' : info.reason || 'unavailable'}
+                                {info.available ? 'Available' : info.reason || 'Unavailable'}
                               </span>
                             )}
                           </button>
@@ -445,10 +438,10 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
                     type="checkbox"
                     checked={autoRun}
                     onChange={(e) => setAutoRun(e.target.checked)}
-                    className="h-4 w-4 cursor-pointer rounded border-border accent-primary"
+                    className="h-4 w-4 cursor-pointer rounded border-border accent-[var(--color-neon-pink)]"
                   />
-                  <span className="font-pixel text-[11px] text-muted-foreground">
-                    auto-run — start agent immediately after creating
+                  <span className="text-sm text-muted-foreground">
+                    Auto-run â start agent immediately after creating
                   </span>
                 </label>
               )}
@@ -456,11 +449,11 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
               {/* Model selection for OpenCode (local Ollama models) */}
               {agentType === 'opencode' && (
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Model</label>
+                  <label className="mb-1.5 block font-pixel text-[10px] text-muted-foreground [text-transform:lowercase]">Model</label>
                   <select
                     value={model ?? ''}
                     onChange={(e) => setModel(e.target.value || undefined)}
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full h-11 rounded-xl border-2 border-border bg-card px-3 text-sm placeholder:text-muted-foreground/50 focus:border-neon-pink focus:outline-none transition-colors"
                   >
                     <option value="">Use provider default</option>
                     <option value="qwen3:4B">ollama qwen3:4B</option>
@@ -471,11 +464,10 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
               )}
 
               {/* Repository configuration */}
-              <div className="space-y-3.5 rounded-2xl border-2 border-border bg-muted/40 p-4">
+              <div className="space-y-3 rounded-2xl border-2 border-border bg-card/50 p-4">
                 <div>
-                  <label htmlFor="task-repo-path" className={labelShell}>
-                    <PixelIcon name="global-public" className="h-3.5 w-3.5" />
-                    local path <span className="text-destructive">*</span>
+                  <label htmlFor="task-repo-path" className="mb-1 block font-pixel text-[10px] text-muted-foreground [text-transform:lowercase]">
+                    Local Path <span className="text-destructive">*</span>
                   </label>
                     <input
                       id="task-repo-path"
@@ -490,20 +482,17 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
                       list={hasLockedRepoPath ? undefined : 'task-recent-repo-paths'}
                       readOnly={hasLockedRepoPath}
                       aria-readonly={hasLockedRepoPath}
-                      className={cn(
-                        'w-full h-11 rounded-xl border-2 bg-card px-3 font-pixel text-[11px] placeholder:text-muted-foreground focus:outline-none transition-colors',
+                      className={`h-11 w-full rounded-xl border-2 bg-card px-3 text-sm font-mono placeholder:text-muted-foreground/50 focus:outline-none transition-colors ${
                         hasLockedRepoPath
                           ? 'border-border text-muted-foreground'
-                          : pathError
-                            ? 'border-destructive text-foreground focus:border-destructive'
-                            : 'border-border text-foreground focus:border-neon-pink'
-                      )}
+                          : pathError ? 'border-destructive focus:border-destructive' : 'border-border focus:border-neon-pink'
+                      }`}
                     />
                     {pathError && (
-                      <p className="mt-1.5 font-pixel text-[10px] text-destructive">{pathError}</p>
+                      <p className="mt-1 text-xs text-destructive">{pathError}</p>
                     )}
                     {!pathError && (
-                      <p className="mt-1.5 font-pixel text-[10px] text-muted-foreground/70">
+                      <p className="mt-1 text-xs text-muted-foreground/60">
                         {hasLockedRepoPath ? 'Locked to this Project local path.' : repoPathHelpText}
                       </p>
                     )}
@@ -515,44 +504,24 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className={labelShell}>
-                        <PixelIcon name="flag" className="h-3.5 w-3.5" />
-                        base branch
-                      </label>
+                      <label className="mb-1 block font-pixel text-[10px] text-muted-foreground [text-transform:lowercase]">Base Branch</label>
                       <input
                         type="text"
                         value={baseBranch}
                         onChange={(e) => setBaseBranch(e.target.value)}
                         placeholder="main"
-                        className={inputShell}
+                        className="w-full h-11 rounded-xl border-2 border-border bg-card px-3 text-sm placeholder:text-muted-foreground/50 focus:border-neon-pink focus:outline-none transition-colors"
                       />
                     </div>
-                    <div className="flex items-end pb-1">
-                      <label className="flex cursor-pointer items-center gap-2 font-pixel text-[11px] text-muted-foreground">
-                        <input
-                          type="checkbox"
-                          checked={useWorktree}
-                          onChange={(e) => setUseWorktree(e.target.checked)}
-                          className="rounded border-border accent-primary"
-                        />
-                        use git worktree
-                      </label>
-                    </div>
-                  </div>
-                  {useWorktree && (
                     <div>
-                      <label className={labelShell}>
-                        <PixelIcon name="hierarchy-2" className="h-3.5 w-3.5" />
-                        branch name
-                      </label>
+                      <label className="mb-1 block font-pixel text-[10px] text-muted-foreground [text-transform:lowercase]">Branch Name</label>
                       <input
                         type="text"
                         value={branchName}
                         onChange={(e) => setBranchName(e.target.value)}
                         placeholder={title.trim() ? `task/${slugify(title.trim())}` : 'task/my-feature'}
-                        className={inputShell}
+                        className="h-11 w-full rounded-xl border-2 border-border bg-card px-3 text-sm font-mono placeholder:text-muted-foreground/50 focus:border-neon-pink focus:outline-none transition-colors"
                       />
-                      <p className="mt-1 font-pixel text-[10px] text-muted-foreground/70">leave blank to auto-generate from title</p>
                     </div>
                   </div>
                   <p className="text-[10px] text-muted-foreground/60">
@@ -563,21 +532,20 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
               </div>
 
               {/* Actions */}
-              <div className="mt-2 flex shrink-0 justify-end gap-2.5 border-t-2 border-border pt-4">
+              <div className="flex justify-end gap-2 pt-4 mt-2 border-t border-border shrink-0">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="flex h-11 items-center justify-center rounded-xl border-2 border-border bg-card px-4 font-pixel text-[11px] text-foreground/80 transition-colors hover:border-foreground/40 hover:text-foreground"
+                  className="h-11 rounded-full border-2 border-border px-4 font-display text-sm text-foreground/80 hover:border-foreground/40 hover:text-foreground transition-colors [text-transform:lowercase]"
                 >
-                  cancel
+                  Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={!title.trim() || submitting}
-                  className="sticker-sm sticker-press flex h-11 items-center gap-2 rounded-full bg-primary px-5 font-display text-sm text-primary-foreground [text-transform:lowercase] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="sticker-sm sticker-press h-11 rounded-full bg-primary px-5 font-display text-sm text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed [text-transform:lowercase]"
                 >
-                  <PixelIcon name="flash" className="h-4 w-4" />
-                  {submitting ? 'Saving…' : isEditMode ? 'Save Changes' : 'Create Task'}
+                  {submitting ? 'Savingâ¦' : isEditMode ? 'Save Changes' : 'Create Task'}
                 </button>
               </div>
             </form>

@@ -149,14 +149,16 @@ export function Board({
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
+      {/* Board area */}
       <div className="flex h-full gap-5 overflow-x-auto p-5 pb-5 max-md:flex-col max-md:overflow-x-hidden max-md:overflow-y-auto md:gap-6 md:p-7">
         {columns.map((column, index) => (
           <motion.div
             key={column.id}
-            className="flex h-full max-md:h-auto"
             initial={{ opacity: 0, y: 42, rotate: index % 2 === 0 ? -1.6 : 1.6, scale: 0.94 }}
             animate={{ opacity: 1, y: 0, rotate: 0, scale: 1 }}
             transition={{ delay: index * 0.09, type: 'spring', stiffness: 260, damping: 19 }}
+            className="flex h-full flex-col max-md:h-auto"
+            style={{ minWidth: 0 }}
           >
             <Column
               column={column}
@@ -192,7 +194,6 @@ export function Board({
         {activeTask && (
           <motion.div
             className="w-full max-w-88 opacity-95"
-            initial={{ rotate: 0, scale: 1 }}
             animate={{ rotate: [3, 1.4, 3], scale: 1.05 }}
             transition={{ duration: 0.7, repeat: Infinity, ease: 'easeInOut' }}
           >

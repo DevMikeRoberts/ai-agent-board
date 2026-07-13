@@ -31,28 +31,22 @@ interface FilterChipsProps {
   onClear: () => void;
 }
 
-const chipBase =
-  'rounded-full border-2 px-3 py-1.5 font-pixel text-[10px] leading-none transition-all';
-const chipIdle =
-  'border-border bg-card text-muted-foreground hover:border-foreground/40 hover:text-foreground';
+const chipBase = 'rounded-full border-2 px-3 py-1.5 font-pixel text-[10px] leading-none transition-all';
+const chipIdle = 'border-border bg-card text-muted-foreground hover:border-foreground/40 hover:text-foreground';
 
 export function FilterChips({ activeAgentTypes, activeStatuses, onToggleAgentType, onToggleStatus, onClear }: FilterChipsProps) {
   const hasActiveFilters = activeAgentTypes.length > 0 || activeStatuses.length > 0;
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      {/* Agent type chips */}
+      {/* Agent chips */}
       {AGENT_CHIPS.map((chip) => {
         const active = activeAgentTypes.includes(chip.value);
         return (
           <button
             key={chip.value}
             onClick={() => onToggleAgentType(chip.value)}
-            className={cn(
-              chipBase,
-              'flex items-center gap-1.5',
-              active ? 'sticker-sm border-ink' : chipIdle
-            )}
+            className={cn(chipBase, 'flex items-center gap-1.5', active ? 'sticker-sm border-ink' : chipIdle)}
             style={active ? { backgroundColor: 'var(--color-neon-pink)', color: 'var(--color-ink)' } : undefined}
           >
             <PixelIcon name="chipset" className="h-3 w-3" />

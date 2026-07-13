@@ -1,7 +1,15 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { PixelIcon } from '@/components/PixelIcon';
-import type { Task, AgentType, Priority, ColumnId, Project } from '@/types';
+import type {
+  Task,
+  AgentType,
+  Priority,
+  ColumnId,
+  Project,
+  CreateProjectRequest,
+  UpdateProjectRequest,
+} from '@/types';
 import { useTheme } from '@/hooks/useTheme';
 import { useTasks } from '@/hooks/useTasks';
 import { useProjects } from '@/hooks/useProjects';
@@ -36,6 +44,7 @@ type TaskSubmitData = {
   priority: Priority;
   columnId: ColumnId;
   agentType: AgentType;
+  model?: string;
   autoRun?: boolean;
   repoPath?: string;
   branchName?: string;
@@ -505,15 +514,17 @@ function BoardPage({
       <AnimatePresence>
         {error && (
           <motion.div
-            initial={{ opacity: 0, y: 24, rotate: -2, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, rotate: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 24, scale: 0.9 }}
-            transition={{ type: 'spring', stiffness: 320, damping: 20 }}
-            className="sticker fixed bottom-5 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-2.5 rounded-2xl bg-destructive px-5 py-3 text-sm font-semibold text-cream"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="sticker fixed bottom-4 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-full bg-card px-4 py-2 font-pixel text-[11px] text-destructive"
           >
-            <PixelIcon name="alert-triangle-1" className="h-4 w-4 shrink-0" />
+            <PixelIcon name="alert-triangle-1" className="h-4 w-4 shrink-0 text-destructive" />
             <span>{error}</span>
-            <button onClick={clearError} className="ml-1 shrink-0 font-pixel hover:opacity-70" aria-label="Dismiss error">
+            <button
+              onClick={clearError}
+              className="ml-1 shrink-0 font-pixel text-destructive hover:text-foreground"
+            >
               ✕
             </button>
           </motion.div>
@@ -681,13 +692,50 @@ export function App() {
         toggleTheme={toggleTheme}
       />
 
-  if (loading || !selectedProject) {
-    return (
-      <div className="flex h-screen flex-col items-center justify-center gap-5 bg-background">
-        <div className="sticker flex h-16 w-16 items-center justify-center rounded-3xl bg-primary">
-          <PixelIcon name="flash" className="animate-px-spin-fast h-8 w-8 text-primary-foreground" />
-        </div>
-        <p className="font-pixel text-xs text-muted-foreground">loading project…</p>
+      {/* ── Right: board or empty state ── */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {loading && !selectedProject ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+            <PixelIcon
+              name="loading-circle-1"
+              className="h-8 w-8 animate-px-spin-fast text-neon-pink"
+            />
+            <span className="font-pixel text-[11px] lowercase text-muted-foreground">
+              loading projects…
+            </span>
+          </div>
+        ) : selectedProject ? (
+          /* key ensures fresh local state when switching projects */
+          <BoardPage
+            key={selectedProject.id}
+            project={selectedProject}
+            theme={theme}
+            toggleTheme={toggleTheme}
+          />
+        ) : (
+          /* No projects at all */
+          <div className="flex h-full flex-col items-center justify-center gap-5 text-center p-8">
+            <div
+              className="sticker flex h-20 w-20 items-center justify-center rounded-[1.75rem]"
+              style={{ backgroundColor: 'var(--color-neon-purple)', color: 'var(--color-ink)' }}
+            >
+              <PixelIcon name="home-2" className="h-10 w-10 animate-px-bob" />
+            </div>
+            <div>
+              <h2 className="font-display text-2xl lowercase text-foreground">no projects yet</h2>
+              <p className="mt-1.5 font-pixel text-[11px] lowercase text-muted-foreground">
+                create a project to start an ai-powered board
+              </p>
+            </div>
+            <button
+              onClick={openCreateDialog}
+              className="sticker-sm sticker-press flex h-11 items-center gap-2 rounded-full bg-primary px-6 font-display text-sm text-primary-foreground [text-transform:lowercase]"
+            >
+              <PixelIcon name="reward-gift" className="h-4 w-4" />
+              new project
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Project management dialogs ── */}
@@ -734,15 +782,16 @@ export function App() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="fixed bottom-4 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-400 shadow-lg backdrop-blur-sm"
+            className="sticker fixed bottom-4 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-full bg-card px-4 py-2 font-pixel text-[11px] text-destructive"
           >
+            <PixelIcon name="alert-triangle-1" className="h-4 w-4 shrink-0 text-destructive" />
             <span>{error}</span>
             <button
               onClick={clearError}
-              className="ml-1 shrink-0 text-red-400 hover:text-red-300"
+              className="ml-1 shrink-0 font-pixel text-destructive hover:text-foreground"
               aria-label="Dismiss error"
             >
-              <X className="h-4 w-4" />
+              ✕
             </button>
           </motion.div>
         )}

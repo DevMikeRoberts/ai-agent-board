@@ -16,7 +16,7 @@ const PANEL_HUES: Record<string, string> = {
   slate: '#8b87a0',
 };
 
-/** Pill text color — ink on bright hues, cream on the deep blue/purple. */
+/** Pill text color — ink on bright hues, cream on the deep blue. */
 const PILL_TEXT: Record<string, string> = {
   yellow: 'var(--color-ink)',
   blue: 'var(--color-cream)',
@@ -47,14 +47,6 @@ interface ColumnProps {
   extraContent?: React.ReactNode;
 }
 
-/* Column accent color data */
-const COLUMN_META: Record<string, { glow: string; dotColor: string; badgeColor: string; label: string }> = {
-  'bg-zinc-500':    { glow: 'rgba(113,113,122,0.45)',  dotColor: '#71717a', badgeColor: 'rgba(113,113,122,0.15)', label: '#a1a1aa' },
-  'bg-blue-500':    { glow: 'rgba(59,130,246,0.50)',   dotColor: '#60a5fa', badgeColor: 'rgba(59,130,246,0.14)',  label: '#93c5fd' },
-  'bg-amber-500':   { glow: 'rgba(245,158,11,0.50)',   dotColor: '#fbbf24', badgeColor: 'rgba(245,158,11,0.14)', label: '#fcd34d' },
-  'bg-emerald-500': { glow: 'rgba(16,185,129,0.50)',   dotColor: '#34d399', badgeColor: 'rgba(16,185,129,0.14)', label: '#6ee7b7' },
-};
-
 export function Column({ column, tasks, onTaskClick, onEditTask, onDeleteTask, onArchiveTask, onUnarchiveTask, onRetryTask, onExpandTask, onAddTask, extraContent }: ColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -83,7 +75,6 @@ export function Column({ column, tasks, onTaskClick, onEditTask, onDeleteTask, o
       data-column={column.id}
       style={{ '--panel': hue } as React.CSSProperties}
     >
-      {/* The whole column is one giant neon panel */}
       <div
         className={cn(
           'panel-neon relative flex h-full flex-col overflow-hidden rounded-[1.75rem] transition-shadow duration-200',
@@ -130,7 +121,6 @@ export function Column({ column, tasks, onTaskClick, onEditTask, onDeleteTask, o
               isOver && 'bg-[color-mix(in_oklab,var(--panel)_10%,transparent)]'
             )}
           >
-            {/* Group cards rendered before tasks */}
             {extraContent}
 
             {tasks.map((task) => (
@@ -143,6 +133,7 @@ export function Column({ column, tasks, onTaskClick, onEditTask, onDeleteTask, o
                 onArchive={onArchiveTask}
                 onUnarchive={onUnarchiveTask}
                 onRetry={onRetryTask}
+                onExpand={onExpandTask}
               />
             ))}
 
@@ -169,7 +160,6 @@ export function Column({ column, tasks, onTaskClick, onEditTask, onDeleteTask, o
             )}
           </div>
 
-          {/* Scroll fade indicator */}
           {canScrollDown && (
             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[color-mix(in_oklab,var(--panel)_14%,var(--color-background))] to-transparent" />
           )}

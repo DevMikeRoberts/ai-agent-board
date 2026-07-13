@@ -1,38 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Markdown from 'react-markdown';
-import {
-  X,
-  Brain,
-  FileCode2,
-  CheckCircle2,
-  AlertCircle,
-  ChevronRight,
-  ChevronDown,
-  Copy,
-  Check,
-  Play,
-  Square,
-  GitBranch,
-  ExternalLink,
-  GitMerge,
-  Trash2,
-  Send,
-  FileText,
-  RotateCw,
-  Download,
-  Paperclip,
-  Clock,
-  Folder,
-  Minimize2,
-  Cog,
-  Terminal,
-  CalendarDays,
-  GitPullRequest,
-  Zap,
-  Archive,
-  Pencil,
-} from 'lucide-react';
+import { PixelIcon } from '@/components/PixelIcon';
 import type { Task, AgentEvent } from '@/types';
 import { getAgentDisplay } from '@/lib/agent-config';
 import { getPriorityDisplay } from '@/lib/priority-config';
@@ -67,9 +36,11 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+      className="flex h-6 w-6 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
     >
-      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+      {copied
+        ? <PixelIcon name="rating-star-1" className="h-3 w-3 text-neon-green" />
+        : <PixelIcon name="clip-1" className="h-3 w-3" />}
     </button>
   );
 }
@@ -78,7 +49,7 @@ function CopyButton({ text }: { text: string }) {
 
 function EventItem({ event }: { event: CoalescedEvent }) {
   const [expanded, setExpanded] = useState(event.type !== 'thinking');
-  const Icon = eventIconMap[event.type];
+  const iconName = eventIconMap[event.type];
   const color = eventColorMap[event.type];
   const label = event.toolLabel
     ? event.toolLabel.charAt(0).toUpperCase() + event.toolLabel.slice(1)
@@ -113,35 +84,38 @@ function EventItem({ event }: { event: CoalescedEvent }) {
       transition={{ duration: 0.2 }}
       className={cn(
         'group',
-        event.type === 'error' && 'rounded-lg border border-red-500/20 bg-red-500/5'
+        event.type === 'error' && 'rounded-xl border-2 border-destructive/40 bg-destructive/10'
       )}
     >
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-accent/50 transition-colors"
+        className="flex w-full items-start gap-2 rounded-xl px-2 py-1.5 text-left hover:bg-accent/50 transition-colors"
       >
         <div className={cn('mt-0.5 shrink-0', color)}>
-          <Icon className="h-3.5 w-3.5" />
+          <PixelIcon name={iconName} className="h-3.5 w-3.5" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-foreground">{label}</span>
+            <span className="font-pixel text-[11px] text-foreground">{label}</span>
             {headerSummary && (
-              <span className="truncate text-[10px] text-muted-foreground font-mono">
+              <span className="truncate font-pixel text-[10px] text-muted-foreground">
                 {headerSummary}
               </span>
             )}
             {!headerSummary && hasFile && (
-              <span className="truncate text-[10px] text-muted-foreground font-mono">
+              <span className="truncate font-pixel text-[10px] text-muted-foreground">
                 {event.metadata!.file}
               </span>
             )}
-            <ChevronRight
+            <span
               className={cn(
-                'ml-auto h-3 w-3 shrink-0 text-muted-foreground/50 transition-transform',
+                'ml-auto shrink-0 font-pixel text-xs text-muted-foreground/50 transition-transform',
                 expanded && 'rotate-90'
               )}
-            />
+              aria-hidden
+            >
+              ›
+            </span>
           </div>
         </div>
       </button>
@@ -159,7 +133,7 @@ function EventItem({ event }: { event: CoalescedEvent }) {
               {(event.type === 'thinking' || event.type === 'complete' || event.type === 'error') &&
                 (looksLikeCode(event.content) ? (
                   <div
-                    className="rounded-md px-2.5 py-1.5 font-mono text-xs whitespace-pre-wrap"
+                    className="rounded-lg px-2.5 py-1.5 font-mono text-xs whitespace-pre-wrap"
                     style={{ backgroundColor: 'var(--code-bg)', color: 'var(--code-text)' }}
                   >
                     {event.content}
@@ -169,7 +143,7 @@ function EventItem({ event }: { event: CoalescedEvent }) {
                     className={cn(
                       'text-xs leading-relaxed whitespace-pre-wrap',
                       event.type === 'error'
-                        ? 'font-mono text-red-700 dark:text-red-300'
+                        ? 'font-mono text-destructive'
                         : 'text-muted-foreground'
                     )}
                   >
@@ -178,14 +152,17 @@ function EventItem({ event }: { event: CoalescedEvent }) {
                 ))}
 
               {event.type === 'command' && event.content.startsWith('You: ') && (
-                <div className="rounded-md bg-sky-500/10 border border-sky-500/20 px-2.5 py-1.5 text-xs text-sky-700 dark:text-sky-300">
+                <div
+                  className="rounded-lg border-2 border-neon-blue/30 px-2.5 py-1.5 text-xs text-foreground/90"
+                  style={{ backgroundColor: 'color-mix(in oklab, var(--color-neon-blue) 12%, transparent)' }}
+                >
                   {event.content}
                 </div>
               )}
 
               {event.type === 'command' && !event.content.startsWith('You: ') && (
                 <div
-                  className="flex items-center gap-1 rounded-md px-2.5 py-1.5 font-mono text-xs"
+                  className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 font-mono text-xs"
                   style={{ backgroundColor: 'var(--code-bg)', color: 'var(--code-command)' }}
                 >
                   <span className="text-muted-foreground select-none">$</span>
@@ -197,7 +174,7 @@ function EventItem({ event }: { event: CoalescedEvent }) {
               {event.type === 'output' &&
                 (looksLikeCode(event.content) ? (
                   <div
-                    className="rounded-md px-2.5 py-1.5 font-mono text-xs whitespace-pre-wrap"
+                    className="rounded-lg px-2.5 py-1.5 font-mono text-xs whitespace-pre-wrap"
                     style={{ backgroundColor: 'var(--code-bg)', color: 'var(--code-text)' }}
                   >
                     {event.content}
@@ -221,7 +198,7 @@ function EventItem({ event }: { event: CoalescedEvent }) {
                   )}
                   {toolDetail && (
                     <div
-                      className="flex items-start gap-1 rounded-md px-2.5 py-1.5 font-mono text-xs whitespace-pre-wrap"
+                      className="flex items-start gap-1 rounded-lg px-2.5 py-1.5 font-mono text-xs whitespace-pre-wrap"
                       style={{ backgroundColor: 'var(--code-bg)', color: 'var(--code-text)' }}
                     >
                       <span className="flex-1 overflow-x-auto">{toolDetail}</span>
@@ -233,7 +210,7 @@ function EventItem({ event }: { event: CoalescedEvent }) {
 
               {hasDiff && (
                 <div
-                  className="mt-1 overflow-x-auto rounded-md p-2.5 font-mono text-[11px] leading-relaxed"
+                  className="mt-1 overflow-x-auto rounded-lg p-2.5 font-mono text-[11px] leading-relaxed"
                   style={{ backgroundColor: 'var(--code-bg)' }}
                 >
                   {event.metadata!.diff!.split('\n').map((line, i) => (
@@ -272,26 +249,26 @@ function FollowUpImagePreview({ file }: { file: File }) {
   const url = useMemo(() => URL.createObjectURL(file), [file]);
   useEffect(() => () => URL.revokeObjectURL(url), [url]);
   return (
-    <img src={url} alt={file.name} className="w-12 h-12 object-cover rounded border border-border" />
+    <img src={url} alt={file.name} className="w-12 h-12 object-cover rounded-lg border-2 border-border" />
   );
 }
 
 // ─── InfoRow ────────────────────────────────────────────────────────────────
 
 function InfoRow({
-  icon: Icon,
+  icon,
   label,
   children,
 }: {
-  icon: React.ElementType;
+  icon: string;
   label: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="flex items-start gap-2 py-1.5">
-      <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      <PixelIcon name={icon} className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       <div className="flex-1 min-w-0">
-        <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
+        <div className="font-pixel text-[10px] text-muted-foreground lowercase tracking-wide mb-0.5">
           {label}
         </div>
         <div className="text-xs text-foreground">{children}</div>
@@ -304,7 +281,7 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
     <div className="mt-4 mb-1.5 flex items-center gap-2">
       <div className="h-px flex-1 bg-border" />
-      <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 px-1">
+      <span className="font-pixel text-[10px] lowercase tracking-widest text-muted-foreground/60 px-1">
         {children}
       </span>
       <div className="h-px flex-1 bg-border" />
@@ -552,6 +529,15 @@ export function TaskFullView({
     return null;
   }, [task, isActive]);
 
+  const tabButtonClass = (active: boolean) =>
+    cn(
+      'sticker-sm flex h-11 items-center gap-2 rounded-full px-4 font-display text-sm [text-transform:lowercase] transition-transform',
+      active
+        ? 'sticker-press'
+        : 'border-2 border-border bg-card text-foreground/80 hover:border-foreground/40 hover:text-foreground'
+    );
+  const activeTabStyle = { backgroundColor: 'var(--color-neon-blue)', color: 'var(--color-ink)' };
+
   return (
     <AnimatePresence>
     {task && (
@@ -564,92 +550,90 @@ export function TaskFullView({
       >
         {/* ── Top progress bar ── */}
         {(agentStatus === 'planning' || agentStatus === 'executing' || agentStatus === 'complete') && (
-          <div className="h-0.5 w-full bg-muted shrink-0">
+          <div className="h-2.5 w-full bg-ink shrink-0">
             <div
               className={cn(
-                'h-full rounded-r transition-all duration-700 ease-in-out',
+                'h-full transition-all duration-700 ease-in-out',
                 agentStatus === 'complete'
-                  ? 'w-full bg-emerald-500'
+                  ? 'w-full bg-neon-green'
                   : agentStatus === 'executing'
                   ? 'w-3/5 bg-primary animate-pulse'
-                  : 'w-1/4 bg-purple-500 animate-pulse'
+                  : 'w-1/4 bg-neon-purple animate-pulse'
               )}
             />
           </div>
         )}
 
         {/* ── Header bar ── */}
-        <div className="shrink-0 flex items-center justify-between border-b border-border bg-card/80 backdrop-blur px-4 py-2.5">
+        <div className="shrink-0 flex items-center justify-between border-b-2 border-border bg-card px-4 py-2.5">
           <div className="flex items-center gap-3 min-w-0">
             {/* Status dot */}
             <div
               className={cn(
-                'h-2.5 w-2.5 rounded-full shrink-0',
-                agentStatus === 'executing' && 'bg-blue-400 animate-pulse shadow-[0_0_6px_rgba(96,165,250,0.8)]',
-                agentStatus === 'planning' && 'bg-purple-400 animate-pulse shadow-[0_0_6px_rgba(168,85,247,0.8)]',
-                agentStatus === 'complete' && 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]',
-                agentStatus === 'failed' && 'bg-red-400 shadow-[0_0_6px_rgba(248,113,113,0.8)]',
+                'h-3 w-3 rounded-full shrink-0 border-2 border-ink',
+                agentStatus === 'executing' && 'bg-neon-blue animate-pulse',
+                agentStatus === 'planning' && 'bg-neon-purple animate-pulse',
+                agentStatus === 'complete' && 'bg-neon-green',
+                agentStatus === 'failed' && 'bg-destructive',
                 agentStatus === 'idle' && 'bg-muted-foreground/40'
               )}
             />
-            <h1 className="text-sm font-semibold text-foreground truncate max-w-lg">{task.title}</h1>
+            <h1 className="font-display text-sm [text-transform:lowercase] text-foreground truncate max-w-lg">{task.title}</h1>
             {agentDisplay && (
-              <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-muted-foreground shrink-0">
+              <span className="hidden sm:inline-flex items-center gap-1 font-pixel text-[10px] text-muted-foreground shrink-0">
                 {agentDisplay.emoji} {agentDisplay.label}
               </span>
             )}
             {isActive && (
-              <span className="hidden md:flex items-center gap-1 text-[10px] text-primary shrink-0">
+              <span className="hidden md:flex items-center gap-1 font-pixel text-[10px] text-primary shrink-0">
                 <span className="relative flex h-1.5 w-1.5">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
                   <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
                 </span>
-                Live
+                live
               </span>
             )}
           </div>
 
           {/* Right controls */}
-          <div className="flex items-center gap-1.5 shrink-0 ml-4">
+          <div className="flex items-center gap-2 shrink-0 ml-4">
             {!isActive && agentStatus !== 'complete' && onRun && (
               <button
                 onClick={() => onRun(task.id)}
-                className="flex items-center gap-1.5 h-8 rounded-lg border border-border bg-muted px-3 text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                className="sticker-sm sticker-press flex h-10 items-center gap-2 rounded-full px-4 font-display text-sm [text-transform:lowercase]"
+                style={{ backgroundColor: 'var(--color-neon-green)', color: 'var(--color-ink)' }}
                 title={agentStatus === 'failed' ? 'Retry agent' : 'Run agent'}
               >
-                {agentStatus === 'failed' ? (
-                  <RotateCw className="h-3.5 w-3.5" />
-                ) : (
-                  <Play className="h-3.5 w-3.5" />
-                )}
-                {agentStatus === 'failed' ? 'Retry' : 'Run'}
+                <PixelIcon name={agentStatus === 'failed' ? 'recycle' : 'flash'} className="h-3.5 w-3.5" />
+                {agentStatus === 'failed' ? 'retry' : 'run'}
               </button>
             )}
             {isActive && onStop && (
               <button
                 onClick={() => onStop(task.id)}
-                className="flex items-center gap-1.5 h-8 rounded-lg border border-border bg-muted px-3 text-xs font-medium text-red-500 dark:text-red-400 hover:bg-red-500/20 transition-colors"
+                className="sticker-sm sticker-press flex h-10 items-center gap-2 rounded-full px-4 font-display text-sm [text-transform:lowercase]"
+                style={{ backgroundColor: 'var(--color-destructive)', color: 'var(--color-ink)' }}
                 title="Stop agent"
               >
-                <Square className="h-3.5 w-3.5" />
-                Stop
+                <span className="text-[10px] leading-none" aria-hidden>■</span>
+                stop
               </button>
             )}
             {onMinimize && (
               <button
                 onClick={onMinimize}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                className="flex h-10 w-10 items-center justify-center rounded-xl border-2 border-border bg-card text-foreground/80 hover:border-foreground/40 hover:text-foreground transition-colors"
                 title="Collapse to panel"
               >
-                <Minimize2 className="h-4 w-4" />
+                <PixelIcon name="flip-vertical-down" className="h-4 w-4" />
               </button>
             )}
             <button
               onClick={onClose}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground hover:bg-destructive hover:text-white hover:border-destructive transition-colors"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border-2 border-border bg-card text-foreground/80 hover:border-destructive hover:bg-destructive hover:text-primary-foreground transition-colors"
               title="Close (Esc)"
             >
-              <X className="h-4 w-4" strokeWidth={2.5} />
+              <span className="font-pixel text-sm leading-none" aria-hidden>✕</span>
             </button>
           </div>
         </div>
@@ -657,38 +641,50 @@ export function TaskFullView({
         {/* ── Body ── */}
         <div className="flex flex-1 overflow-hidden">
           {/* ── LEFT INFO PANEL ── */}
-          <aside className="w-72 xl:w-80 shrink-0 flex flex-col border-r border-border bg-card/40 overflow-y-auto">
+          <aside className="w-72 xl:w-80 shrink-0 flex flex-col border-r-2 border-border bg-card/40 overflow-y-auto">
             <div className="p-4">
 
               {/* Status badge */}
               <div className="mb-3 flex items-center gap-2">
                 {agentStatus === 'executing' && (
-                  <span className="flex items-center gap-1.5 rounded-full bg-blue-500/10 border border-blue-500/25 px-2.5 py-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400">
-                    <span className="h-1.5 w-1.5 rounded-full bg-blue-400 animate-pulse" />
-                    Executing
+                  <span
+                    className="sticker-sm flex items-center gap-1.5 rounded-full px-2.5 py-1 font-pixel text-[10px] lowercase"
+                    style={{ backgroundColor: 'var(--color-neon-blue)', color: 'var(--color-ink)' }}
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-ink animate-pulse" />
+                    executing
                   </span>
                 )}
                 {agentStatus === 'planning' && (
-                  <span className="flex items-center gap-1.5 rounded-full bg-purple-500/10 border border-purple-500/25 px-2.5 py-1 text-[11px] font-semibold text-purple-600 dark:text-purple-400">
-                    <span className="h-1.5 w-1.5 rounded-full bg-purple-400 animate-pulse" />
-                    Planning
+                  <span
+                    className="sticker-sm flex items-center gap-1.5 rounded-full px-2.5 py-1 font-pixel text-[10px] lowercase"
+                    style={{ backgroundColor: 'var(--color-neon-purple)', color: 'var(--color-ink)' }}
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-ink animate-pulse" />
+                    planning
                   </span>
                 )}
                 {agentStatus === 'complete' && (
-                  <span className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                    <CheckCircle2 className="h-3 w-3" />
-                    Complete
+                  <span
+                    className="sticker-sm flex items-center gap-1.5 rounded-full px-2.5 py-1 font-pixel text-[10px] lowercase"
+                    style={{ backgroundColor: 'var(--color-neon-green)', color: 'var(--color-ink)' }}
+                  >
+                    <PixelIcon name="rating-star-1" className="h-3 w-3" />
+                    complete
                   </span>
                 )}
                 {agentStatus === 'failed' && (
-                  <span className="flex items-center gap-1.5 rounded-full bg-red-500/10 border border-red-500/25 px-2.5 py-1 text-[11px] font-semibold text-red-600 dark:text-red-400">
-                    <AlertCircle className="h-3 w-3" />
-                    Failed
+                  <span
+                    className="sticker-sm flex items-center gap-1.5 rounded-full px-2.5 py-1 font-pixel text-[10px] lowercase"
+                    style={{ backgroundColor: 'var(--color-destructive)', color: 'var(--color-ink)' }}
+                  >
+                    <PixelIcon name="alert-triangle-1" className="h-3 w-3" />
+                    failed
                   </span>
                 )}
                 {agentStatus === 'idle' && (
-                  <span className="flex items-center gap-1.5 rounded-full bg-muted/60 border border-border px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
-                    Idle
+                  <span className="flex items-center gap-1.5 rounded-full border-2 border-border bg-muted/60 px-2.5 py-1 font-pixel text-[10px] lowercase text-muted-foreground">
+                    idle
                   </span>
                 )}
                 {priorityDisplay && (
@@ -701,10 +697,10 @@ export function TaskFullView({
               {/* Description */}
               {task.description && (
                 <div className="mb-3">
-                  <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 mb-1.5">
-                    Description
+                  <div className="font-pixel text-[10px] lowercase tracking-widest text-muted-foreground/60 mb-1.5">
+                    description
                   </div>
-                  <div className="rounded-lg border border-border/50 bg-muted/30 px-3 py-2.5 text-xs leading-relaxed text-foreground/80 max-h-48 overflow-y-auto prose-sm dark:prose-invert">
+                  <div className="rounded-xl border-2 border-border/50 bg-muted/30 px-3 py-2.5 text-xs leading-relaxed text-foreground/80 max-h-48 overflow-y-auto prose-sm dark:prose-invert">
                     <Markdown
                       allowedElements={[
                         'p', 'strong', 'em', 'code', 'pre', 'ul', 'ol', 'li',
@@ -718,41 +714,41 @@ export function TaskFullView({
               )}
 
               {/* ── Metadata ── */}
-              <SectionHeader>Metadata</SectionHeader>
+              <SectionHeader>metadata</SectionHeader>
               <div className="space-y-0.5">
                 {agentDisplay && (
-                  <InfoRow icon={Zap} label="Agent">
+                  <InfoRow icon="chipset" label="Agent">
                     <span className="flex items-center gap-1">
                       {agentDisplay.emoji} {agentDisplay.label}
                     </span>
                   </InfoRow>
                 )}
                 {priorityDisplay && (
-                  <InfoRow icon={AlertCircle} label="Priority">
+                  <InfoRow icon="alert-triangle-1" label="Priority">
                     <span className="flex items-center gap-1">
                       {priorityDisplay.emoji} {priorityDisplay.label}
                     </span>
                   </InfoRow>
                 )}
-                <InfoRow icon={CalendarDays} label="Created">
+                <InfoRow icon="calendar-date" label="Created">
                   {formatDate(task.createdAt)}
                 </InfoRow>
                 {task.startedAt && (
-                  <InfoRow icon={Play} label="Started">
+                  <InfoRow icon="flash" label="Started">
                     {formatDate(task.startedAt)}
                   </InfoRow>
                 )}
                 {task.completedAt && (
-                  <InfoRow icon={CheckCircle2} label="Finished">
+                  <InfoRow icon="rating-star-1" label="Finished">
                     {formatDate(task.completedAt)}
                   </InfoRow>
                 )}
                 {duration && (
-                  <InfoRow icon={Clock} label="Duration">
+                  <InfoRow icon="clock" label="Duration">
                     {duration}
                   </InfoRow>
                 )}
-                <InfoRow icon={Terminal} label="Events">
+                <InfoRow icon="old-electronics" label="Events">
                   {events.length} recorded
                 </InfoRow>
               </div>
@@ -760,17 +756,17 @@ export function TaskFullView({
               {/* ── Repository ── */}
               {(task.branchName || task.repoPath) && (
                 <>
-                  <SectionHeader>Repository</SectionHeader>
+                  <SectionHeader>repository</SectionHeader>
                   <div className="space-y-0.5">
                     {task.branchName && (
-                      <InfoRow icon={GitBranch} label="Branch">
+                      <InfoRow icon="hierarchy-2" label="Branch">
                         <span className="font-mono">{task.branchName}</span>
                         <span className="text-muted-foreground/60"> from </span>
                         <span className="font-mono">{task.baseBranch || 'main'}</span>
                       </InfoRow>
                     )}
                     {task.repoPath && (
-                      <InfoRow icon={Folder} label="Repo Path">
+                      <InfoRow icon="global-public" label="Repo Path">
                         <span className="font-mono break-all text-[10px]">{task.repoPath}</span>
                       </InfoRow>
                     )}
@@ -781,7 +777,7 @@ export function TaskFullView({
               {/* ── Pull Request ── */}
               {(task.agentStatus === 'complete' || task.columnId === 'done') && task.branchName && (
                 <>
-                  <SectionHeader>Pull Request</SectionHeader>
+                  <SectionHeader>pull request</SectionHeader>
                   <div className="space-y-2">
                     {/* Existing PR link */}
                     {(prUrl ?? task.prUrl) && (
@@ -789,11 +785,12 @@ export function TaskFullView({
                         href={prUrl ?? task.prUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                        className="sticker-sm sticker-press flex items-center gap-2 rounded-xl px-3 py-2 font-pixel text-[11px] lowercase"
+                        style={{ backgroundColor: 'var(--color-neon-green)', color: 'var(--color-ink)' }}
                       >
-                        <GitPullRequest className="h-3.5 w-3.5" />
-                        View Pull Request
-                        <ExternalLink className="h-3 w-3 ml-auto" />
+                        <PixelIcon name="hyperlink" className="h-3.5 w-3.5" />
+                        view pull request
+                        <PixelIcon name="hyperlink" className="h-3 w-3 ml-auto" />
                       </a>
                     )}
 
@@ -812,10 +809,10 @@ export function TaskFullView({
                           setPrLoading(false);
                         }}
                         disabled={prLoading}
-                        className="flex w-full items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-xs font-medium text-foreground hover:bg-accent transition-colors disabled:opacity-50"
+                        className="flex w-full items-center gap-2 rounded-xl border-2 border-border bg-card px-3 py-2 font-pixel text-[11px] lowercase text-foreground/80 hover:border-foreground/40 hover:text-foreground transition-colors disabled:opacity-50"
                       >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                        {prLoading ? 'Creating PR…' : 'Create Pull Request'}
+                        <PixelIcon name="hyperlink" className="h-3.5 w-3.5" />
+                        {prLoading ? 'creating pr…' : 'create pull request'}
                       </button>
                     )}
 
@@ -834,30 +831,33 @@ export function TaskFullView({
                           setMergeLoading(false);
                         }}
                         disabled={mergeLoading}
-                        className="flex w-full items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-xs font-medium text-foreground hover:bg-accent transition-colors disabled:opacity-50"
+                        className="flex w-full items-center gap-2 rounded-xl border-2 border-border bg-card px-3 py-2 font-pixel text-[11px] lowercase text-foreground/80 hover:border-foreground/40 hover:text-foreground transition-colors disabled:opacity-50"
                       >
-                        <GitMerge className="h-3.5 w-3.5" />
-                        {mergeLoading ? 'Merging…' : `Merge to ${task.baseBranch || 'main'}`}
+                        <PixelIcon name="deal-handshake" className="h-3.5 w-3.5" />
+                        {mergeLoading ? 'merging…' : `merge to ${task.baseBranch || 'main'}`}
                       </button>
                     )}
 
                     {mergeResult && (
-                      <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-400">
-                        <GitMerge className="h-3.5 w-3.5" />
-                        Merged to {mergeResult}
+                      <div
+                        className="sticker-sm flex items-center gap-2 rounded-xl px-3 py-2 font-pixel text-[11px] lowercase"
+                        style={{ backgroundColor: 'var(--color-neon-green)', color: 'var(--color-ink)' }}
+                      >
+                        <PixelIcon name="deal-handshake" className="h-3.5 w-3.5" />
+                        merged to {mergeResult}
                       </div>
                     )}
 
                     {prError && (
-                      <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-xs text-red-400 flex items-start justify-between gap-2">
+                      <div className="rounded-xl border-2 border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive flex items-start justify-between gap-2">
                         <span className="font-mono">{prError}</span>
-                        <button onClick={() => setPrError(null)} className="shrink-0 hover:text-red-300">✕</button>
+                        <button onClick={() => setPrError(null)} className="shrink-0 font-pixel hover:text-foreground" aria-label="Dismiss">✕</button>
                       </div>
                     )}
                     {mergeError && (
-                      <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-xs text-red-400 flex items-start justify-between gap-2">
+                      <div className="rounded-xl border-2 border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive flex items-start justify-between gap-2">
                         <span className="font-mono">{mergeError}</span>
-                        <button onClick={() => setMergeError(null)} className="shrink-0 hover:text-red-300">✕</button>
+                        <button onClick={() => setMergeError(null)} className="shrink-0 font-pixel hover:text-foreground" aria-label="Dismiss">✕</button>
                       </div>
                     )}
                   </div>
@@ -865,51 +865,51 @@ export function TaskFullView({
               )}
 
               {/* ── Actions ── */}
-              <SectionHeader>Actions</SectionHeader>
+              <SectionHeader>actions</SectionHeader>
               <div className="space-y-1.5">
                 {onEdit && !task.archived && (
                   <button
                     onClick={() => { onClose(); onEdit(task); }}
-                    className="flex w-full items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-xs font-medium text-foreground hover:bg-accent transition-colors"
+                    className="flex w-full items-center gap-2 rounded-xl border-2 border-border bg-card px-3 py-2 font-pixel text-[11px] lowercase text-foreground/80 hover:border-foreground/40 hover:text-foreground transition-colors"
                   >
-                    <Pencil className="h-3.5 w-3.5" />
-                    Edit Task
+                    <PixelIcon name="quill-ink" className="h-3.5 w-3.5" />
+                    edit task
                   </button>
                 )}
                 {!isActive && agentStatus === 'failed' && onReconfigureRetry && (
                   <button
                     onClick={() => { onClose(); onReconfigureRetry(task.id); }}
-                    className="flex w-full items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-xs font-medium text-amber-500 dark:text-amber-400 hover:bg-amber-500/20 transition-colors"
+                    className="flex w-full items-center gap-2 rounded-xl border-2 border-border bg-card px-3 py-2 font-pixel text-[11px] lowercase text-neon-yellow hover:border-neon-yellow/60 hover:text-neon-yellow transition-colors"
                   >
-                    <Cog className="h-3.5 w-3.5" />
-                    Reconfigure &amp; Retry
+                    <PixelIcon name="cog-browser" className="h-3.5 w-3.5" />
+                    reconfigure &amp; retry
                   </button>
                 )}
                 {onArchive && (task.columnId === 'done' || agentStatus === 'failed') && !task.archived && (
                   <button
                     onClick={() => { onArchive(task); onClose(); }}
-                    className="flex w-full items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-accent transition-colors"
+                    className="flex w-full items-center gap-2 rounded-xl border-2 border-border bg-card px-3 py-2 font-pixel text-[11px] lowercase text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-colors"
                   >
-                    <Archive className="h-3.5 w-3.5" />
-                    Archive Task
+                    <PixelIcon name="floppy-disk" className="h-3.5 w-3.5" />
+                    archive task
                   </button>
                 )}
                 {onUnarchive && task.archived && (
                   <button
                     onClick={() => { onUnarchive(task); onClose(); }}
-                    className="flex w-full items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-accent transition-colors"
+                    className="flex w-full items-center gap-2 rounded-xl border-2 border-border bg-card px-3 py-2 font-pixel text-[11px] lowercase text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-colors"
                   >
-                    <Archive className="h-3.5 w-3.5" />
-                    Unarchive Task
+                    <PixelIcon name="floppy-disk" className="h-3.5 w-3.5" />
+                    unarchive task
                   </button>
                 )}
                 {onDelete && (
                   <button
                     onClick={() => { onDelete(task); onClose(); }}
-                    className="flex w-full items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-500/15 transition-colors"
+                    className="flex w-full items-center gap-2 rounded-xl border-2 border-destructive/30 bg-destructive/10 px-3 py-2 font-pixel text-[11px] lowercase text-destructive hover:border-destructive/60 hover:bg-destructive/15 transition-colors"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Delete Task
+                    <PixelIcon name="bin" className="h-3.5 w-3.5" />
+                    delete task
                   </button>
                 )}
               </div>
@@ -920,15 +920,15 @@ export function TaskFullView({
           <div className="flex flex-1 flex-col overflow-hidden">
             {/* Failure summary */}
             {agentStatus === 'failed' && (
-              <div className="shrink-0 border-b border-border px-4 py-3">
-                <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+              <div className="shrink-0 border-b-2 border-border px-4 py-3">
+                <div className="sticker rounded-2xl border-2 border-destructive/40 bg-destructive/10 p-3">
                   <div className="flex items-start gap-2">
-                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500 dark:text-red-400" />
+                    <PixelIcon name="alert-triangle-1" className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold text-red-700 dark:text-red-300">
-                        Agent failed
+                      <p className="font-display text-sm [text-transform:lowercase] text-destructive">
+                        agent failed
                       </p>
-                      <p className="mt-1 whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-red-700/80 dark:text-red-300/80">
+                      <p className="mt-1 whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-destructive/80">
                         {latestError?.content ||
                           'No error event was recorded. Use Reconfigure or Retry to capture details.'}
                       </p>
@@ -940,82 +940,61 @@ export function TaskFullView({
             )}
 
             {/* Tab bar */}
-            <div className="shrink-0 flex items-center justify-between border-b border-border px-3 pt-1">
-              <div className="flex gap-1">
+            <div className="shrink-0 flex items-center justify-between border-b-2 border-border px-3 py-2 gap-2">
+              <div className="flex gap-2 flex-wrap">
                 {showSummaryTab && (
                   <button
                     onClick={() => selectTab('summary')}
-                    className={cn(
-                      'px-3 py-1.5 text-xs font-medium rounded-t transition-colors',
-                      activeTab === 'summary'
-                        ? 'bg-card border border-border border-b-card text-foreground -mb-px'
-                        : 'text-muted-foreground hover:text-foreground'
-                    )}
+                    className={tabButtonClass(activeTab === 'summary')}
+                    style={activeTab === 'summary' ? activeTabStyle : undefined}
                   >
-                    Summary
+                    <PixelIcon name="reward-gift" className="h-4 w-4" />
+                    summary
                   </button>
                 )}
                 <button
                   onClick={() => selectTab('events')}
-                  className={cn(
-                    'px-3 py-1.5 text-xs font-medium rounded-t transition-colors',
-                    activeTab === 'events'
-                      ? 'bg-card border border-border border-b-card text-foreground -mb-px'
-                      : 'text-muted-foreground hover:text-foreground'
-                  )}
+                  className={tabButtonClass(activeTab === 'events')}
+                  style={activeTab === 'events' ? activeTabStyle : undefined}
                 >
-                  <span className="flex items-center gap-1.5">
-                    <Brain className="h-3 w-3" />
-                    Thinking Chain
-                    {events.length > 0 && (
-                      <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-semibold">
-                        {coalescedEvents.length}
-                      </span>
-                    )}
-                  </span>
+                  <PixelIcon name="light-bulb" className="h-4 w-4" />
+                  thinking chain
+                  {events.length > 0 && (
+                    <span className="rounded-full bg-ink/20 px-1.5 py-0.5 font-pixel text-[9px]">
+                      {coalescedEvents.length}
+                    </span>
+                  )}
                 </button>
                 <button
                   onClick={() => selectTab('terminal')}
-                  className={cn(
-                    'px-3 py-1.5 text-xs font-medium rounded-t transition-colors',
-                    activeTab === 'terminal'
-                      ? 'bg-card border border-border border-b-card text-foreground -mb-px'
-                      : 'text-muted-foreground hover:text-foreground'
-                  )}
+                  className={tabButtonClass(activeTab === 'terminal')}
+                  style={activeTab === 'terminal' ? activeTabStyle : undefined}
                 >
-                  <span className="flex items-center gap-1.5">
-                    <Terminal className="h-3 w-3" />
-                    Terminal
-                  </span>
+                  <PixelIcon name="old-electronics" className="h-4 w-4" />
+                  terminal
                 </button>
                 <button
                   onClick={() => selectTab('changes')}
-                  className={cn(
-                    'px-3 py-1.5 text-xs font-medium rounded-t transition-colors',
-                    activeTab === 'changes'
-                      ? 'bg-card border border-border border-b-card text-foreground -mb-px'
-                      : 'text-muted-foreground hover:text-foreground'
-                  )}
+                  className={tabButtonClass(activeTab === 'changes')}
+                  style={activeTab === 'changes' ? activeTabStyle : undefined}
                 >
-                  <span className="flex items-center gap-1.5">
-                    <FileCode2 className="h-3 w-3" />
-                    File Changes
-                    {fileChanges.length > 0 && (
-                      <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-semibold">
-                        {fileChanges.length}
-                      </span>
-                    )}
-                  </span>
+                  <PixelIcon name="text-format-1" className="h-4 w-4" />
+                  file changes
+                  {fileChanges.length > 0 && (
+                    <span className="rounded-full bg-ink/20 px-1.5 py-0.5 font-pixel text-[9px]">
+                      {fileChanges.length}
+                    </span>
+                  )}
                 </button>
               </div>
               {events.length > 0 && (
                 <button
                   onClick={handleExportLog}
-                  className="flex items-center gap-1 px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                  className="flex items-center gap-1 rounded-full px-2 py-1 font-pixel text-[10px] lowercase text-muted-foreground hover:text-foreground transition-colors"
                   title="Download event log as markdown"
                 >
-                  <Download className="h-3 w-3" />
-                  Export
+                  <PixelIcon name="clound-download" className="h-3 w-3" />
+                  export
                 </button>
               )}
             </div>
@@ -1026,8 +1005,8 @@ export function TaskFullView({
                 {summaryText ? (
                   <>
                     {!completedSectionFilled && (
-                      <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-                        <AlertCircle className="h-4 w-4 shrink-0" />
+                      <div className="mb-4 flex items-center gap-2 rounded-xl border-2 border-neon-yellow/40 bg-neon-yellow/10 px-3 py-2 text-xs text-neon-yellow">
+                        <PixelIcon name="alert-triangle-1" className="h-4 w-4 shrink-0" />
                         The required "Completed" section is empty or missing.
                       </div>
                     )}
@@ -1038,8 +1017,8 @@ export function TaskFullView({
                 ) : (
                   <div className="flex h-full items-center justify-center">
                     <div className="text-center">
-                      <FileText className="mx-auto h-12 w-12 text-muted-foreground/20" />
-                      <p className="mt-3 text-sm text-muted-foreground/50">
+                      <PixelIcon name="reward-gift" className="mx-auto h-12 w-12 text-muted-foreground/20" />
+                      <p className="mt-3 font-pixel text-xs lowercase text-muted-foreground/50">
                         No summary was provided for this task.
                       </p>
                     </div>
@@ -1053,12 +1032,12 @@ export function TaskFullView({
               <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-0.5">
                 {coalescedEvents.length === 0 && !streaming && agentStatus === 'failed' && !latestError && (
                   <div className="flex h-full items-center justify-center p-4">
-                    <div className="w-full max-w-sm rounded-lg border border-red-500/30 bg-red-500/10 p-6 text-center">
-                      <AlertCircle className="mx-auto h-10 w-10 text-red-500/80 dark:text-red-400/80" />
-                      <p className="mt-3 text-sm font-medium text-red-700 dark:text-red-300">
-                        Agent failed — no events recorded
+                    <div className="sticker w-full max-w-sm rounded-2xl border-2 border-destructive/40 bg-destructive/10 p-6 text-center">
+                      <PixelIcon name="alert-triangle-1" className="mx-auto h-10 w-10 text-destructive/80" />
+                      <p className="mt-3 font-display text-sm [text-transform:lowercase] text-destructive">
+                        agent failed — no events recorded
                       </p>
-                      <p className="mt-1 text-xs leading-relaxed text-red-700/70 dark:text-red-300/70">
+                      <p className="mt-1 text-xs leading-relaxed text-destructive/70">
                         Use Reconfigure or Retry to run again and capture details.
                       </p>
                     </div>
@@ -1067,10 +1046,10 @@ export function TaskFullView({
                 {coalescedEvents.length === 0 && !streaming && agentStatus !== 'failed' && (
                   <div className="flex h-full items-center justify-center">
                     <div className="text-center">
-                      <Brain className="mx-auto h-12 w-12 text-muted-foreground/20" />
-                      <p className="mt-3 text-sm text-muted-foreground/50">No agent activity yet</p>
-                      <p className="mt-1 text-xs text-muted-foreground/30">
-                        Start the agent to see the thinking chain
+                      <PixelIcon name="light-bulb" className="mx-auto h-12 w-12 text-muted-foreground/20 animate-px-bob" />
+                      <p className="mt-3 font-display text-sm [text-transform:lowercase] text-muted-foreground/50">no agent activity yet</p>
+                      <p className="mt-1 font-pixel text-[10px] lowercase text-muted-foreground/30">
+                        start the agent to see the thinking chain
                       </p>
                     </div>
                   </div>
@@ -1094,8 +1073,8 @@ export function TaskFullView({
                         />
                       ))}
                     </div>
-                    <span className="text-[10px] text-muted-foreground">
-                      Agent is thinking…
+                    <span className="font-pixel text-[10px] lowercase text-muted-foreground">
+                      agent is thinking…
                     </span>
                   </motion.div>
                 )}
@@ -1107,7 +1086,7 @@ export function TaskFullView({
               <div
                 className={cn(
                   'flex-1 overflow-hidden',
-                  theme === 'light' ? 'bg-[#f8fafc]' : 'bg-[#0f172a]'
+                  theme === 'light' ? 'bg-cream' : 'bg-ink'
                 )}
               >
                 <TerminalView events={events} streaming={streaming} theme={theme} />
@@ -1120,13 +1099,13 @@ export function TaskFullView({
                 {fileChanges.length === 0 ? (
                   <div className="flex h-full items-center justify-center">
                     <div className="text-center">
-                      <FileCode2 className="mx-auto h-12 w-12 text-muted-foreground/20" />
-                      <p className="mt-3 text-sm text-muted-foreground/50">No file changes yet</p>
+                      <PixelIcon name="text-format-1" className="mx-auto h-12 w-12 text-muted-foreground/20" />
+                      <p className="mt-3 font-pixel text-xs lowercase text-muted-foreground/50">no file changes yet</p>
                     </div>
                   </div>
                 ) : (
                   fileChanges.map((file) => (
-                    <details key={file.path} className="group rounded-lg border border-border bg-card">
+                    <details key={file.path} className="group rounded-xl border-2 border-border bg-card">
                       <summary className="flex cursor-pointer items-center gap-2 px-3 py-2.5 text-sm hover:bg-accent/50">
                         <span>
                           {file.type === 'created' ? '🟢' : file.type === 'modified' ? '🟡' : '📖'}
@@ -1137,15 +1116,15 @@ export function TaskFullView({
                         >
                           {file.path}
                         </span>
-                        <span className="text-[10px] text-muted-foreground capitalize shrink-0">
+                        <span className="font-pixel text-[10px] text-muted-foreground lowercase shrink-0">
                           {file.type}
                         </span>
-                        <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0 group-open:rotate-180 transition-transform" />
+                        <span className="font-pixel text-xs text-muted-foreground shrink-0 group-open:rotate-180 transition-transform" aria-hidden>▾</span>
                       </summary>
-                      <div className="border-t border-border px-3 py-2.5 overflow-x-auto">
+                      <div className="border-t-2 border-border px-3 py-2.5 overflow-x-auto">
                         {file.diff ? (
                           <div
-                            className="rounded-md p-2.5 font-mono text-[11px] leading-relaxed"
+                            className="rounded-lg p-2.5 font-mono text-[11px] leading-relaxed"
                             style={{ backgroundColor: 'var(--code-bg)' }}
                           >
                             {file.diff.split('\n').map((line, i) => (
@@ -1182,7 +1161,7 @@ export function TaskFullView({
             )}
 
             {/* ── Message composer (bottom) ── */}
-            <div className="shrink-0 border-t border-border bg-card px-4 py-3">
+            <div className="shrink-0 border-t-2 border-border bg-card px-4 py-3">
               {followUpImages.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-2.5">
                   {followUpImages.map((f, i) => (
@@ -1191,7 +1170,7 @@ export function TaskFullView({
                       <button
                         type="button"
                         onClick={() => setFollowUpImages((prev) => prev.filter((_, j) => j !== i))}
-                        className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[10px] leading-none flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-destructive text-primary-foreground text-[10px] leading-none flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                       >
                         ×
                       </button>
@@ -1204,10 +1183,10 @@ export function TaskFullView({
                   type="button"
                   onClick={() => imageInputRef.current?.click()}
                   disabled={agentStatus !== 'executing' || sending}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-2 border-border bg-card text-foreground/80 hover:border-foreground/40 hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   title="Attach images"
                 >
-                  <Paperclip className="h-4 w-4" />
+                  <PixelIcon name="clip-1" className="h-4 w-4" />
                 </button>
                 <input
                   ref={imageInputRef}
@@ -1238,7 +1217,7 @@ export function TaskFullView({
                       : 'Messages can only be sent while the agent is running'
                   }
                   disabled={agentStatus !== 'executing' || sending}
-                  className="flex-1 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="h-11 flex-1 rounded-xl border-2 border-border bg-card px-3 font-pixel text-[11px] text-foreground placeholder:text-muted-foreground focus:border-neon-pink focus:outline-none transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 />
                 <button
                   onClick={handleSendFollowUp}
@@ -1247,16 +1226,16 @@ export function TaskFullView({
                     sending ||
                     (!followUpMessage.trim() && followUpImages.length === 0)
                   }
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-muted text-primary hover:bg-primary/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="sticker-sm sticker-press flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground disabled:opacity-40 disabled:cursor-not-allowed"
                   title="Send message (Enter)"
                 >
-                  <Send className="h-4 w-4" />
+                  <PixelIcon name="envelope-close" className="h-4 w-4" />
                 </button>
               </div>
-              <p className="mt-1.5 text-[10px] text-muted-foreground/40 text-center">
+              <p className="mt-1.5 font-pixel text-[10px] lowercase text-muted-foreground/40 text-center">
                 {agentStatus === 'executing'
-                  ? 'Your message will be injected into the running agent session'
-                  : 'Start the agent to enable messaging'}
+                  ? 'your message will be injected into the running agent session'
+                  : 'start the agent to enable messaging'}
               </p>
             </div>
           </div>

@@ -17,11 +17,11 @@ const agentStatusConfig: Record<
   AgentStatus,
   { icon: string; label: string; className: string; spin?: boolean; pulse?: boolean }
 > = {
-  idle: { icon: 'alarm-bell-sleep', label: 'Idle', className: 'text-muted-foreground' },
-  planning: { icon: 'light-bulb', label: 'Planning', className: 'text-neon-purple', pulse: true },
+  idle:      { icon: 'alarm-bell-sleep', label: 'Idle',      className: 'text-muted-foreground' },
+  planning:  { icon: 'light-bulb',       label: 'Planning',  className: 'text-neon-purple', pulse: true },
   executing: { icon: 'loading-circle-1', label: 'Executing', className: 'text-neon-blue', spin: true },
-  complete: { icon: 'rating-star-1', label: 'Complete', className: 'text-neon-green' },
-  failed: { icon: 'alert-triangle-1', label: 'Failed', className: 'text-destructive' },
+  complete:  { icon: 'rating-star-1',    label: 'Complete',  className: 'text-neon-green' },
+  failed:    { icon: 'alert-triangle-1', label: 'Failed',    className: 'text-destructive' },
 };
 
 function formatElapsed(startedAt?: number): string {
@@ -129,19 +129,16 @@ function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarc
           {onExpand && task.columnId !== 'backlog' && (
             <button
               onClick={(e) => { e.stopPropagation(); onExpand(task); }}
-              className="flex h-6 w-6 items-center justify-center rounded-lg text-muted-foreground transition-all hover:bg-primary/15 hover:text-primary"
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-primary"
               aria-label="Expand task view"
               title="Open full view"
             >
-              <Maximize2 className="h-3 w-3" />
+              <PixelIcon name="expand-1" className="h-3.5 w-3.5" />
             </button>
           )}
           {onRetry && task.agentStatus === 'failed' && !task.archived && (
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onRetry(task);
-              }}
+              onClick={(e) => { e.stopPropagation(); onRetry(task); }}
               className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-neon-yellow"
               aria-label="Retry task"
             >
@@ -150,10 +147,7 @@ function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarc
           )}
           {onEdit && !task.archived && (
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onEdit(task);
-              }}
+              onClick={(e) => { e.stopPropagation(); onEdit(task); }}
               className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               aria-label="Edit task"
             >
@@ -162,10 +156,7 @@ function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarc
           )}
           {onArchive && (task.columnId === 'done' || task.agentStatus === 'failed') && !task.archived && (
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onArchive(task);
-              }}
+              onClick={(e) => { e.stopPropagation(); onArchive(task); }}
               className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               aria-label="Archive task"
             >
@@ -174,10 +165,7 @@ function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarc
           )}
           {onUnarchive && task.archived && (
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onUnarchive(task);
-              }}
+              onClick={(e) => { e.stopPropagation(); onUnarchive(task); }}
               className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               aria-label="Unarchive task"
             >
@@ -186,10 +174,7 @@ function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarc
           )}
           {onDelete && (
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(task);
-              }}
+              onClick={(e) => { e.stopPropagation(); onDelete(task); }}
               className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
               aria-label="Delete task"
             >
@@ -205,12 +190,12 @@ function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarc
           {priorityDisplay && <span className="mr-1.5">{priorityDisplay.emoji}</span>}{task.title}
         </h3>
 
-        {/* Description preview */}
+        {/* Description */}
         <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
           {task.description}
         </p>
 
-        {/* Agent card state badge (card-states feature) */}
+        {/* State badge */}
         <div className="mt-3">
           <FcStateBadge state={fcState} />
         </div>
@@ -227,7 +212,16 @@ function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarc
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Elapsed time (running) */}
+            {retryPending && (
+              <span
+                className="flex items-center gap-1 rounded-full border-2 border-neon-yellow/40 bg-neon-yellow/10 px-2 py-0.5 font-pixel text-[10px] text-neon-yellow"
+                title={`Auto-retry after token limit at ${new Date(task.retryAt!).toLocaleString()}`}
+              >
+                <PixelIcon name="recycle" className="h-3 w-3" />
+                retry {retryLabel}
+              </span>
+            )}
+
             {isActive && elapsed && (
               <span className="flex items-center gap-1 font-pixel text-[10px] text-muted-foreground">
                 <PixelIcon name="clock" className="h-3 w-3" />
@@ -242,7 +236,7 @@ function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarc
               </span>
             )}
 
-            {/* Agent status */}
+            {/* Agent status icon */}
             <div className={cn('flex items-center gap-1', agentStatus.className)} title={agentStatus.label}>
               <PixelIcon
                 name={agentStatus.icon}
@@ -251,23 +245,19 @@ function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarc
                   agentStatus.spin && 'animate-px-spin-fast',
                   agentStatus.pulse && 'animate-px-blink'
                 )}
-                style={agentStatus.glowColor !== 'transparent'
-                  ? { filter: `drop-shadow(0 0 4px ${agentStatus.glowColor})` }
-                  : {}}
               />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Agent working progress bar — marching rainbow pixels, pinned to the card bottom */}
+      {/* Working progress bar */}
       {FC_STATE_META[fcState].working && (
         <div className="fc-card-bar" aria-hidden="true">
           <i />
         </div>
       )}
 
-      {/* One-off sticker pop + neon confetti when the task finishes (card-states) */}
       {celebrate && <FcCelebration />}
     </div>
   );
