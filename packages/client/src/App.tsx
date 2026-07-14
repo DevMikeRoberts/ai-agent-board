@@ -18,12 +18,14 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { useTaskGroups } from '@/hooks/useTaskGroups';
 import { PRIORITY_WEIGHT } from '@/lib/priority-config';
 import { slugify } from '@/lib/utils';
+import { api } from '@/lib/api';
 import { SK_SORT_BY, SK_SORT_DIR, SK_FILTER_AGENTS, SK_FILTER_STATUSES } from '@/lib/storage-keys';
 import { Header } from '@/components/Header';
 import type { StatusFilter } from '@/components/FilterChips';
 import { statusFilterToStatuses } from '@/components/FilterChips';
 import { Board } from '@/components/Board';
 import { TaskDialog } from '@/components/TaskDialog';
+import { SprintPlannerDialog } from '@/components/SprintPlannerDialog';
 import { TaskGroupDialog } from '@/components/TaskGroupDialog';
 import { GroupPanel } from '@/components/GroupPanel';
 import { AgentPanel } from '@/components/AgentPanel';
@@ -75,6 +77,7 @@ function BoardPage({
   const { tasks, error, clearError, showArchived, setShowArchived, addTask, updateTask, moveTask, runTask, stopTask, deleteTask, archiveTask, unarchiveTask, configureAndRunTask, createPR, mergeLocal } = useTasks(project.id);
   const { groups, createGroup, runGroup, stopGroup, deleteGroup, updateGroup, refreshGroup } = useTaskGroups(project.id);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [sprintDialogOpen, setSprintDialogOpen] = useState(false);
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState<TaskGroupWithChildren | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
@@ -263,8 +266,8 @@ function BoardPage({
     setDialogOpen(true);
   }, []);
 
-  const handleOpenGroupDialog = useCallback(() => {
-    setGroupDialogOpen(true);
+  const handleOpenSprintDialog = useCallback(() => {
+    setSprintDialogOpen(true);
   }, []);
 
   const handleCloseDialog = useCallback(() => {
@@ -293,6 +296,18 @@ function BoardPage({
       repoPath: lockedRepoPath || group.repoPath,
     });
   }, [createGroup, project.id, lockedRepoPath]);
+
+  const handleSprintPlan = useCallback(async (data: {
+    sprintName: string;
+    description: string;
+    agentType: AgentType;
+    repoPath?: string;
+    baseBranch?: string;
+    priority: Priority;
+    projectId: string;
+  }) => {
+    return api.createSprintPlan(data);
+  }, []);
 
   const handleDeleteTask = useCallback((task: Task) => {
     setDeletingTask(task);
@@ -380,6 +395,8 @@ function BoardPage({
     } else if (deletingTask || deletingGroupId) {
       setDeletingTask(null);
       setDeletingGroupId(null);
+    } else if (sprintDialogOpen) {
+      setSprintDialogOpen(false);
     } else if (groupDialogOpen) {
       setGroupDialogOpen(false);
     } else if (dialogOpen) {
@@ -391,16 +408,16 @@ function BoardPage({
     } else if (selectedTaskId) {
       setSelectedTaskId(null);
     }
-  }, [fullViewTaskId, deletingTask, deletingGroupId, groupDialogOpen, dialogOpen, selectedGroupId, selectedTaskId]);
+  }, [fullViewTaskId, deletingTask, deletingGroupId, sprintDialogOpen, groupDialogOpen, dialogOpen, selectedGroupId, selectedTaskId]);
 
   const isAnyOpen = useCallback(
-    () => fullViewTaskId !== null || dialogOpen || groupDialogOpen || selectedTaskId !== null || selectedGroupId !== null || deletingTask !== null || deletingGroupId !== null,
-    [fullViewTaskId, dialogOpen, groupDialogOpen, selectedTaskId, selectedGroupId, deletingTask, deletingGroupId]
+    () => fullViewTaskId !== null || dialogOpen || sprintDialogOpen || groupDialogOpen || selectedTaskId !== null || selectedGroupId !== null || deletingTask !== null || deletingGroupId !== null,
+    [fullViewTaskId, dialogOpen, sprintDialogOpen, groupDialogOpen, selectedTaskId, selectedGroupId, deletingTask, deletingGroupId]
   );
 
   useKeyboardShortcuts({
     onNewTask: handleOpenDialog,
-    onNewGroup: handleOpenGroupDialog,
+    onSprintPlanner: handleOpenSprintDialog,
     onCloseAll: handleCloseAll,
     onToggleCompanion: companion.toggle,
     isAnyOpen,
@@ -433,7 +450,7 @@ function BoardPage({
         onToggleStatus={handleToggleStatus}
         onClearFilters={handleClearFilters}
         onNewTask={handleOpenDialog}
-        onNewGroup={handleOpenGroupDialog}
+        onSprintPlanner={handleOpenSprintDialog}
       />
 
       <main className="flex-1 overflow-hidden">
@@ -468,6 +485,15 @@ function BoardPage({
         onEditSubmit={updateTask}
         highlightRequired={highlightRequiredFields}
         lockedRepoPath={lockedRepoPath}
+        projectDefaults={projectDefaults}
+      />
+
+      <SprintPlannerDialog
+        open={sprintDialogOpen}
+        onClose={() => setSprintDialogOpen(false)}
+        onSubmit={handleSprintPlan}
+        lockedRepoPath={lockedRepoPath}
+        projectId={project.id}
         projectDefaults={projectDefaults}
       />
 

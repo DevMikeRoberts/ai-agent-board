@@ -26,7 +26,7 @@ interface HeaderProps {
   onToggleStatus: (status: StatusFilter) => void;
   onClearFilters: () => void;
   onNewTask: () => void;
-  onNewGroup: () => void;
+  onSprintPlanner: () => void;
   title?: string;
   onBackToProjects?: () => void;
 }
@@ -43,7 +43,7 @@ export function Header({
   showArchived, onToggleArchived, sortBy, sortDir,
   onSortByChange, onSortDirChange, activeAgentTypes, activeStatuses,
   onToggleAgentType, onToggleStatus, onClearFilters,
-  onNewTask, onNewGroup, title = 'AI Agent Board', onBackToProjects,
+  onNewTask, onSprintPlanner, title = 'AI Agent Board', onBackToProjects,
 }: HeaderProps) {
   const [showFilters, setShowFilters] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -152,13 +152,13 @@ export function Header({
               <span>new task</span>
             </button>
             <button
-              onClick={onNewGroup}
+              onClick={onSprintPlanner}
               className="sticker-sm sticker-press flex h-11 items-center gap-2 rounded-full px-4 font-display text-sm [text-transform:lowercase]"
-              style={{ backgroundColor: 'var(--color-neon-purple)', color: 'var(--color-ink)' }}
-              aria-label="New Group"
+              style={{ backgroundColor: 'var(--color-neon-blue)', color: 'var(--color-ink)' }}
+              aria-label="Sprint Planner"
             >
-              <PixelIcon name="layer" className="h-4 w-4" />
-              <span>new group</span>
+              <PixelIcon name="flag" className="h-4 w-4" />
+              <span>sprint planner</span>
             </button>
           </div>
 
@@ -330,12 +330,12 @@ export function Header({
               new task
             </button>
             <button
-              onClick={() => { onNewGroup(); setMobileMenuOpen(false); }}
+              onClick={() => { onSprintPlanner(); setMobileMenuOpen(false); }}
               className="sticker-sm sticker-press flex flex-1 items-center justify-center gap-2 h-11 rounded-full font-display text-sm [text-transform:lowercase]"
-              style={{ backgroundColor: 'var(--color-neon-purple)', color: 'var(--color-ink)' }}
+              style={{ backgroundColor: 'var(--color-neon-blue)', color: 'var(--color-ink)' }}
             >
-              <PixelIcon name="layer" className="h-4 w-4" />
-              new group
+              <PixelIcon name="flag" className="h-4 w-4" />
+              sprint planner
             </button>
           </div>
 

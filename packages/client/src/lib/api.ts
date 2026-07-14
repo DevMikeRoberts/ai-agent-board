@@ -223,6 +223,17 @@ export const api = {
   createCompanionTask: (message: string) =>
     request<{ taskId: string }>('/companion/chat', { method: 'POST', body: JSON.stringify({ message }) }),
 
+  // --- Sprint Planner ---
+  createSprintPlan: (data: {
+    sprintName: string;
+    description: string;
+    agentType?: AgentType;
+    repoPath?: string;
+    baseBranch?: string;
+    priority?: Priority;
+    projectId?: string;
+  }) => request<{ taskId: string }>('/sprint/plan', { method: 'POST', body: JSON.stringify(data) }),
+
 };
 
 // --- WebSocket (shared singleton) ---

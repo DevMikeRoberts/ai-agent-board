@@ -2,14 +2,14 @@ import { useEffect } from 'react';
 
 interface ShortcutHandlers {
   onNewTask: () => void;
-  onNewGroup?: () => void;
+  onSprintPlanner?: () => void;
   onCloseAll: () => void;
   onToggleCompanion?: () => void;
   /** Return true if any dialog or panel is currently open */
   isAnyOpen: () => boolean;
 }
 
-export function useKeyboardShortcuts({ onNewTask, onNewGroup, onCloseAll, onToggleCompanion, isAnyOpen }: ShortcutHandlers) {
+export function useKeyboardShortcuts({ onNewTask, onSprintPlanner, onCloseAll, onToggleCompanion, isAnyOpen }: ShortcutHandlers) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore when typing in inputs/textareas/contenteditable
@@ -32,10 +32,10 @@ export function useKeyboardShortcuts({ onNewTask, onNewGroup, onCloseAll, onTogg
         }
       }
 
-      if ((e.key === 'g' || e.key === 'G') && onNewGroup) {
+      if ((e.key === 'g' || e.key === 'G') && onSprintPlanner) {
         if (!e.ctrlKey && !e.metaKey && !e.altKey && !isAnyOpen()) {
           e.preventDefault();
-          onNewGroup();
+          onSprintPlanner();
         }
       }
 
@@ -49,5 +49,5 @@ export function useKeyboardShortcuts({ onNewTask, onNewGroup, onCloseAll, onTogg
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onNewTask, onNewGroup, onCloseAll, onToggleCompanion, isAnyOpen]);
+  }, [onNewTask, onSprintPlanner, onCloseAll, onToggleCompanion, isAnyOpen]);
 }
