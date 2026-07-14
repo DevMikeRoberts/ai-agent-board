@@ -652,7 +652,7 @@ export function App() {
   const selectedProject = useMemo(() => {
     // /projects or /projects/new → default to the default project (board stays visible)
     if (route.view === 'projects') return defaultProject;
-    if (route.projectId) return projects.find((p) => p.id === route.projectId);
+    if (route.view === 'board' && route.projectId) return projects.find((p) => p.id === route.projectId);
     return defaultProject;
   }, [defaultProject, projects, route]);
 
