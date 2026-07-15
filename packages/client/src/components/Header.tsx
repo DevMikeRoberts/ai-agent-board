@@ -77,7 +77,7 @@ export function Header({
 
   return (
     <header className="sticky top-0 z-50 border-b-2 border-border bg-background/95 backdrop-blur-sm">
-      <div className="flex h-16 items-center justify-between px-3 md:px-5">
+      <div className="flex h-16 items-center justify-between px-3 md:px-4 lg:px-5">
         {/* Logo + title */}
         <div className="flex min-w-0 items-center gap-2.5 md:gap-3">
           {onBackToProjects && (
@@ -100,7 +100,7 @@ export function Header({
           </div>
 
           <div className="min-w-0">
-            <h1 className="truncate font-display text-base text-foreground [text-transform:lowercase] md:text-xl">
+            <h1 className="truncate font-display text-sm text-foreground [text-transform:lowercase] md:text-base lg:text-lg">
               {title}
             </h1>
           </div>
@@ -142,7 +142,7 @@ export function Header({
           {/* ── Desktop controls ── */}
 
           {/* Group 1: Create */}
-          <div className="hidden md:flex items-center gap-2">
+          <div className="hidden lg:flex items-center gap-2">
             <button
               onClick={onNewTask}
               className="sticker-sm sticker-press flex h-11 items-center gap-2 rounded-full bg-primary px-4 font-display text-sm text-primary-foreground [text-transform:lowercase]"
@@ -163,7 +163,7 @@ export function Header({
           </div>
 
           {/* Divider */}
-          <div className="hidden md:block mx-3 h-6 w-0.5 bg-border" />
+          <div className="hidden lg:block mx-3 h-6 w-0.5 bg-border" />
 
           {/* Group 2: Search */}
           <div className="relative hidden md:block">
@@ -177,7 +177,7 @@ export function Header({
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder="search tasks…"
               aria-label="Search tasks"
-              className="h-11 w-48 rounded-xl border-2 border-border bg-card pl-9 pr-3 font-pixel text-[11px] text-foreground placeholder:text-muted-foreground focus:border-neon-pink focus:outline-none transition-colors"
+              className="h-11 w-32 lg:w-48 rounded-xl border-2 border-border bg-card pl-9 pr-3 font-pixel text-[11px] text-foreground placeholder:text-muted-foreground focus:border-neon-pink focus:outline-none transition-colors"
             />
           </div>
 
