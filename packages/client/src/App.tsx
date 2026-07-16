@@ -39,6 +39,7 @@ import { ProjectsSidebar } from '@/components/ProjectsSidebar';
 import { GitHubSetupModal } from '@/components/GitHubSetupModal';
 import { BoardCompanion } from '@/components/BoardCompanion';
 import { useCompanion } from '@/hooks/useCompanion';
+import { useRadio } from '@/hooks/useRadio';
 import { HomePage } from '@/components/HomePage';
 
 const STATUS_WEIGHT: Record<string, number> = { executing: 0, planning: 1, failed: 2, idle: 3, complete: 4 };
@@ -64,10 +65,14 @@ function BoardPage({
   project,
   theme,
   toggleTheme,
+  onGoHome,
+  radio,
 }: {
   project: Project;
   theme: 'dark' | 'light';
   toggleTheme: () => void;
+  onGoHome: () => void;
+  radio: { on: boolean; volume: number; toggle: () => void; setVolume: (v: number) => void };
 }) {
   const lockedRepoPath = project.repoPath;
   const projectDefaults = {
@@ -452,6 +457,8 @@ function BoardPage({
         onClearFilters={handleClearFilters}
         onNewTask={handleOpenDialog}
         onSprintPlanner={handleOpenSprintDialog}
+        onGoHome={onGoHome}
+        radio={radio}
       />
 
       <main className="flex-1 overflow-hidden">
@@ -640,6 +647,7 @@ export function App() {
     selectProjectDirectory,
   } = useProjects();
 
+  const radio = useRadio();
   const [route, setRoute] = useState<RouteState>(() => readRoute());
 
   // Project-management dialog state (lifted out of ProjectsPage)
@@ -732,8 +740,6 @@ export function App() {
         onEditProject={openEditDialog}
         onDeleteProject={(p) => setDeletingProject(p)}
         onOpenSettings={() => setConfigOpen(true)}
-        onGoHome={() => navigate('/')}
-        isHome={route.view === 'home'}
         theme={theme}
         toggleTheme={toggleTheme}
       />
@@ -759,6 +765,8 @@ export function App() {
             project={selectedProject}
             theme={theme}
             toggleTheme={toggleTheme}
+            onGoHome={() => navigate('/')}
+            radio={radio}
           />
         ) : (
           /* No projects at all */
