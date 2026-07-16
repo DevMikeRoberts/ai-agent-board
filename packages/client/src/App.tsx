@@ -40,6 +40,8 @@ import { GitHubSetupModal } from '@/components/GitHubSetupModal';
 import { BoardCompanion } from '@/components/BoardCompanion';
 import { useCompanion } from '@/hooks/useCompanion';
 import { useRadio } from '@/hooks/useRadio';
+import { DitherBackground } from '@/components/DitherBackground';
+import { SakuraLeaves } from '@/components/SakuraLeaves';
 import { HomePage } from '@/components/HomePage';
 
 const STATUS_WEIGHT: Record<string, number> = { executing: 0, planning: 1, failed: 2, idle: 3, complete: 4 };
@@ -731,6 +733,10 @@ export function App() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
+      {/* ── Global visual effects ── */}
+      <DitherBackground />
+      <SakuraLeaves />
+
       {/* ── Left sidebar: project list ── */}
       <ProjectsSidebar
         projects={projects}
