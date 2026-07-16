@@ -11,6 +11,7 @@ interface ProjectsSidebarProps {
   onEditProject: (project: Project) => void;
   onDeleteProject: (project: Project) => void;
   onOpenSettings: () => void;
+  onGoHome: () => void;
   theme: 'dark' | 'light';
   toggleTheme: () => void;
 }
@@ -23,6 +24,7 @@ export function ProjectsSidebar({
   onEditProject,
   onDeleteProject,
   onOpenSettings,
+  onGoHome,
   theme,
   toggleTheme,
 }: ProjectsSidebarProps) {
@@ -35,36 +37,31 @@ export function ProjectsSidebar({
         collapsed ? 'w-14' : 'w-64'
       }`}
     >
-      {/* ── Header ── */}
+      {/* ── Header — home button ── */}
       <div className="relative flex h-14 shrink-0 items-center border-b-2 border-border px-2">
         {collapsed ? (
           <button
-            onClick={() => setCollapsed(false)}
-            className="sticker-sm sticker-press mx-auto flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground"
-            aria-label="Expand sidebar"
-            title="Expand sidebar"
+            onClick={() => { onGoHome(); setCollapsed(false); }}
+            className="sticker-sm sticker-press mx-auto flex h-8 w-8 items-center justify-center rounded-full bg-neon-purple text-ink"
+            aria-label="Go home"
+            title="Go home"
           >
-            <PixelIcon name="flash" className="h-4 w-4" />
+            <PixelIcon name="home-2" className="h-4 w-4" />
           </button>
         ) : (
           <>
-            <div className="flex min-w-0 flex-1 items-center gap-2.5">
-              {/* Logo sticker */}
-              <div className="sticker-sm flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                <PixelIcon name="flash" className="h-4 w-4 animate-px-bob" />
-              </div>
-              <div className="min-w-0">
-                <span className="block truncate font-display text-sm text-foreground [text-transform:lowercase]">
-                  projects
-                </span>
-                <span className="block font-pixel text-[9px] tracking-widest text-neon-pink [text-transform:lowercase]">
-                  ai agent board
-                </span>
-              </div>
-            </div>
+            <button
+              onClick={onGoHome}
+              className="sticker sticker-press flex h-10 items-center gap-2 rounded-xl bg-neon-purple px-3 text-ink"
+              aria-label="Go home"
+              title="Go home"
+            >
+              <PixelIcon name="home-2" className="h-5 w-5" />
+              <span className="font-display text-sm [text-transform:lowercase]">home</span>
+            </button>
             <button
               onClick={() => setCollapsed(true)}
-              className="ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border-2 border-border bg-card text-foreground/70 transition-colors hover:border-foreground/40 hover:text-foreground"
+              className="ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border-2 border-border bg-card text-foreground/70 transition-colors hover:border-foreground/40 hover:text-foreground"
               aria-label="Collapse sidebar"
               title="Collapse sidebar"
             >

@@ -735,19 +735,6 @@ export function App() {
       <DitherBackground />
       <SakuraLeaves />
 
-      {/* ── Global home button — fixed top-left corner ── */}
-      {route.view !== 'home' && (
-        <button
-          onClick={() => navigate('/')}
-          className="sticker sticker-press fixed left-4 top-4 z-[60] flex h-12 items-center gap-2 rounded-2xl bg-neon-purple px-4 font-display text-sm text-ink [text-transform:lowercase]"
-          aria-label="Go home"
-          title="Go home"
-        >
-          <PixelIcon name="home-2" className="h-5 w-5" />
-          <span className="hidden sm:inline">home</span>
-        </button>
-      )}
-
       {/* ── Floating radio widget — fixed bottom-right ── */}
       <div className="fixed bottom-4 right-4 z-[60]">
         <div className="sticker-sm flex items-center gap-2 rounded-2xl border-2 border-neon-pink/30 bg-card px-3 py-2 shadow-[0_0_12px_-4px_var(--color-neon-pink)]">
@@ -761,20 +748,23 @@ export function App() {
       </div>
 
       {/* ── Left sidebar: project list ── */}
-      <ProjectsSidebar
-        projects={projects}
-        selectedProjectId={selectedProject?.id}
-        onSelectProject={openProject}
-        onNewProject={openCreateDialog}
-        onEditProject={openEditDialog}
-        onDeleteProject={(p) => setDeletingProject(p)}
-        onOpenSettings={() => setConfigOpen(true)}
-        theme={theme}
-        toggleTheme={toggleTheme}
-      />
+      <div className="relative z-10">
+        <ProjectsSidebar
+          projects={projects}
+          selectedProjectId={selectedProject?.id}
+          onSelectProject={openProject}
+          onNewProject={openCreateDialog}
+          onEditProject={openEditDialog}
+          onDeleteProject={(p) => setDeletingProject(p)}
+          onOpenSettings={() => setConfigOpen(true)}
+          theme={theme}
+          toggleTheme={toggleTheme}
+          onGoHome={() => navigate('/')}
+        />
+      </div>
 
       {/* ── Right: board or empty state ── */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="relative z-10 flex flex-1 flex-col overflow-hidden">
         {loading && !selectedProject ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
             <PixelIcon
