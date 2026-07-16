@@ -43,6 +43,8 @@ import { useRadio } from '@/hooks/useRadio';
 import { DitherBackground } from '@/components/DitherBackground';
 import { SakuraLeaves } from '@/components/SakuraLeaves';
 import { RainAnimation } from '@/components/RainAnimation';
+import { NightCityBackground } from '@/components/NightCityBackground';
+import { LightGrassTree } from '@/components/LightGrassTree';
 import { HomePage } from '@/components/HomePage';
 
 const STATUS_WEIGHT: Record<string, number> = { executing: 0, planning: 1, failed: 2, idle: 3, complete: 4 };
@@ -735,6 +737,8 @@ export function App() {
       <DitherBackground />
       <SakuraLeaves />
       <RainAnimation />
+      <NightCityBackground />
+      <LightGrassTree />
 
       {/* ── Left sidebar: project list ── */}
       {route.view !== 'home' && (

@@ -1,7 +1,7 @@
+export type Theme = 'dark' | 'light';
+
 import { useState, useEffect, useCallback } from 'react';
 import { SK_THEME } from '@/lib/storage-keys';
-
-type Theme = 'dark' | 'light';
 
 export function useTheme() {
   const [theme, setTheme] = useState<Theme>(() => {

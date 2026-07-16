@@ -11,6 +11,7 @@ import { taskToFcState } from '@/components/fc/taskToFcState';
 import { FC_STATE_META } from '@/components/fc/fcState';
 import { useNeedsInput } from '@/components/fc/useNeedsInput';
 import { FcCelebration } from '@/components/fc/FcCelebration';
+import { ConfettiOverlay } from '@/components/ConfettiOverlay';
 
 
 const agentStatusConfig: Record<

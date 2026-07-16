@@ -18,6 +18,7 @@ interface Petal {
 /**
  * 8-bit pixelated sakura petals falling across the entire viewport.
  * Rendered on a fullscreen canvas with image-rendering: pixelated.
+ * Only active in the light theme.
  */
 export function SakuraLeaves() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -25,17 +26,14 @@ export function SakuraLeaves() {
 
   useEffect(() => {
     if (theme !== 'light') return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const canvas = canvasRef.current!;
+    const ctx = canvas.getContext('2d')!;
 
     const W = 200;
     const H = 200;
     canvas.width = W;
     canvas.height = H;
 
-    const isDark = () => document.documentElement.classList.contains('dark');
     const PETAL_COUNT = 24;
     const petals: Petal[] = [];
 
@@ -46,8 +44,7 @@ export function SakuraLeaves() {
     let raf: number;
 
     function draw() {
-      ctx!.clearRect(0, 0, W, H);
-      const dark = isDark();
+      ctx.clearRect(0, 0, W, H);
 
       for (const p of petals) {
         p.y += p.speed;
@@ -64,19 +61,19 @@ export function SakuraLeaves() {
         const px = Math.round(p.x);
         const py = Math.round(p.y);
         const s = Math.round(p.size);
-        const alpha = dark ? p.opacity : p.opacity * 0.7;
-        ctx!.fillStyle = `hsla(${p.hue}, 80%, 75%, ${alpha})`;
+        const alpha = p.opacity;
+        ctx.fillStyle = `hsla(${p.hue}, 80%, 75%, ${alpha})`;
 
         // Cross pattern for pixel petal
-        ctx!.fillRect(px, py, s, s);
-        ctx!.fillRect(px - s, py, s, s);
-        ctx!.fillRect(px + s, py, s, s);
-        ctx!.fillRect(px, py - s, s, s);
-        ctx!.fillRect(px, py + s, s, s);
+        ctx.fillRect(px, py, s, s);
+        ctx.fillRect(px - s, py, s, s);
+        ctx.fillRect(px + s, py, s, s);
+        ctx.fillRect(px, py - s, s, s);
+        ctx.fillRect(px, py + s, s, s);
 
         // Center highlight
-        ctx!.fillStyle = `hsla(${p.hue + 20}, 90%, 85%, ${alpha * 0.8})`;
-        ctx!.fillRect(px, py, s, s);
+        ctx.fillStyle = `hsla(${p.hue + 20}, 90%, 85%, ${alpha * 0.8})`;
+        ctx.fillRect(px, py, s, s);
       }
 
       raf = requestAnimationFrame(draw);
@@ -84,7 +81,7 @@ export function SakuraLeaves() {
 
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [theme]);
 
   return (
     <canvas

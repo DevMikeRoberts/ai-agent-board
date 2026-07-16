@@ -1,12 +1,15 @@
 import { useEffect, useRef } from 'react';
+import { useTheme } from '@/hooks/useTheme';
 
 /**
  * Animated dithering background using a small canvas that renders
  * an ordered Bayer dither pattern with slowly drifting color gradients.
  * The result is a subtle, retro CRT-style grain that breathes over time.
+ * Active in both themes.
  */
 export function DitherBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const { theme } = useTheme();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -29,8 +32,6 @@ export function DitherBackground() {
       [15, 7, 13,  5],
     ];
 
-    const isDark = () => document.documentElement.classList.contains('dark');
-
     let raf: number;
     let t = 0;
 
@@ -38,7 +39,7 @@ export function DitherBackground() {
       t += 0.003;
       context.clearRect(0, 0, W, H);
 
-      const dark = isDark();
+      const dark = theme === 'dark';
 
       // Slowly drifting hue offsets for the gradient
       const hueShift = Math.sin(t * 0.7) * 30;
@@ -96,7 +97,7 @@ export function DitherBackground() {
 
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [theme]);
 
   return (
     <canvas
