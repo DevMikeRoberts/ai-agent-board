@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { CompanionMessage } from '@/hooks/useCompanion';
 import { cn } from '@/lib/utils';
+import { TypewriterText } from '@/components/TypewriterText';
 
 interface BoardCompanionProps {
   open: boolean;
@@ -170,6 +171,13 @@ export function BoardCompanion({ open, onToggle, messages, onSend, streaming }: 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Companion messages type out once, then stay fully rendered — tracked by id so
+  // re-renders (and reopening the panel) don't replay the effect on old messages.
+  const [typedIds, setTypedIds] = useState<Set<string>>(new Set());
+  const markTyped = useCallback((id: string) => {
+    setTypedIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
+  }, []);
+
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -301,7 +309,13 @@ export function BoardCompanion({ open, onToggle, messages, onSend, streaming }: 
                           companion
                         </span>
                       )}
-                      <span className="whitespace-pre-wrap break-words">{msg.content}</span>
+                      <span className="whitespace-pre-wrap break-words">
+                        {msg.role === 'companion' && !msg.id.startsWith('streaming-') && !typedIds.has(msg.id) ? (
+                          <TypewriterText text={msg.content} onComplete={() => markTyped(msg.id)} />
+                        ) : (
+                          msg.content
+                        )}
+                      </span>
                     </div>
                   </motion.div>
                 ))}

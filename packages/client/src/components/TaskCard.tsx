@@ -11,8 +11,17 @@ import { taskToFcState } from '@/components/fc/taskToFcState';
 import { FC_STATE_META } from '@/components/fc/fcState';
 import { useNeedsInput } from '@/components/fc/useNeedsInput';
 import { FcCelebration } from '@/components/fc/FcCelebration';
-import { ConfettiOverlay } from '@/components/ConfettiOverlay';
+import { ConfettiOverlay, type ConfettiRect } from '@/components/ConfettiOverlay';
 
+
+// Module-level (not component state) so it survives TaskCard remounting.
+// Each kanban column is a separate droppable subtree, so a task moving between
+// columns — exactly what happens when an agent finishes, since the server sets
+// agentStatus + columnId in the same update — unmounts and remounts TaskCard.
+// A `useRef` reset on that remount would never observe the "not finished →
+// finished" transition, so the celebration is tracked here instead, keyed by
+// task id, for the lifetime of the page.
+const lastFinishedById = new Map<string, boolean>();
 
 const agentStatusConfig: Record<
   AgentStatus,
@@ -77,25 +86,26 @@ function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarc
 
   const cardRef = useRef<HTMLDivElement>(null);
   const finished = task.agentStatus === 'complete' || task.columnId === 'done';
-  const prevFinishedRef = useRef(finished);
   const [celebrate, setCelebrate] = useState(false);
-  const [confettiPos, setConfettiPos] = useState<{ x: number; y: number } | null>(null);
+  const [confettiRect, setConfettiRect] = useState<ConfettiRect | null>(null);
   useEffect(() => {
-    if (finished && !prevFinishedRef.current) {
+    const wasFinished = lastFinishedById.get(task.id);
+    lastFinishedById.set(task.id, finished);
+    // Only celebrate on an observed not-finished -> finished transition — never
+    // on first sight of an already-finished task (e.g. reloading the board).
+    if (finished && wasFinished === false) {
       setCelebrate(true);
       if (cardRef.current) {
         const rect = cardRef.current.getBoundingClientRect();
-        setConfettiPos({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+        setConfettiRect({ x: rect.left, y: rect.top, width: rect.width, height: rect.height });
       }
       const id = setTimeout(() => {
         setCelebrate(false);
-        setConfettiPos(null);
+        setConfettiRect(null);
       }, 2600);
-      prevFinishedRef.current = finished;
       return () => clearTimeout(id);
     }
-    prevFinishedRef.current = finished;
-  }, [finished]);
+  }, [finished, task.id]);
 
   const [elapsed, setElapsed] = useState('');
   useEffect(() => {
@@ -269,7 +279,7 @@ function TaskCardComponent({ task, onClick, onEdit, onDelete, onArchive, onUnarc
       )}
 
       {celebrate && <FcCelebration />}
-      {confettiPos && <ConfettiOverlay x={confettiPos.x} y={confettiPos.y} />}
+      {confettiRect && <ConfettiOverlay rect={confettiRect} />}
     </div>
   );
 }

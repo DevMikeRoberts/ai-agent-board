@@ -228,6 +228,15 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showPriority, showAgent]);
 
+  // Close any open dropdown in the same pass as closing the dialog — otherwise the
+  // dropdown's own exit animation runs concurrently with the dialog's, and Framer
+  // Motion serializes the two, making the dialog take ~700ms to close instead of ~300ms.
+  const handleClose = () => {
+    setShowPriority(false);
+    setShowAgent(false);
+    onClose();
+  };
+
   const selectedAgent = agents.find((a) => a.value === agentType)!;
   const selectedPriority = priorities.find((p) => p.value === priority)!;
   const agentAvailability = new Map(availableAgents.map((agent) => [agent.name, agent]));
@@ -245,7 +254,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 bg-[var(--overlay-bg)] backdrop-blur-sm"
-            onClick={onClose}
+            onClick={handleClose}
           />
 
           {/* Dialog */}
@@ -268,7 +277,8 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
                 {isEditMode ? 'edit task' : 'create task'}
               </h2>
               <button
-                onClick={onClose}
+                type="button"
+                onClick={handleClose}
                 className="flex h-9 w-9 items-center justify-center rounded-xl border-2 border-border font-pixel text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-colors"
                 aria-label="Close"
               >
@@ -553,7 +563,7 @@ export function TaskDialog({ open, onClose, onSubmit, editTask, onEditSubmit, hi
               <div className="flex justify-end gap-2 pt-4 mt-2 border-t border-border shrink-0">
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={handleClose}
                   className="h-11 rounded-full border-2 border-border px-4 font-display text-sm text-foreground/80 hover:border-foreground/40 hover:text-foreground transition-colors [text-transform:lowercase]"
                 >
                   Cancel

@@ -38,6 +38,7 @@ import { ConfigDialog } from '@/components/ConfigDialog';
 import { ProjectsSidebar } from '@/components/ProjectsSidebar';
 import { GitHubSetupModal } from '@/components/GitHubSetupModal';
 import { BoardCompanion } from '@/components/BoardCompanion';
+import { CompanionQuipToast } from '@/components/CompanionQuipToast';
 import { useCompanion } from '@/hooks/useCompanion';
 import { useRadio } from '@/hooks/useRadio';
 import { DitherBackground } from '@/components/DitherBackground';
@@ -580,6 +581,9 @@ function BoardPage({
         onSend={companion.sendMessage}
         streaming={companion.streaming}
       />
+
+      {/* Periodic quip toast — shows even while the companion panel is closed */}
+      <CompanionQuipToast open={companion.open} onOpen={companion.openPanel} />
     </div>
   );
 }
