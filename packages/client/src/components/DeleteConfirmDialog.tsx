@@ -41,51 +41,55 @@ export function DeleteConfirmDialog({
             onClick={onCancel}
           />
 
-          {/* Dialog — small scary-cute sticker with shake + red glow */}
+          {/* Dialog — scary-cute red sticker: shakes in, glows and pulses while open */}
           <motion.div
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
             onKeyDown={(e) => { if (e.key === 'Escape') onCancel(); }}
             initial={{ opacity: 0, scale: 0.92, y: 24, rotate: -1 }}
-            animate={{ opacity: 1, scale: 1, y: 0, rotate: 0 }}
+            animate={{ opacity: 1, scale: 1, y: 0, rotate: 0, x: [0, -7, 7, -5, 5, -2, 2, 0] }}
             exit={{ opacity: 0, scale: 0.92, y: 24, rotate: -1 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-[1.75rem] bg-popover p-6"
+            transition={{
+              default: { type: 'spring', damping: 25, stiffness: 300 },
+              x: { duration: 0.45, delay: 0.05, ease: 'easeInOut' },
+            }}
+            className="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-[1.75rem] p-6"
             style={{
+              background: 'color-mix(in srgb, var(--color-destructive) 16%, var(--color-popover))',
               border: '2px solid var(--color-destructive)',
-              boxShadow: '4px 4px 0 0 var(--color-ink), 0 0 28px -4px color-mix(in srgb, var(--color-destructive) 60%, transparent)',
+              boxShadow: '4px 4px 0 0 var(--color-ink), 0 0 32px -4px color-mix(in srgb, var(--color-destructive) 70%, transparent)',
             }}
           >
+            {/* Pulsing inner glow ring — keeps the danger feel alive while the dialog is open */}
             <motion.div
               aria-hidden="true"
-              animate={{ x: [0, -3, 3, -2, 2, -1, 1, 0] }}
-              transition={{ duration: 0.4, ease: 'easeInOut' }}
+              animate={{ opacity: [0.5, 1, 0.5] }}
+              transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
               className="absolute inset-0 rounded-[1.75rem] pointer-events-none"
               style={{
-                border: '2px solid var(--color-destructive)',
-                boxShadow: 'inset 0 0 24px -4px color-mix(in srgb, var(--color-destructive) 40%, transparent)',
+                boxShadow: 'inset 0 0 26px -4px color-mix(in srgb, var(--color-destructive) 55%, transparent)',
               }}
             />
             {/* Header */}
             <div className="mb-5 flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
                 <PixelIcon name="bin" className="animate-px-bob h-10 w-10 shrink-0 text-destructive" />
-                <h2 id={titleId} className="font-display text-xl leading-tight text-foreground [text-transform:lowercase]">
+                <h2 id={titleId} className="font-display text-xl leading-tight text-destructive [text-transform:lowercase]">
                   {title}
                 </h2>
               </div>
               <button
                 onClick={onCancel}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border-2 border-border bg-card font-pixel text-sm text-foreground/80 transition-colors hover:border-foreground/40 hover:text-foreground"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border-2 border-destructive/50 bg-card font-pixel text-sm text-destructive/80 transition-colors hover:border-destructive hover:text-destructive"
               >
                 ✕
               </button>
             </div>
 
             {description ?? (
-              <p className="mb-6 text-sm leading-relaxed text-muted-foreground">
-                <span className="font-semibold text-foreground">{taskTitle}</span> will be permanently
+              <p className="mb-6 text-sm leading-relaxed" style={{ color: 'color-mix(in srgb, var(--color-destructive) 55%, var(--color-foreground))' }}>
+                <span className="font-semibold text-destructive">{taskTitle}</span> will be permanently
                 deleted. This action cannot be undone.
               </p>
             )}

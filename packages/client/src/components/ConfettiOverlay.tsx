@@ -11,11 +11,22 @@ interface ConfettiPiece {
   size: number;
 }
 
+export interface ConfettiRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+const COLORS = ['#ff6ec7', '#f2e947', '#3df285', '#6c5cff', '#b08bff', '#ffffff'];
+const PARTICLE_COUNT = 70;
+
 /**
- * 8-bit confetti burst effect for task completion.
- * Renders pixelated confetti particles that drift down.
+ * 8-bit confetti burst that emanates outward from a card's edges.
+ * The canvas is sized to the full viewport so particle coordinates (derived
+ * from getBoundingClientRect) line up 1:1 with screen space.
  */
-export function ConfettiOverlay({ x, y }: { x: number; y: number }) {
+export function ConfettiOverlay({ rect }: { rect: ConfettiRect }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<ConfettiPiece[]>([]);
   const animationRef = useRef<number | null>(null);
@@ -26,66 +37,65 @@ export function ConfettiOverlay({ x, y }: { x: number; y: number }) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const W = 320;
-    const H = 240;
+    const W = window.innerWidth;
+    const H = window.innerHeight;
     canvas.width = W;
     canvas.height = H;
 
-    const colors = ['#ff0', '#0f0', '#0ff', '#f00', '#f0f', '#00f'];
+    const { x, y, width, height } = rect;
+    const cx = x + width / 2;
+    const cy = y + height / 2;
 
-    const createParticles = () => {
-      particlesRef.current = [];
-      for (let i = 0; i < 50; i++) {
-        const angle = (Math.random() - 0.5) * Math.PI * 1.5;
-        const speed = Math.random() * 3 + 2;
-        particlesRef.current.push({
-          x,
-          y,
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed - Math.random() * 1.5,
-          color: colors[Math.floor(Math.random() * colors.length)],
-          rotation: Math.random() * 360,
-          rotationSpeed: (Math.random() - 0.5) * 0.1,
-          size: Math.random() * 2 + 1,
-        });
-      }
-    };
+    const particles: ConfettiPiece[] = [];
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      // Spawn along the card's perimeter so the burst reads as coming from the card itself.
+      const edge = Math.floor(Math.random() * 4);
+      let px: number, py: number;
+      if (edge === 0) { px = x + Math.random() * width; py = y; }
+      else if (edge === 1) { px = x + width; py = y + Math.random() * height; }
+      else if (edge === 2) { px = x + Math.random() * width; py = y + height; }
+      else { px = x; py = y + Math.random() * height; }
 
-    createParticles();
+      const angle = Math.atan2(py - cy, px - cx) + (Math.random() - 0.5) * 0.8;
+      const speed = Math.random() * 3.5 + 2;
+      particles.push({
+        x: px,
+        y: py,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - Math.random() * 1.2,
+        color: COLORS[Math.floor(Math.random() * COLORS.length)],
+        rotation: Math.random() * 360,
+        rotationSpeed: (Math.random() - 0.5) * 14,
+        size: Math.random() * 4 + 3,
+      });
+    }
+    particlesRef.current = particles;
 
     const animate = () => {
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
       ctx.clearRect(0, 0, W, H);
 
-      ctx.font = 'bold 12px monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#fff';
-      ctx.fillText('✓', x, y);
-
-      const particles = particlesRef.current;
-      for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i];
+      const list = particlesRef.current;
+      for (let i = list.length - 1; i >= 0; i--) {
+        const p = list[i];
         p.x += p.vx;
         p.y += p.vy;
-        p.vy += 0.05;
+        p.vy += 0.14; // gravity
+        p.vx *= 0.99; // slight air drag
         p.rotation += p.rotationSpeed;
 
         ctx.save();
         ctx.translate(p.x, p.y);
         ctx.rotate((p.rotation * Math.PI) / 180);
         ctx.fillStyle = p.color;
-        ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
+        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
         ctx.restore();
 
-        if (p.y > H || p.x < -20 || p.x > W + 20) {
-          particles.splice(i, 1);
+        if (p.y > H + 20 || p.x < -20 || p.x > W + 20) {
+          list.splice(i, 1);
         }
       }
 
-      if (particles.length > 0) {
+      if (list.length > 0) {
         animationRef.current = requestAnimationFrame(animate);
       } else {
         animationRef.current = null;
@@ -99,13 +109,7 @@ export function ConfettiOverlay({ x, y }: { x: number; y: number }) {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [x, y]);
+  }, [rect]);
 
-  return (
-    <canvas
-      ref={canvasRef}
-      className="fixed inset-0 pointer-events-none z-[100]"
-      style={{ imageRendering: 'pixelated' }}
-    />
-  );
+  return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-[100]" />;
 }
